@@ -339,7 +339,7 @@ class Optimizer:
                 reason="$170K+ for Union Depository",
                 estimated_value=170000,
                 estimated_time_minutes=15,
-                activity_type=ActivityType.AUTO_SHOP,
+                activity_type=ActivityType.AUTO_SHOP_DELIVERY,
                 score=0.65,
             )
         )
