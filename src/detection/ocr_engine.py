@@ -106,23 +106,32 @@ class OCREngine:
         # winocr expects the image in a specific format
         result = await winocr.recognize_pil(image, self._language)
 
-        # Parse winocr result
+        # Parse winocr result (result is a Windows.Media.Ocr.OcrResult object)
         words = []
         all_text = []
         total_confidence = 0.0
 
-        for line in result.get("lines", []):
-            line_text = line.get("text", "")
+        # Access the Lines property of the OcrResult object
+        for line in result.Lines:
+            line_text = line.Text  # Get the text from the line
             all_text.append(line_text)
 
-            for word in line.get("words", []):
+            # Access the Words property of each OcrLine object
+            for word in line.Words:
+                # Get bounding rectangle
+                bounds = word.BoundingRect
                 word_info = {
-                    "text": word.get("text", ""),
-                    "confidence": word.get("confidence", 1.0),
-                    "bounds": word.get("bounding_rect", {}),
+                    "text": word.Text,
+                    "confidence": float(word.Confidence),
+                    "bounds": {
+                        "x": bounds.X,
+                        "y": bounds.Y,
+                        "width": bounds.Width,
+                        "height": bounds.Height,
+                    },
                 }
                 words.append(word_info)
-                total_confidence += word_info["confidence"]
+                total_confidence += float(word.Confidence)
 
         avg_confidence = total_confidence / len(words) if words else 0.0
 
