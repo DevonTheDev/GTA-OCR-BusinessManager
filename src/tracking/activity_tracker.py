@@ -112,7 +112,7 @@ class ActivityTracker:
     @property
     def completed_activities(self) -> List[Activity]:
         """Get list of completed activities."""
-        return list(self._completed_activities)
+        return list(self._completed_activities) if self._completed_activities else []
 
     def get_recent_activities(self, count: int = 10) -> List[Activity]:
         """Get recent completed activities.
@@ -123,6 +123,8 @@ class ActivityTracker:
         Returns:
             List of recent activities (newest first)
         """
+        if not self._completed_activities:  # Handles both None and empty deque
+            return []
         return list(reversed(self._completed_activities[-count:]))
 
     def get_stats_by_type(self, activity_type: ActivityType) -> dict:
@@ -134,6 +136,14 @@ class ActivityTracker:
         Returns:
             Dict with count, success_rate, avg_earnings, avg_duration
         """
+        if not self._completed_activities:
+            return {
+                "count": 0,
+                "success_rate": 0.0,
+                "avg_earnings": 0,
+                "avg_duration": 0,
+            }
+
         activities = [
             a for a in self._completed_activities
             if a.activity_type == activity_type
