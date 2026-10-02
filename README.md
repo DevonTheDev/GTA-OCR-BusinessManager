@@ -584,3 +584,13 @@ Local tests cover the default tracker lifecycle, UTC and fixed positive/negative
 offsets, completion, cancellation, replacement and JSON timestamps. This is clock
 compatibility, not monotonic elapsed-time measurement, normalization of older mixed
 timestamps, protection from system-clock changes or native Windows validation.
+
+### Recent game-state transitions
+
+Recent transition queries iterate over the retained deque instead of attempting
+unsupported slicing. They return the requested newest transitions first, preserve
+the existing default of ten and return an empty list for nonpositive counts.
+Queries do not change the current state or retained history; the existing history
+limit still applies. Local tests exercise actual transitions/listeners, ordering,
+empty requests and retention. Returned transition objects remain shared, and this
+does not add concurrent-access guarantees or native UI/gameplay validation.

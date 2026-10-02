@@ -1,6 +1,7 @@
 """Game state machine for tracking GTA Online activity."""
 
 from collections import deque
+from itertools import islice
 from enum import Enum, auto
 from typing import Optional, Callable
 from dataclasses import dataclass, field
@@ -290,9 +291,11 @@ class GameStateMachine:
             count: Number of transitions to return
 
         Returns:
-            List of recent transitions (newest first)
+            List of recent transitions (newest first), empty for nonpositive count
         """
-        return list(reversed(self._context.transitions[-count:]))
+        if count <= 0:
+            return []
+        return list(islice(reversed(self._context.transitions), count))
 
     def is_in_activity(self) -> bool:
         """Check if currently in a tracked activity."""
