@@ -3,6 +3,7 @@
 import time
 from collections import deque
 from dataclasses import dataclass, field
+from threading import Lock
 from typing import Callable
 
 
@@ -60,8 +61,12 @@ class PerformanceMonitor:
         self._total_times.samples = deque(maxlen=window_size)
 
         self._capture_count = 0
-        self._last_report_time = time.time()
+        self._last_report_time = time.monotonic()
         self._capture_count_at_last_report = 0
+        self._system_metrics_lock = Lock()
+        self._process = None
+        self._last_system_sample = None
+        self._system_metrics = (0.0, 0.0)
 
     def record_capture(self, duration_ms: float) -> None:
         """Record a capture operation duration."""
@@ -100,23 +105,13 @@ class PerformanceMonitor:
 
     def get_metrics(self) -> PerformanceMetrics:
         """Get current performance metrics."""
-        now = time.time()
+        now = time.monotonic()
         elapsed = now - self._last_report_time
         captures_since_report = self._capture_count - self._capture_count_at_last_report
 
         fps = captures_since_report / elapsed if elapsed > 0 else 0.0
 
-        # Get system metrics (optional, may fail on some systems)
-        cpu_percent = 0.0
-        memory_mb = 0.0
-        try:
-            import psutil
-
-            process = psutil.Process()
-            cpu_percent = process.cpu_percent()
-            memory_mb = process.memory_info().rss / (1024 * 1024)
-        except ImportError:
-            pass  # psutil not installed
+        cpu_percent, memory_mb = self._get_system_metrics()
 
         return PerformanceMetrics(
             avg_capture_ms=self._capture_times.average(),
@@ -128,6 +123,38 @@ class PerformanceMonitor:
             memory_mb=memory_mb,
         )
 
+    def _get_system_metrics(self) -> tuple[float, float]:
+        """Share nonblocking process samples between capture and UI readers."""
+        with self._system_metrics_lock:
+            now = time.monotonic()
+            if self._last_system_sample is not None and now - self._last_system_sample < 0.5:
+                return self._system_metrics
+            cpu_percent, memory_mb = 0.0, 0.0
+            try:
+                import psutil
+            except (ImportError, OSError):
+                pass  # System metrics are optional.
+            else:
+                try:
+                    if self._process is None:
+                        # Keep psutil's previous CPU counters. A new Process on
+                        # every read would return its initial 0% sample forever.
+                        self._process = psutil.Process()
+                except (psutil.Error, OSError):
+                    pass
+                if self._process is not None:
+                    try:
+                        cpu_percent = self._process.cpu_percent()
+                    except (psutil.Error, OSError):
+                        pass
+                    try:
+                        memory_mb = self._process.memory_info().rss / (1024 * 1024)
+                    except (psutil.Error, OSError):
+                        pass
+            self._system_metrics = (cpu_percent, memory_mb)
+            self._last_system_sample = time.monotonic()
+            return self._system_metrics
+
     def reset(self) -> None:
         """Reset all metrics."""
         self._capture_times.clear()
@@ -135,12 +162,16 @@ class PerformanceMonitor:
         self._detection_times.clear()
         self._total_times.clear()
         self._capture_count = 0
-        self._last_report_time = time.time()
+        self._last_report_time = time.monotonic()
         self._capture_count_at_last_report = 0
+        with self._system_metrics_lock:
+            self._process = None
+            self._last_system_sample = None
+            self._system_metrics = (0.0, 0.0)
 
     def mark_report(self) -> None:
         """Mark the current time for FPS calculation."""
-        self._last_report_time = time.time()
+        self._last_report_time = time.monotonic()
         self._capture_count_at_last_report = self._capture_count
 
 

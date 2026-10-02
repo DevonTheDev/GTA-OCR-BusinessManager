@@ -378,3 +378,17 @@ Contributions welcome! Please feel free to submit issues or pull requests.
 - Uses the Windows OCR API via [winocr](https://github.com/poa00/winocr)
 - Screen capture powered by [mss](https://github.com/BoboTiG/python-mss)
 - UI built with [PyQt6](https://www.riverbankcomputing.com/software/pyqt/)
+
+### Optional performance metrics
+
+Install `pip install -e ".[metrics]"` (or `pip install psutil`) to enable process
+CPU/RAM sampling. The process sampler is reused across capture and UI reads,
+with one synchronized sample at most every half second. Its first CPU sample is
+zero while the baseline is established; subsequent samples can exceed 100% when
+multiple CPU cores are active, following psutil's process-percent convention.
+
+If psutil is missing or a particular OS metric is denied, that optional metric
+is reported as zero while capture timing remains available. Transient failures
+are retried on later samples. FPS uses monotonic elapsed time, independently of
+system clock changes. Resetting the monitor clears its timing and CPU baseline.
+Synthetic tests check these semantics; they are not Windows performance benchmarks.

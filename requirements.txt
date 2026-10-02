@@ -16,6 +16,9 @@ pyqtgraph>=0.13.0
 PyYAML>=6.0
 keyboard>=0.13.5
 
+# Optional: Process CPU/RAM metrics
+# psutil>=5.9.0
+
 # Optional: Audio notifications
 # playsound>=1.3.0
 
