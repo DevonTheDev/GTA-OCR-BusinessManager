@@ -536,3 +536,22 @@ Local tests cover all three goal types, saved JSON, resets and reentrant listene
 This protects normal update/notification methods; returned dataclasses remain
 mutable, and this is not a general thread-safety guarantee or a migration of
 previously duplicated history. Native Qt notifications remain unverified.
+
+### Mission result bookkeeping
+
+Mission completion treats a zero balance as a known value, so an activity that
+starts at $0 can record its positive balance change. Missing balances still yield
+zero activity earnings, and spending still cannot become a negative payout. This
+retains the existing balance-difference calculation and separate session/earnings
+ledgers; it does not infer a reward directly from OCR result-screen text.
+
+Both successful and failed activities retain their tracked type and name when
+saved to SQLite. Sell missions therefore keep their label, and successful sells
+increment the existing session sell counter. A missing tracked activity keeps the
+generic fallback. Repeated result screens remain ignored after the mission resets.
+Existing history is not migrated or relabeled.
+
+Local tests use synthetic detected states through the actual trackers and SQLite,
+covering zero/missing/spent balances, failed activity types, sell counts and the
+money-plus-mission path without duplicate session income. Native OCR accuracy,
+gameplay, UI rendering and mission classification heuristics remain unverified.

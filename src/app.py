@@ -616,19 +616,26 @@ class GTABusinessManager:
         # Mission complete
         elif state == GameState.MISSION_COMPLETE and self._data.mission_start_time is not None:
             earnings = 0
-            if self._data.current_money and self._data.mission_start_money:
+            if (self._data.current_money is not None
+                    and self._data.mission_start_money is not None):
                 earnings = max(0, self._data.current_money - self._data.mission_start_money)
 
             # Calculate duration
             duration_seconds = int((datetime.now() - self._data.mission_start_time).total_seconds())
 
             activity = self._activity_tracker.complete_activity(success=True, earnings=earnings)
-            self._session_tracker.record_activity_complete(success=True, earnings=earnings)
+            self._session_tracker.record_activity_complete(
+                success=True, earnings=earnings,
+                is_sell=activity is not None and activity.activity_type == ActivityType.SELL_MISSION,
+            )
 
             # Persist activity to database
             self._persist_activity(
                 activity_type=activity.activity_type.name if activity else "MISSION",
-                activity_name=self._data.current_mission or "Unknown",
+                activity_name=(
+                    activity.name if activity and activity.name
+                    else self._data.current_mission or "Unknown"
+                ),
                 earnings=earnings,
                 success=True,
                 duration_seconds=duration_seconds,
@@ -656,13 +663,16 @@ class GTABusinessManager:
             # Calculate duration
             duration_seconds = int((datetime.now() - self._data.mission_start_time).total_seconds())
 
-            self._activity_tracker.complete_activity(success=False, earnings=0)
+            activity = self._activity_tracker.complete_activity(success=False, earnings=0)
             self._session_tracker.record_activity_complete(success=False, earnings=0)
 
             # Persist failed activity to database
             self._persist_activity(
-                activity_type="MISSION",
-                activity_name=self._data.current_mission or "Unknown",
+                activity_type=activity.activity_type.name if activity else "MISSION",
+                activity_name=(
+                    activity.name if activity and activity.name
+                    else self._data.current_mission or "Unknown"
+                ),
                 earnings=0,
                 success=False,
                 duration_seconds=duration_seconds,
