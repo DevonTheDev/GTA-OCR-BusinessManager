@@ -139,10 +139,13 @@ class SessionGoal:
         Returns:
             True if goal was just completed
         """
-        was_complete = self.is_complete
+        # Keep the completed goal as a record of the first crossing, including
+        # when a later session reset supplies a smaller total.
+        if self.is_complete:
+            return False
         self.current_value = new_value
 
-        if self.is_complete and not was_complete:
+        if self.is_complete:
             self.completed_at = datetime.now(timezone.utc)
             return True
 
@@ -373,20 +376,20 @@ class GoalTracker:
 
     def _on_goal_completed(self) -> None:
         """Handle goal completion."""
-        if not self._current_goal:
+        completed_goal = self._current_goal
+        if not completed_goal:
             return
 
-        logger.info(f"Goal completed: {self._current_goal.display_name}")
+        logger.info(f"Goal completed: {completed_goal.display_name}")
 
-        # Notify callbacks
-        for callback in self._on_goal_complete:
+        # Publish history first: callbacks may clear/replace the current goal,
+        # save state, or complete another goal synchronously.
+        self._completed_goals.append(completed_goal)
+        for callback in tuple(self._on_goal_complete):
             try:
-                callback(self._current_goal)
+                callback(completed_goal)
             except Exception as e:
                 logger.error(f"Goal complete callback error: {e}")
-
-        # Move to completed list
-        self._completed_goals.append(self._current_goal)
 
     def clear_goal(self) -> None:
         """Clear the current goal without completing it."""

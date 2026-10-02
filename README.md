@@ -517,3 +517,22 @@ power-loss durability guarantee. Temporary files are removed on ordinary failure
 abrupt exit or denied cleanup may leave one behind. Tests exercise real disposable
 SQLite/files, injected I/O errors and quoted multiline CSV content. Native Windows
 filesystem behavior and spreadsheet formula-text handling remain separate work.
+
+### Completed goal history and notifications
+
+Once a goal reaches its target, normal progress updates retain that first completed
+value and timestamp. Later session resets or rising totals cannot reopen the same
+goal, notify completion again or change its saved history. Setting another goal
+still creates a fresh goal, and incomplete goals keep their existing update behavior.
+Legacy completed goals without a timestamp stay complete without inventing one.
+
+Completion records the finished goal before notifying listeners. Every listener
+for that event receives the same goal, even if an earlier listener clears it,
+replaces it or completes another goal. Listener registrations made during a
+notification apply to later completion events. Individual callback failures remain
+logged without preventing other listeners or the normal save.
+
+Local tests cover all three goal types, saved JSON, resets and reentrant listeners.
+This protects normal update/notification methods; returned dataclasses remain
+mutable, and this is not a general thread-safety guarantee or a migration of
+previously duplicated history. Native Qt notifications remain unverified.
