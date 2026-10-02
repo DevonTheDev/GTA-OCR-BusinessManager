@@ -1,6 +1,7 @@
 """Main application orchestrator for GTA Business Manager."""
 
 import copy
+import math
 import time
 import threading
 from typing import Optional, Callable, List
@@ -159,7 +160,7 @@ class GTABusinessManager:
         """
         try:
             fps = float(value)
-            if fps <= 0 or fps > 60:
+            if not math.isfinite(fps) or fps <= 0 or fps > 60:
                 logger.warning(f"Invalid {name} value {value}, using {default}")
                 return default
             return fps
@@ -389,11 +390,19 @@ class GTABusinessManager:
         with self._perf_monitor.time_operation("total"):
             # Capture multiple regions
             with self._perf_monitor.time_operation("capture"):
-                full_screen = self._capture.capture_full_screen()
-                money_img = self._capture.capture_money_display()
-                mission_img = self._capture.capture_mission_text()
-                center_img = self._capture.capture_center_prompt()
-                timer_img = self._capture.capture_timer()
+                # These images belong to one detection cycle, not five separate
+                # rate-limited cycles. Reuse the existing batch capture API.
+                regions = self._capture.regions
+                images = self._capture.capture_multiple_regions([
+                    regions.full_screen,
+                    regions.money_display,
+                    regions.mission_text,
+                    regions.center_prompt,
+                    regions.timer_bottom_right,
+                ])
+                full_screen, money_img, mission_img, center_img, timer_img = (
+                    images[index] for index in range(5)
+                )
 
             self._data.total_captures += 1
 

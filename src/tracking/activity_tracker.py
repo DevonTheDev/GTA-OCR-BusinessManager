@@ -1,6 +1,7 @@
 """Activity tracking for GTA Business Manager."""
 
 from collections import deque
+from itertools import islice
 from datetime import datetime, timezone
 from typing import Optional, List
 from dataclasses import dataclass, field
@@ -121,11 +122,11 @@ class ActivityTracker:
             count: Number of activities to return
 
         Returns:
-            List of recent activities (newest first)
+            List of recent activities (newest first), or empty for a nonpositive count
         """
-        if not self._completed_activities:  # Handles both None and empty deque
+        if not self._completed_activities or count <= 0:
             return []
-        return list(reversed(self._completed_activities[-count:]))
+        return list(islice(reversed(self._completed_activities), count))
 
     def get_stats_by_type(self, activity_type: ActivityType) -> dict:
         """Get statistics for a specific activity type.

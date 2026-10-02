@@ -3,6 +3,7 @@
 import pytest
 from datetime import datetime, timedelta
 
+from src.tracking.activity_tracker import ActivityTracker
 from src.tracking.session import SessionStats, SessionTracker
 from src.tracking.analytics import Analytics, EarningsBreakdown, TimeBreakdown, EfficiencyMetrics
 from src.game.activities import Activity, ActivityType
@@ -363,3 +364,23 @@ def patched_duration(self):
     return original_duration(self)
 
 Activity.duration_seconds = patched_duration
+
+
+@pytest.mark.parametrize('count,expected', [(1,['third']),(2,['third','second']),(10,['third','second','first']),(0,[]),(-1,[])])
+def test_recent_activity_history_handles_bounded_deque(count, expected):
+    tracker = ActivityTracker()
+    for name in ['first','second','third']:
+        tracker.start_activity(ActivityType.CONTACT_MISSION,name=name)
+        tracker.complete_activity(success=True,earnings=10)
+    assert [activity.name for activity in tracker.get_recent_activities(count)] == expected
+    assert [activity.name for activity in tracker.completed_activities] == ['first','second','third']
+
+
+def test_recent_activity_history_respects_retention_window():
+    from collections import deque
+    tracker = ActivityTracker()
+    tracker._completed_activities = deque(maxlen=2)
+    for name in ['first','second','third']:
+        tracker.start_activity(ActivityType.CONTACT_MISSION,name=name)
+        tracker.complete_activity(success=True)
+    assert [activity.name for activity in tracker.get_recent_activities()] == ['third','second']
