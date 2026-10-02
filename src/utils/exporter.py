@@ -8,6 +8,7 @@ from typing import Optional, List
 from dataclasses import dataclass
 
 from .logging import get_logger
+from .persistence import atomic_text_writer
 from ..database.repository import Repository, get_repository
 
 logger = get_logger("utils.exporter")
@@ -68,7 +69,7 @@ class DataExporter:
 
             # Export session info
             session_file = output_path / f"session_{session_id}_info.csv"
-            with open(session_file, "w", newline="", encoding="utf-8") as f:
+            with atomic_text_writer(session_file, newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow(["Property", "Value"])
                 session_info = data["session"]
@@ -87,7 +88,7 @@ class DataExporter:
 
             # Export activities
             activities_file = output_path / f"session_{session_id}_activities.csv"
-            with open(activities_file, "w", newline="", encoding="utf-8") as f:
+            with atomic_text_writer(activities_file, newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow([
                     "Activity Type", "Activity Name", "Earnings", "Duration (min)",
@@ -109,7 +110,7 @@ class DataExporter:
             # Export earnings log
             if include_earnings:
                 earnings_file = output_path / f"session_{session_id}_earnings.csv"
-                with open(earnings_file, "w", newline="", encoding="utf-8") as f:
+                with atomic_text_writer(earnings_file, newline="") as f:
                     writer = csv.writer(f)
                     writer.writerow(["Timestamp", "Amount", "Source", "Balance After"])
 
@@ -162,7 +163,7 @@ class DataExporter:
 
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(output_file, "w", newline="", encoding="utf-8") as f:
+            with atomic_text_writer(output_file, newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow([
                     "Session ID", "Date", "Duration (min)", "Start Money",
@@ -227,7 +228,7 @@ class DataExporter:
             output_file.parent.mkdir(parents=True, exist_ok=True)
             rows_exported = 0
 
-            with open(output_file, "w", newline="", encoding="utf-8") as f:
+            with atomic_text_writer(output_file, newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow([
                     "Session ID", "Date", "Activity Type", "Activity Name",
@@ -286,7 +287,7 @@ class DataExporter:
 
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(output_file, "w", encoding="utf-8") as f:
+            with atomic_text_writer(output_file) as f:
                 json.dump(data, f, indent=2)
 
             rows = len(data.get("activities", [])) + len(data.get("earnings", []))
@@ -336,7 +337,7 @@ class DataExporter:
             rows_exported = 0
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
-            with open(output_file, "w", newline="", encoding="utf-8") as f:
+            with atomic_text_writer(output_file, newline="") as f:
                 writer = csv.writer(f)
                 writer.writerow([
                     "Activity Type", "Count", "Total Earnings", "Avg Earnings",

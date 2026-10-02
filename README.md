@@ -495,7 +495,25 @@ existing no-session error and header-only empty-result behavior. Breakdown row
 counts now report data rows actually written, excluding the header.
 
 Invalid periods are rejected before an existing export is opened. This does not
-make export writes atomic, provide a multi-query database snapshot, or alter
-session-level totals. Local tests use real disposable SQLite and CSV files,
+provide a multi-query database snapshot or alter session-level totals. Per-file
+write recovery is described below. Local tests use real disposable SQLite and CSV files,
 including older sessions with recent activity, exact boundaries, other characters,
 more than 1,000 sessions and query-count checks; no gameplay performance claim.
+
+### Recoverable export writes
+
+CSV and JSON exports stage each output file beside its destination and replace it
+only after serialization and handle closure succeed. A partial write, close or
+replacement failure leaves the previous version of that file intact; a failed
+first write leaves no partial final file. Export methods keep their existing
+failure result and normal retry behavior. UTF-8, CSV quoting/newlines, JSON
+formatting, filenames and row counts are unchanged. Existing symlink destinations
+continue to update their targets.
+
+This is per-file replacement: a session's info, activities and earnings files are
+published separately. If a later file fails, earlier files may already contain the
+new export. It is not an all-files/database transaction, concurrent-update lock or
+power-loss durability guarantee. Temporary files are removed on ordinary failure;
+abrupt exit or denied cleanup may leave one behind. Tests exercise real disposable
+SQLite/files, injected I/O errors and quoted multiline CSV content. Native Windows
+filesystem behavior and spreadsheet formula-text handling remain separate work.
