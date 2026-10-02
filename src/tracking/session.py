@@ -24,11 +24,13 @@ class SessionStats:
     sells_completed: int = 0
     time_in_missions: float = 0  # seconds
     time_idle: float = 0  # seconds
+    ended_at: Optional[datetime] = None
 
     @property
     def duration_seconds(self) -> float:
-        """Get session duration in seconds."""
-        return (datetime.now() - self.started_at).total_seconds()
+        """Get elapsed duration, fixed once the session has ended."""
+        end = self.ended_at if self.ended_at is not None else datetime.now()
+        return (end - self.started_at).total_seconds()
 
     @property
     def earnings_per_hour(self) -> float:
@@ -78,6 +80,7 @@ class SessionTracker:
         if not self._is_active or not self._stats:
             return None
 
+        self._stats.ended_at = datetime.now()
         self._is_active = False
         logger.info(
             f"Session ended - Duration: {self._stats.duration_seconds / 60:.1f}min, "
@@ -91,7 +94,7 @@ class SessionTracker:
         Keep the session start time and activity statistics collected before the
         first successful OCR reading.
         """
-        if self._stats:
+        if self._is_active and self._stats:
             self._stats.start_money = start_money
             self._stats.current_money = start_money
 
@@ -104,7 +107,7 @@ class SessionTracker:
         Returns:
             Change amount (can be negative)
         """
-        if not self._stats:
+        if not self._is_active or not self._stats:
             return 0
 
         change = new_money - self._stats.current_money
@@ -125,7 +128,7 @@ class SessionTracker:
             earnings: Money earned (if known)
             is_sell: Whether this was a sell mission
         """
-        if not self._stats:
+        if not self._is_active or not self._stats:
             return
 
         self._stats.activities_completed += 1
@@ -144,7 +147,7 @@ class SessionTracker:
         Args:
             seconds: Time to add
         """
-        if self._stats:
+        if self._is_active and self._stats:
             self._stats.time_in_missions += seconds
 
     def add_idle_time(self, seconds: float) -> None:
@@ -153,7 +156,7 @@ class SessionTracker:
         Args:
             seconds: Time to add
         """
-        if self._stats:
+        if self._is_active and self._stats:
             self._stats.time_idle += seconds
 
     @property

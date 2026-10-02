@@ -448,3 +448,18 @@ exports may still show the old baseline after an initial failure, and a persiste
 storage failure or abrupt process exit can leave the session unfinished. Local
 tests exercise real SQLite, injected commit failures and concurrent finalizers;
 native Windows OCR and crash recovery remain separate validation work.
+
+### Completed session statistics
+
+Stopping a session records its end time. Its displayed duration and session
+average earnings/hour then stay fixed while the stopped view or analytics cache
+refreshes. Tracker update methods ignore late balance, activity and time updates
+after completion. Repeated stop calls preserve the original end time; starting
+another session creates fresh, live statistics without reopening the prior one.
+
+This applies to `SessionStats` and `SessionTracker`, not the separate rolling
+rate windows or cross-session activity-history selection. Active-session wall
+clock behavior is unchanged. The returned dataclass remains mutable by callers;
+this is not an immutable snapshot or a new thread-safety guarantee. Local tests
+use controlled clocks and the application's stop/analytics path without native
+capture, OCR or Qt UI execution.
