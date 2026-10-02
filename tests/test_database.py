@@ -244,3 +244,35 @@ class TestRepository:
 
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])
+
+
+@pytest.mark.parametrize('operation,expected', [
+    (lambda repo: repo.get_or_create_character('Offline Player'), None),
+    (lambda repo: repo.get_all_characters(), []),
+    (lambda repo: repo.get_active_character(), None),
+    (lambda repo: repo.set_active_character(1), False),
+])
+def test_failed_database_initialization_preserves_repository_error_contract(tmp_path, operation, expected):
+    # SQLite cannot open a file whose parent directory does not exist.
+    repo = Repository(str(tmp_path / 'not-created' / 'history.db'))
+    assert repo.initialize() is False
+    assert operation(repo) == expected
+    assert repo._initialized is False
+    assert repo._db_session is None
+
+
+def test_repository_recovers_after_database_directory_becomes_available(tmp_path):
+    directory = tmp_path / 'created-later'
+    repo = Repository(str(directory / 'history.db'))
+    assert repo.get_or_create_character('Recovered Player') is None
+    directory.mkdir()
+    character = repo.get_or_create_character('Recovered Player')
+    assert character is not None and character.name == 'Recovered Player'
+    assert repo.get_all_characters()[0].id == character.id
+    repo.close()
+
+
+def test_private_session_accessor_reports_initialization_failure_as_database_error(tmp_path):
+    repo = Repository(str(tmp_path / 'not-created' / 'history.db'))
+    with pytest.raises(DatabaseError, match='initializ'):
+        repo._get_session()

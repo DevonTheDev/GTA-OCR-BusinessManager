@@ -308,6 +308,11 @@ remaining resources are still cleaned up. A database-close failure can leave an
 old repository handle needing later recovery. A permanently blocked OCR call or
 forced process exit cannot guarantee final session persistence.
 
+If SQLite cannot initialize, repository methods retain their documented empty or
+failure results instead of crashing with an uninitialized session factory. They
+retry initialization on the next operation, allowing recovery after the database
+location is repaired. Tests use temporary paths; no live data is modified.
+
 Offline regression tests use real threads and temporary SQLite with synthetic
 capture. Windows smoke checks remain important: stop during OCR, wait for
 `STOPPED`, restart with a different displayed balance, and confirm that the first

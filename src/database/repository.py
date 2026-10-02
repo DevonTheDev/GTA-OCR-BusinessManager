@@ -51,8 +51,8 @@ class Repository:
     @contextmanager
     def _session_scope(self):
         """Provide a transactional scope around operations."""
-        if not self._initialized:
-            self.initialize()
+        if not self._initialized and not self.initialize():
+            raise DatabaseError("Database initialization failed")
 
         session = self._session_factory()
         try:
@@ -67,8 +67,8 @@ class Repository:
 
     def _get_session(self) -> DBSession:
         """Get or create a database session."""
-        if not self._initialized:
-            self.initialize()
+        if not self._initialized and not self.initialize():
+            raise DatabaseError("Database initialization failed")
 
         if self._db_session is None:
             self._db_session = self._session_factory()
