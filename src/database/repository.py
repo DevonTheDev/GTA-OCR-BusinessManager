@@ -4,6 +4,7 @@ from datetime import datetime, timedelta
 from typing import Optional, List
 from contextlib import contextmanager
 
+from sqlalchemy import func
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.exc import SQLAlchemyError
 
@@ -338,6 +339,40 @@ class Repository:
             logger.error(f"Failed to get session activities: {e}")
             return []
 
+    def get_character_activities(
+        self, character_id: int, days: int = 30, activity_type: Optional[str] = None
+    ) -> List[Activity]:
+        """Read a UTC activity-time window, newest first, without a session cap.
+
+        Completion time takes precedence; legacy/in-progress rows without it
+        use their start time. Undated/future rows are outside the window.
+        """
+        if isinstance(days, bool) or not isinstance(days, int) or days < 0:
+            raise ValueError("days must be a nonnegative integer")
+        now = utc_now()
+        cutoff = now - timedelta(days=days)
+        try:
+            with self._session_scope() as db_session:
+                activity_time = func.coalesce(Activity.ended_at, Activity.started_at)
+                query = (
+                    db_session.query(Activity)
+                    .join(Session, Activity.session_id == Session.id)
+                    .filter(
+                        Session.character_id == character_id,
+                        activity_time >= cutoff,
+                        activity_time <= now,
+                    )
+                )
+                if activity_type is not None:
+                    query = query.filter(Activity.activity_type == activity_type)
+                activities = query.order_by(activity_time.desc(), Activity.id.desc()).all()
+                for activity in activities:
+                    db_session.expunge(activity)
+                return activities
+        except DatabaseError as exc:
+            logger.error(f"Failed to get character activities: {exc}")
+            return []
+
     # Business snapshot operations
 
     def save_business_snapshot(
@@ -481,48 +516,19 @@ class Repository:
         """
         default_stats = {"count": 0, "total_earnings": 0, "avg_earnings": 0, "avg_duration": 0}
 
-        try:
-            with self._session_scope() as db_session:
-                cutoff = utc_now() - timedelta(days=days)
-
-                # Get sessions for this character in the period
-                session_ids = [
-                    s.id for s in db_session.query(Session)
-                    .filter(
-                        Session.character_id == character_id,
-                        Session.started_at >= cutoff,
-                    )
-                    .all()
-                ]
-
-                if not session_ids:
-                    return default_stats
-
-                activities = (
-                    db_session.query(Activity)
-                    .filter(
-                        Activity.session_id.in_(session_ids),
-                        Activity.activity_type == activity_type,
-                    )
-                    .all()
-                )
-
-                if not activities:
-                    return default_stats
-
-                total_earnings = sum(a.earnings or 0 for a in activities)
-                total_duration = sum(a.duration_seconds or 0 for a in activities)
-                count = len(activities)
-
-                return {
-                    "count": count,
-                    "total_earnings": total_earnings,
-                    "avg_earnings": total_earnings // count if count else 0,
-                    "avg_duration": total_duration // count if count else 0,
-                }
-        except DatabaseError as e:
-            logger.error(f"Failed to get activity stats: {e}")
+        activities = self.get_character_activities(character_id, days, activity_type)
+        if not activities:
             return default_stats
+
+        total_earnings = sum(activity.earnings or 0 for activity in activities)
+        total_duration = sum(activity.duration_seconds or 0 for activity in activities)
+        count = len(activities)
+        return {
+            "count": count,
+            "total_earnings": total_earnings,
+            "avg_earnings": total_earnings // count,
+            "avg_duration": total_duration // count,
+        }
 
     def export_session_data(self, session_id: int) -> Optional[dict]:
         """Export all data for a session.

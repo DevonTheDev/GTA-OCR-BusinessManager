@@ -478,3 +478,24 @@ capture run creates a new parser. A genuine unusually large balance change may
 therefore need a restart or future threshold-policy adjustment. Tests use synthetic
 OCR text through the actual capture/accounting path and disposable SQLite, without
 Windows OCR, screenshots, live gameplay or an accuracy benchmark.
+
+### Activity export periods and row counts
+
+Activity-history and earnings-breakdown exports now use the activity's completion
+time within the requested UTC lookback window, rather than ignoring the period or
+using the parent session's start date. Records without a completion time use their
+start time; undated and future-dated records are excluded. Both window boundaries
+are inclusive, `days` must be a nonnegative integer, and zero means the single
+query instant. Existing earnings/count/average formulas are unchanged.
+
+The history export queries all matching activities for the selected character,
+without the former 1,000-session cap or one activity query per session. Rows are
+newest first with an ID tie-breaker. A session-existence check preserves the
+existing no-session error and header-only empty-result behavior. Breakdown row
+counts now report data rows actually written, excluding the header.
+
+Invalid periods are rejected before an existing export is opened. This does not
+make export writes atomic, provide a multi-query database snapshot, or alter
+session-level totals. Local tests use real disposable SQLite and CSV files,
+including older sessions with recent activity, exact boundaries, other characters,
+more than 1,000 sessions and query-count checks; no gameplay performance claim.

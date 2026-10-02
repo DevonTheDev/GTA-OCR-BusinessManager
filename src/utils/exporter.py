@@ -216,13 +216,14 @@ class DataExporter:
             ExportResult with success status
         """
         try:
-            sessions = self._repo.get_recent_sessions(character_id, limit=1000)
+            sessions = self._repo.get_recent_sessions(character_id, limit=1)
             if not sessions:
                 return ExportResult(
                     success=False,
                     error_message=f"No sessions found for character {character_id}"
                 )
 
+            activities = self._repo.get_character_activities(character_id, days=days)
             output_file.parent.mkdir(parents=True, exist_ok=True)
             rows_exported = 0
 
@@ -233,20 +234,19 @@ class DataExporter:
                     "Earnings", "Duration (min)", "Success"
                 ])
 
-                for session in sessions:
-                    activities = self._repo.get_session_activities(session.id)
-                    for activity in activities:
-                        duration_min = (activity.duration_seconds or 0) / 60
-                        writer.writerow([
-                            session.id,
-                            activity.ended_at.strftime("%Y-%m-%d %H:%M") if activity.ended_at else "",
-                            activity.activity_type,
-                            activity.activity_name,
-                            f"${activity.earnings or 0:,}",
-                            f"{duration_min:.1f}",
-                            "Yes" if activity.success else "No",
-                        ])
-                        rows_exported += 1
+                for activity in activities:
+                    duration_min = (activity.duration_seconds or 0) / 60
+                    activity_date = activity.ended_at or activity.started_at
+                    writer.writerow([
+                        activity.session_id,
+                        activity_date.strftime("%Y-%m-%d %H:%M") if activity_date else "",
+                        activity.activity_type,
+                        activity.activity_name,
+                        f"${activity.earnings or 0:,}",
+                        f"{duration_min:.1f}",
+                        "Yes" if activity.success else "No",
+                    ])
+                    rows_exported += 1
 
             logger.info(f"Exported {rows_exported} activities to {output_file}")
             return ExportResult(
@@ -328,6 +328,12 @@ class DataExporter:
                 "HEIST_PREP", "SECURITY_CONTRACT", "PAYPHONE_HIT", "MC_CONTRACT"
             ]
 
+            # Resolve and validate all inputs before opening an existing export.
+            statistics = [
+                (activity_type, self._repo.get_activity_stats(character_id, activity_type, days))
+                for activity_type in activity_types
+            ]
+            rows_exported = 0
             output_file.parent.mkdir(parents=True, exist_ok=True)
 
             with open(output_file, "w", newline="", encoding="utf-8") as f:
@@ -337,9 +343,7 @@ class DataExporter:
                     "Avg Duration (min)", "$/Hour"
                 ])
 
-                for activity_type in activity_types:
-                    stats = self._repo.get_activity_stats(character_id, activity_type, days)
-
+                for activity_type, stats in statistics:
                     if stats["count"] > 0:
                         avg_duration_min = stats["avg_duration"] / 60
                         avg_duration_hrs = avg_duration_min / 60
@@ -353,12 +357,13 @@ class DataExporter:
                             f"{avg_duration_min:.1f}",
                             f"${per_hour:,.0f}",
                         ])
+                        rows_exported += 1
 
             logger.info(f"Exported earnings breakdown to {output_file}")
             return ExportResult(
                 success=True,
                 file_path=output_file,
-                rows_exported=len(activity_types),
+                rows_exported=rows_exported,
             )
 
         except Exception as e:
