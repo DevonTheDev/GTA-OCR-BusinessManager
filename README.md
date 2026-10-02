@@ -172,7 +172,9 @@ python -m src.main --debug      # Enable debug logging
 ### Running Tests
 
 Run the automated, hardware-independent unit suite with `python -m pytest`.
-For a minimal test environment, install `pytest`, `SQLAlchemy`, and `PyYAML`.
+For a fresh, hardware-independent test environment, install
+`python -m pip install -r requirements-test.txt`. This includes headless OpenCV
+and imports the real app for accounting tests without starting screen capture.
 
 On Windows, separately run `python test_capture.py` with the runtime dependencies
 installed to diagnose screen capture and OCR. This interactive script requires a

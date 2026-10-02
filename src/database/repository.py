@@ -185,6 +185,25 @@ class Repository:
             logger.error(f"Failed to start session: {e}")
             return None
 
+    def set_session_start_money(self, session_id: int, start_money: int) -> bool:
+        """Set the first observed balance of an open session.
+
+        Sessions can be created before OCR supplies a balance. Closed session
+        history must not be rebased by a delayed reading.
+        """
+        try:
+            with self._session_scope() as db_session:
+                session = db_session.query(Session).filter_by(
+                    id=session_id, ended_at=None
+                ).first()
+                if session is None:
+                    return False
+                session.start_money = start_money
+                return True
+        except DatabaseError as e:
+            logger.error(f"Failed to set session opening balance: {e}")
+            return False
+
     def end_session(self, session_id: int, end_money: int = 0) -> bool:
         """End a play session.
 

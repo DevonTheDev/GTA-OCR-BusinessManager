@@ -426,15 +426,20 @@ class GTABusinessManager:
 
     def _process_money_change(self, reading: MoneyReading) -> int:
         """Process a money reading and detect changes."""
+        if not reading.has_value:
+            return 0
+
         current_value = reading.display_value
         change = 0
         prev_money = None
+        initial_balance = False
 
         with self._data_lock:
             # Initialize session start money
             if self._data.session_start_money is None:
                 self._data.session_start_money = current_value
-                self._session_tracker.update_money(current_value)
+                self._session_tracker.set_money_baseline(current_value)
+                initial_balance = True
                 logger.info(f"Session start money: ${current_value:,}")
 
             # Detect change from last reading
@@ -448,11 +453,22 @@ class GTABusinessManager:
 
                     if change > 0:
                         self._data.session_earnings += change
-                        self._session_tracker.update_money(current_value)
 
+            # Spending must advance the tracker's balance too, so later income
+            # is measured against the latest observation rather than an old high.
+            self._session_tracker.update_money(current_value)
             self._data.current_money = current_value
 
         # Operations that don't need the lock (database, logging, callbacks)
+        if initial_balance and self._repository and self._data.db_session_id:
+            try:
+                if not self._repository.set_session_start_money(
+                    self._data.db_session_id, current_value
+                ):
+                    logger.warning("Failed to persist session opening balance")
+            except Exception as e:
+                logger.error(f"Failed to persist session opening balance: {e}")
+
         if change != 0:
             if change > 0:
                 self._persist_earning(change, current_value)

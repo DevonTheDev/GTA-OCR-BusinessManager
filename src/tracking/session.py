@@ -85,6 +85,16 @@ class SessionTracker:
         )
         return self._stats
 
+    def set_money_baseline(self, start_money: int) -> None:
+        """Set the first observed balance without counting it as income.
+
+        Keep the session start time and activity statistics collected before the
+        first successful OCR reading.
+        """
+        if self._stats:
+            self._stats.start_money = start_money
+            self._stats.current_money = start_money
+
     def update_money(self, new_money: int) -> int:
         """Update current money and track earnings.
 
