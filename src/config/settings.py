@@ -1,6 +1,7 @@
 """Settings manager for GTA Business Manager."""
 
 import os
+from copy import deepcopy
 from pathlib import Path
 from typing import Any, Optional, Union
 
@@ -96,12 +97,12 @@ class Settings:
                 with open(self._config_path, "r", encoding="utf-8") as f:
                     loaded = yaml.safe_load(f) or {}
                 # Merge with defaults (loaded values override defaults)
-                self._config = self._deep_merge(DEFAULT_CONFIG.copy(), loaded)
+                self._config = self._deep_merge(deepcopy(DEFAULT_CONFIG), loaded)
             except Exception as e:
                 print(f"Warning: Failed to load config, using defaults: {e}")
-                self._config = DEFAULT_CONFIG.copy()
+                self._config = deepcopy(DEFAULT_CONFIG)
         else:
-            self._config = DEFAULT_CONFIG.copy()
+            self._config = deepcopy(DEFAULT_CONFIG)
             self._save()
 
     def _save(self) -> None:
@@ -242,14 +243,14 @@ class Settings:
 
     def reset_to_defaults(self, save: bool = True) -> None:
         """Reset all settings to defaults."""
-        self._config = DEFAULT_CONFIG.copy()
+        self._config = deepcopy(DEFAULT_CONFIG)
         if save:
             self._save()
 
     def reset_section(self, section: str, save: bool = True) -> None:
         """Reset a specific section to defaults."""
         if section in DEFAULT_CONFIG:
-            self._config[section] = DEFAULT_CONFIG[section].copy()
+            self._config[section] = deepcopy(DEFAULT_CONFIG[section])
             if save:
                 self._save()
 

@@ -154,3 +154,49 @@ class TestSettingsValidation:
         # Create new settings instance with same path
         settings2 = Settings(settings.config_path)
         assert settings2.get("capture.idle_fps") == 2.0
+
+
+class TestSettingsIsolation:
+    """Defaults and independent profiles must never share mutable state."""
+
+    @pytest.fixture(autouse=True)
+    def isolated_defaults(self, monkeypatch):
+        from copy import deepcopy
+        import src.config.settings as settings_module
+        from src.config.defaults import DEFAULT_CONFIG
+
+        # Keep regressions against the old implementation from poisoning other tests.
+        self.defaults = deepcopy(DEFAULT_CONFIG)
+        monkeypatch.setattr(settings_module, "DEFAULT_CONFIG", deepcopy(DEFAULT_CONFIG))
+
+    @pytest.mark.parametrize("content", [None, "{}", "display:\n  mode: window\n", "[invalid"])
+    def test_edit_does_not_change_defaults_or_another_profile(self, tmp_path, content):
+        import src.config.settings as settings_module
+
+        path = tmp_path / "first.yaml"
+        if content is not None:
+            path.write_text(content, encoding="utf-8")
+        first = Settings(path)
+        second = Settings(tmp_path / "second.yaml")
+
+        first.set("notifications.events.safe_full", False, save=False)
+
+        assert settings_module.DEFAULT_CONFIG == self.defaults
+        assert second.get("notifications.events.safe_full") is True
+
+    def test_reset_restores_original_values_and_remains_isolated(self, tmp_path):
+        settings = Settings(tmp_path / "config.yaml")
+        settings.set("capture.idle_fps", 25, save=False)
+        settings.reset_to_defaults(save=False)
+        assert settings.get("capture.idle_fps") == self.defaults["capture"]["idle_fps"]
+
+        settings.set("notifications.events.safe_full", False, save=False)
+        settings.reset_to_defaults(save=False)
+        assert settings.get("notifications.events.safe_full") is True
+
+    def test_reset_section_does_not_share_nested_defaults(self, tmp_path):
+        settings = Settings(tmp_path / "config.yaml")
+        settings.reset_section("notifications", save=False)
+        settings.set("notifications.events.safe_full", False, save=False)
+        settings.reset_section("notifications", save=False)
+        assert settings.get("notifications.events.safe_full") is True

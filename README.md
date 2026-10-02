@@ -169,6 +169,15 @@ python -m src.main --console    # Console-only mode (no GUI)
 python -m src.main --debug      # Enable debug logging
 ```
 
+### Running Tests
+
+Run the automated, hardware-independent unit suite with `python -m pytest`.
+For a minimal test environment, install `pytest`, `SQLAlchemy`, and `PyYAML`.
+
+On Windows, separately run `python test_capture.py` with the runtime dependencies
+installed to diagnose screen capture and OCR. This interactive script requires a
+display and Windows OCR; it is not collected by the automated unit suite.
+
 ### Building an Executable
 
 ```bash
