@@ -569,3 +569,18 @@ Tests link the actual OCR-text state classifier to real trackers and SQLite usin
 synthetic recognized text, including both outcomes and intermediate state changes.
 This does not change OCR keywords, detection confidence, automatic phase-boundary
 recognition or native gameplay behavior; no screenshot/Windows OCR accuracy claim.
+
+### Activity timestamp compatibility
+
+Activity duration checks, completion and cancellation now obtain the current time
+using the start timestamp's timezone convention. Default activities keep naive
+local timestamps; explicitly timezone-aware activities retain their timezone.
+Canceling an ordinary activity, including replacing it with a new activity, no
+longer mixes a naive start with an aware UTC end and fails when its duration is read.
+Cancellation still leaves completed history untouched and retains its existing
+failure/notes behavior; serialized timestamp fields keep their existing format.
+
+Local tests cover the default tracker lifecycle, UTC and fixed positive/negative
+offsets, completion, cancellation, replacement and JSON timestamps. This is clock
+compatibility, not monotonic elapsed-time measurement, normalization of older mixed
+timestamps, protection from system-clock changes or native Windows validation.

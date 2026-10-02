@@ -2,7 +2,7 @@
 
 from collections import deque
 from itertools import islice
-from datetime import datetime, timezone
+from datetime import datetime
 from typing import Optional, List
 from dataclasses import dataclass, field
 
@@ -91,7 +91,7 @@ class ActivityTracker:
             return None
 
         cancelled = self._current_activity
-        cancelled.ended_at = datetime.now(timezone.utc)
+        cancelled.ended_at = datetime.now(cancelled.started_at.tzinfo)
         cancelled.success = False
         cancelled.notes = "Cancelled"
 

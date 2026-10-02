@@ -65,7 +65,7 @@ class Activity:
     @property
     def duration_seconds(self) -> float:
         """Get duration in seconds."""
-        end = self.ended_at or datetime.now()
+        end = self.ended_at or datetime.now(self.started_at.tzinfo)
         return (end - self.started_at).total_seconds()
 
     @property
@@ -80,7 +80,7 @@ class Activity:
             success: Whether activity was successful
             earnings: Money earned (if known)
         """
-        self.ended_at = datetime.now()
+        self.ended_at = datetime.now(self.started_at.tzinfo)
         self.success = success
         self.earnings = earnings
 
