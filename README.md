@@ -397,3 +397,21 @@ is reported as zero while capture timing remains available. Transient failures
 are retried on later samples. FPS uses monotonic elapsed time, independently of
 system clock changes. Resetting the monitor clears its timing and CPU baseline.
 Synthetic tests check these semantics; they are not Windows performance benchmarks.
+
+### Safer local state saves
+
+Settings, cooldowns, goals, session history, nightclub state, passive income and
+weekly bonuses stage their YAML/JSON in a unique file beside the destination.
+The writer closes before replacing the saved file, so interrupted serialization,
+flush/close errors and ordinary replacement failures preserve the last good save.
+Existing symlink destinations still update their targets. Serialization formats
+and each store's existing error reporting are unchanged.
+
+This is per-file replacement, not a concurrent-update lock, multi-file transaction
+or power-loss durability guarantee. In-memory changes are not rolled back after a
+failed save; a later successful save can persist them. Temporary files are cleaned
+up on ordinary failures; an abrupt process exit or denied cleanup may leave a
+`.tmp` file. Cleanup failures are logged without hiding the original save error.
+Local Python tests use disposable real files and injected failures. Native Windows
+filesystem behavior remains a separate runtime check; no existing saves are
+migrated or rewritten until the app performs its normal save operation.

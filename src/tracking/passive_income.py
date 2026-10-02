@@ -7,6 +7,7 @@ import json
 from pathlib import Path
 
 from ..utils.logging import get_logger
+from ..utils.persistence import atomic_text_writer
 from ..game.businesses import NIGHTCLUB, AGENCY
 
 logger = get_logger("tracking.passive_income")
@@ -323,8 +324,7 @@ class PassiveIncomeTracker:
                 },
             }
 
-            self._data_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._data_path, "w", encoding="utf-8") as f:
+            with atomic_text_writer(self._data_path) as f:
                 json.dump(data, f, indent=2)
         except Exception as e:
             logger.error(f"Failed to save passive income state: {e}")

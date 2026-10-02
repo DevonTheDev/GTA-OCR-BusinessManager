@@ -12,6 +12,7 @@ import json
 from pathlib import Path
 
 from ..utils.logging import get_logger
+from ..utils.persistence import atomic_text_writer
 
 logger = get_logger("game.weekly_bonuses")
 
@@ -286,8 +287,7 @@ class WeeklyBonusTracker:
             return
 
         try:
-            self._data_path.parent.mkdir(parents=True, exist_ok=True)
-            with open(self._data_path, "w", encoding="utf-8") as f:
+            with atomic_text_writer(self._data_path) as f:
                 json.dump(self._state.to_dict(), f, indent=2)
         except Exception as e:
             logger.error(f"Failed to save bonuses: {e}")

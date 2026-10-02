@@ -8,6 +8,7 @@ from typing import Any, Optional, Union
 import yaml
 
 from .defaults import DEFAULT_CONFIG
+from ..utils.persistence import atomic_text_writer
 
 
 class SettingsValidationError(ValueError):
@@ -107,8 +108,7 @@ class Settings:
 
     def _save(self) -> None:
         """Save current configuration to file."""
-        self._config_path.parent.mkdir(parents=True, exist_ok=True)
-        with open(self._config_path, "w", encoding="utf-8") as f:
+        with atomic_text_writer(self._config_path) as f:
             yaml.dump(self._config, f, default_flow_style=False, sort_keys=False)
 
     def _deep_merge(self, base: dict, override: dict) -> dict:
