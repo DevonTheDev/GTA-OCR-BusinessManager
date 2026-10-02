@@ -99,6 +99,7 @@ class GTABusinessManager:
         """
         self._settings = settings or get_settings()
         self._state = AppState.STOPPED
+        self._lifecycle_lock = threading.RLock()
 
         # Core components (initialized lazily)
         self._capture: Optional[ScreenCapture] = None
@@ -239,68 +240,92 @@ class GTABusinessManager:
             # Continue without persistence
 
     def start(self) -> bool:
-        """Start the capture and detection loop.
+        """Start a fresh session only after the previous worker has finished."""
+        with self._lifecycle_lock:
+            if self._state != AppState.STOPPED or (
+                self._capture_thread and self._capture_thread.is_alive()
+            ):
+                logger.warning(f"Cannot start - current state: {self._state.name}")
+                return False
 
-        Returns:
-            True if started successfully
-        """
-        if self._state != AppState.STOPPED:
-            logger.warning(f"Cannot start - current state: {self._state.name}")
-            return False
+            self._state = AppState.STARTING
+            logger.info("Starting GTA Business Manager...")
+            try:
+                # Business observations and completed activity history outlive a
+                # capture run. Money, mission state and database IDs do not.
+                with self._data_lock:
+                    self._data = AppData(business_states=self._data.business_states)
+                    self._last_capture_result = None
+                self._money_parser = MoneyParser()
+                self._activity_tracker.cancel_activity()
+                self._cached_efficiency = None
+                self._cached_breakdown = None
+                self._last_analytics_time = 0.0
 
-        self._state = AppState.STARTING
-        logger.info("Starting GTA Business Manager...")
-
-        try:
-            self._initialize_components()
-            self._stop_event.clear()
-
-            # Start capture thread
-            self._capture_thread = threading.Thread(
-                target=self._capture_loop,
-                name="CaptureThread",
-                daemon=True,
-            )
-            self._capture_thread.start()
-
-            self._state = AppState.RUNNING
-            logger.info("GTA Business Manager started")
-            return True
-
-        except Exception as e:
-            logger.error(f"Failed to start: {e}")
-            self._state = AppState.STOPPED
-            return False
+                self._initialize_components()
+                self._stop_event.clear()
+                self._capture_thread = threading.Thread(
+                    target=self._capture_loop,
+                    name="CaptureThread",
+                    daemon=True,
+                )
+                self._capture_thread.start()
+                self._state = AppState.RUNNING
+                logger.info("GTA Business Manager started")
+                return True
+            except Exception as e:
+                logger.error(f"Failed to start: {e}")
+                self._state = AppState.STOPPING
+                self._stop_event.set()
+                if not self._capture_thread or not self._capture_thread.is_alive():
+                    self._finish_stop(self._capture_thread)
+                return False
 
     def stop(self) -> None:
-        """Stop the capture and detection loop."""
-        if self._state in (AppState.STOPPED, AppState.STOPPING):
+        """Signal shutdown; a timed-out worker retains its resources until exit."""
+        with self._lifecycle_lock:
+            if self._state == AppState.STOPPED:
+                return
+            self._state = AppState.STOPPING
+            self._stop_event.set()
+            worker = self._capture_thread
+
+        # Never hold the lifecycle lock while joining: the worker's finally
+        # block needs that lock to finish. Callbacks may stop their own worker.
+        if worker is threading.current_thread():
             return
+        if worker and worker.is_alive():
+            worker.join(timeout=5.0)
+            if worker.is_alive():
+                logger.warning("Capture is still stopping; resources remain open until it exits")
+                return
+        self._finish_stop(worker)
 
-        self._state = AppState.STOPPING
-        logger.info("Stopping GTA Business Manager...")
-
-        # Signal thread to stop
-        self._stop_event.set()
-
-        # Wait for thread to finish
-        if self._capture_thread and self._capture_thread.is_alive():
-            self._capture_thread.join(timeout=5.0)
-
-        # End session tracker
-        if self._session_tracker.is_active:
-            self._session_tracker.end_session()
-
-        # End database session
-        self._end_database_session()
-
-        # Cleanup
-        if self._capture:
-            self._capture.close()
-            self._capture = None
-
-        self._state = AppState.STOPPED
-        logger.info("GTA Business Manager stopped")
+    def _finish_stop(self, worker: Optional[threading.Thread]) -> None:
+        """Finalize one run exactly once, never a newer run started meanwhile."""
+        with self._lifecycle_lock:
+            if worker is not self._capture_thread or self._state == AppState.STOPPED:
+                return
+            self._state = AppState.STOPPING
+            self._stop_event.set()
+            try:
+                if self._session_tracker.is_active:
+                    self._session_tracker.end_session()
+            except Exception as e:
+                logger.error(f"Failed to end session tracker: {e}")
+            try:
+                self._end_database_session()
+            except Exception as e:
+                logger.error(f"Failed to close database resources: {e}")
+            capture, self._capture = self._capture, None
+            if capture:
+                try:
+                    capture.close()
+                except Exception as e:
+                    logger.error(f"Failed to close capture resources: {e}")
+            self._capture_thread = None
+            self._state = AppState.STOPPED
+            logger.info("GTA Business Manager stopped")
 
     def _end_database_session(self) -> None:
         """End the database session and close repository."""
@@ -316,44 +341,45 @@ class GTABusinessManager:
 
     def pause(self) -> None:
         """Pause capture and detection."""
-        if self._state == AppState.RUNNING:
-            self._state = AppState.PAUSED
-            logger.info("Capture paused")
+        with self._lifecycle_lock:
+            if self._state == AppState.RUNNING:
+                self._state = AppState.PAUSED
+                logger.info("Capture paused")
 
     def resume(self) -> None:
         """Resume capture and detection."""
-        if self._state == AppState.PAUSED:
-            self._state = AppState.RUNNING
-            logger.info("Capture resumed")
+        with self._lifecycle_lock:
+            if self._state == AppState.PAUSED:
+                self._state = AppState.RUNNING
+                logger.info("Capture resumed")
 
     def _capture_loop(self) -> None:
-        """Main capture and detection loop (runs in thread)."""
+        """Main capture loop; its finally block owns deferred resource cleanup."""
+        worker = threading.current_thread()
         logger.debug("Capture loop started")
-
-        while not self._stop_event.is_set():
-            if self._state != AppState.RUNNING:
-                time.sleep(0.1)
-                continue
-
-            try:
-                result = self._do_capture_cycle()
-                self._last_capture_result = result
-
-                # Notify listeners
-                for callback in self._on_capture:
-                    try:
-                        callback(result)
-                    except Exception as e:
-                        logger.error(f"Capture callback error: {e}")
-
-                # Adjust capture rate based on state
-                self._adjust_capture_rate(result.game_state)
-
-            except Exception as e:
-                logger.error(f"Capture cycle error: {e}")
-                time.sleep(1.0)  # Back off on error
-
-        logger.debug("Capture loop ended")
+        try:
+            while not self._stop_event.is_set():
+                if self._state != AppState.RUNNING:
+                    self._stop_event.wait(0.1)
+                    continue
+                try:
+                    result = self._do_capture_cycle()
+                    self._last_capture_result = result
+                    for callback in self._on_capture:
+                        if self._stop_event.is_set():
+                            break
+                        try:
+                            callback(result)
+                        except Exception as e:
+                            logger.error(f"Capture callback error: {e}")
+                    if not self._stop_event.is_set():
+                        self._adjust_capture_rate(result.game_state)
+                except Exception as e:
+                    logger.error(f"Capture cycle error: {e}")
+                    self._stop_event.wait(1.0)
+        finally:
+            self._finish_stop(worker)
+            logger.debug("Capture loop ended")
 
     def _do_capture_cycle(self) -> CaptureResult:
         """Perform one capture and detection cycle."""

@@ -289,6 +289,25 @@ pytest tests/
 python test_capture.py
 ```
 
+### Capture lifecycle checks
+
+Each Start begins fresh session money/mission state. Previous business observations
+and completed activity history remain available. A Stop request waits up to five
+seconds for an in-flight capture; if it is still busy, the app remains `STOPPING`
+and refuses another Start. The worker closes its resources and database session
+when that capture returns. Stopping from a capture callback is also supported.
+
+Shutdown is best-effort if a component's cleanup raises: the failure is logged and
+remaining resources are still cleaned up. A database-close failure can leave an
+old repository handle needing later recovery. A permanently blocked OCR call or
+forced process exit cannot guarantee final session persistence.
+
+Offline regression tests use real threads and temporary SQLite with synthetic
+capture. Windows smoke checks remain important: stop during OCR, wait for
+`STOPPED`, restart with a different displayed balance, and confirm that the first
+reading is an opening balance rather than income. These tests do not exercise
+real Windows OCR, Qt or native capture-resource cleanup.
+
 ### API/Extending
 
 ```python
