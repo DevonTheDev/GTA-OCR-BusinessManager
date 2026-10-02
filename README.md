@@ -244,6 +244,12 @@ Screen Capture (mss) → Region Extraction → OCR (winocr) → Parsing → Stat
 - Idle: 0.5 FPS (every 2 seconds)
 - Active: 2.0 FPS (every 500ms)
 
+Capture pacing uses elapsed monotonic time, so changing the system clock cannot
+create an hour-long wait or bypass the rate limit. Failed screen grabs are paced
+as well; a disconnected or unavailable capture backend does not trigger a tight
+retry loop. Batched HUD grabs still wait only once between batches. These are
+scheduling guarantees, not measured native Windows FPS benchmarks.
+
 **State Machine:**
 ```
 IDLE → MISSION_ACTIVE → MISSION_COMPLETE

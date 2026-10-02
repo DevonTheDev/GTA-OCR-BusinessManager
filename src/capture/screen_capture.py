@@ -33,7 +33,7 @@ class ScreenCapture:
         self._scaler = ResolutionScaler(monitor_index)
         self._regions = regions or DEFAULT_REGIONS
         self._sct: Optional[mss.mss] = None
-        self._last_capture_time: float = 0
+        self._last_capture_time: Optional[float] = None
         self._min_capture_interval: float = 0.0  # Seconds between captures
 
         logger.info(
@@ -57,14 +57,14 @@ class ScreenCapture:
 
     def _should_capture(self) -> bool:
         """Check if enough time has passed since last capture."""
-        if self._min_capture_interval <= 0:
+        if self._min_capture_interval <= 0 or self._last_capture_time is None:
             return True
-        return (time.time() - self._last_capture_time) >= self._min_capture_interval
+        return (time.monotonic() - self._last_capture_time) >= self._min_capture_interval
 
     def _wait_for_rate_limit(self) -> None:
         """Wait if necessary to respect rate limiting."""
-        if self._min_capture_interval > 0:
-            elapsed = time.time() - self._last_capture_time
+        if self._min_capture_interval > 0 and self._last_capture_time is not None:
+            elapsed = time.monotonic() - self._last_capture_time
             if elapsed < self._min_capture_interval:
                 time.sleep(self._min_capture_interval - elapsed)
 
@@ -95,8 +95,6 @@ class ScreenCapture:
             # Capture the region
             screenshot = sct.grab(monitor_dict)
 
-            self._last_capture_time = time.time()
-
             # Convert to numpy array (BGRA -> BGR)
             img = np.array(screenshot)
             return img[:, :, :3]  # Remove alpha channel
@@ -104,6 +102,10 @@ class ScreenCapture:
         except Exception as e:
             logger.error(f"Failed to capture region: {e}")
             return None
+        finally:
+            # Pace failed attempts too, so an unavailable screen cannot create
+            # a tight retry loop. Wall-clock adjustments must not affect waits.
+            self._last_capture_time = time.monotonic()
 
     def capture_full_screen(self, wait_for_rate: bool = True) -> Optional[np.ndarray]:
         """Capture the full screen.
