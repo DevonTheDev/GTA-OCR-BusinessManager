@@ -589,13 +589,20 @@ class GTABusinessManager:
         state = state_result.state
 
         # Mission started
-        if state == GameState.MISSION_ACTIVE and self._data.mission_start_time is None:
+        if (state in (GameState.MISSION_ACTIVE, GameState.HEIST_PREP, GameState.HEIST_FINALE)
+                and self._data.mission_start_time is None):
             self._data.mission_start_time = datetime.now()
             self._data.mission_start_money = self._data.current_money
             self._data.current_mission = state_result.mission_text or "Unknown Mission"
 
-            # Determine activity type
-            activity_type = self._infer_activity_type(state_result)
+            # Explicit heist states already distinguish prep from finale; keep
+            # generic mission inference for MISSION_ACTIVE only.
+            if state == GameState.HEIST_PREP:
+                activity_type = ActivityType.HEIST_PREP
+            elif state == GameState.HEIST_FINALE:
+                activity_type = ActivityType.HEIST_FINALE
+            else:
+                activity_type = self._infer_activity_type(state_result)
             self._activity_tracker.start_activity(
                 activity_type=activity_type,
                 name=self._data.current_mission,

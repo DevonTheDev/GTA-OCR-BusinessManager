@@ -555,3 +555,17 @@ Local tests use synthetic detected states through the actual trackers and SQLite
 covering zero/missing/spent balances, failed activity types, sell counts and the
 money-plus-mission path without duplicate session income. Native OCR accuracy,
 gameplay, UI rendering and mission classification heuristics remain unverified.
+
+### Tracking detected heist phases
+
+The existing `HEIST_PREP` and `HEIST_FINALE` detector states now start an activity
+when no mission is being tracked, using their corresponding activity types. They
+capture the same start time and balance as ordinary missions and reach the same
+success/failure persistence path. Generic active missions retain their existing
+text-based type inference, and later noisy/repeated states do not replace an
+already-active activity or reset its baseline.
+
+Tests link the actual OCR-text state classifier to real trackers and SQLite using
+synthetic recognized text, including both outcomes and intermediate state changes.
+This does not change OCR keywords, detection confidence, automatic phase-boundary
+recognition or native gameplay behavior; no screenshot/Windows OCR accuracy claim.
