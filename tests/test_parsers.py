@@ -142,7 +142,7 @@ class TestMoneyParser:
         """Flag dramatic changes that could be OCR errors."""
         # First establish a baseline
         first = parser.parse("$1,000,000")
-        parser._last_valid_reading = first
+        assert parser.validate_reading(first)
 
         # Now a dramatically different value
         second = MoneyReading(total=100000000)  # 100x increase

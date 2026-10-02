@@ -463,3 +463,18 @@ clock behavior is unchanged. The returned dataclass remains mutable by callers;
 this is not an immutable snapshot or a new thread-safety guarantee. Local tests
 use controlled clocks and the application's stop/analytics path without native
 capture, OCR or Qt UI execution.
+
+### OCR balance validation baseline
+
+Money plausibility checks compare each candidate with the last balance accepted
+by validation. Parsing alone, rejected candidates and later mutation of a returned
+reading do not replace that numeric baseline. This prevents the parse→validate
+capture flow from accepting a large OCR spike simply by comparing it with itself.
+The existing parsed-reading accessor still returns the latest parsed candidate.
+
+The existing minimum/maximum limits and 100× jump threshold are unchanged.
+Repeated rejected jumps do not automatically establish a new baseline; a fresh
+capture run creates a new parser. A genuine unusually large balance change may
+therefore need a restart or future threshold-policy adjustment. Tests use synthetic
+OCR text through the actual capture/accounting path and disposable SQLite, without
+Windows OCR, screenshots, live gameplay or an accuracy benchmark.

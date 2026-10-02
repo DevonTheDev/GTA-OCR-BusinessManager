@@ -75,6 +75,9 @@ class MoneyParser:
     def __init__(self):
         """Initialize money parser."""
         self._last_valid_reading: Optional[MoneyReading] = None
+        # Parsing produces candidates. Only successful validation advances the
+        # numeric baseline, independently of mutable returned reading objects.
+        self._last_accepted_value: Optional[int] = None
 
     def parse(self, text: str) -> MoneyReading:
         """Parse money value(s) from OCR text.
@@ -268,7 +271,7 @@ class MoneyParser:
         return MoneyReading(raw_text=text)
 
     def get_last_valid(self) -> Optional[MoneyReading]:
-        """Get the last successfully parsed reading."""
+        """Get the last parsed candidate; plausibility validation is separate."""
         return self._last_valid_reading
 
     def validate_reading(self, reading: MoneyReading) -> bool:
@@ -301,9 +304,9 @@ class MoneyParser:
                 logger.debug(f"Money value exceeds GTA maximum: {value}")
                 return False
 
-            # Check against last reading if available
-            if self._last_valid_reading:
-                last_value = self._last_valid_reading.display_value
+            # Compare against accepted history, never the candidate just parsed.
+            if self._last_accepted_value is not None:
+                last_value = self._last_accepted_value
                 # Flag dramatic changes (could be OCR error)
                 if last_value > 0:
                     try:
@@ -318,6 +321,7 @@ class MoneyParser:
                         # If calculation fails, allow the reading
                         pass
 
+            self._last_accepted_value = value
             return True
 
         except Exception as e:
