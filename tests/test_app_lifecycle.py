@@ -44,8 +44,11 @@ def manager(tmp_path, monkeypatch):
     repo.close()
 
 
-def test_restart_has_a_fresh_money_baseline_and_database_session(manager):
+@pytest.mark.parametrize("opening_write_fails", [False, True])
+def test_restart_has_a_fresh_money_baseline_and_database_session(manager, monkeypatch, opening_write_fails):
     app, repo, _ = manager
+    if opening_write_fails:
+        monkeypatch.setattr(repo, "set_session_start_money", lambda *args: False)
     assert app.start()
     first_id = app._data.db_session_id
     app._process_money_change(MoneyReading(total=100_000))
@@ -60,6 +63,9 @@ def test_restart_has_a_fresh_money_baseline_and_database_session(manager):
     assert app._process_money_change(MoneyReading(total=300_000)) == 0
     assert app.session_stats.total_earnings == 0
     assert repo.export_session_data(first_id)["session"]["total_earnings"] == 20_000
+    if opening_write_fails:
+        assert repo.export_session_data(second_id)["session"]["start_money"] == 0
+        app.stop()  # Recovery occurs on normal finalization, not a background retry.
     assert repo.export_session_data(second_id)["session"]["start_money"] == 300_000
     assert repo.export_session_data(second_id)["earnings"] == []
 

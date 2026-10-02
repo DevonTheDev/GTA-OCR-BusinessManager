@@ -431,3 +431,20 @@ refresh can bypass the interval. This changes cache behavior, not the selected
 activity history or analytics formulas, and does not make every tracker operation
 thread-safe. Tests use real calculations with controlled clocks and threads;
 there is no native UI or FPS benchmark claim.
+
+### Opening-balance recovery at session end
+
+The first observed balance is retained separately for the database session, so
+resetting the on-screen statistics cannot replace it. Normal finalization saves
+that original balance, the ending balance and their net difference in one SQLite
+transaction. This recovers a failed initial opening-balance write when storage is
+available again at session end. UI earnings remain gross positive money changes;
+database session earnings remain the net balance difference.
+
+Finalization only updates an open row, so repeated or competing finalizers cannot
+rewrite closed history. Success is logged only after commit; failures are reported
+and roll back the transaction. This is not a background retry journal: active
+exports may still show the old baseline after an initial failure, and a persistent
+storage failure or abrupt process exit can leave the session unfinished. Local
+tests exercise real SQLite, injected commit failures and concurrent finalizers;
+native Windows OCR and crash recovery remain separate validation work.

@@ -87,6 +87,8 @@ class AppData:
     # Database IDs for persistence
     character_id: Optional[int] = None
     db_session_id: Optional[int] = None
+    # Original OCR baseline for the DB session, independent of statistics resets.
+    db_start_money: Optional[int] = None
 
 
 class GTABusinessManager:
@@ -328,16 +330,22 @@ class GTABusinessManager:
             logger.info("GTA Business Manager stopped")
 
     def _end_database_session(self) -> None:
-        """End the database session and close repository."""
-        if self._repository and self._data.db_session_id:
+        """Atomically finalize observed balances, then close the repository."""
+        repository = self._repository
+        with self._data_lock:
+            session_id = self._data.db_session_id
+            end_money = self._data.current_money or 0
+            start_money = self._data.db_start_money
+        if repository and session_id:
             try:
-                end_money = self._data.current_money or 0
-                self._repository.end_session(self._data.db_session_id, end_money)
-                logger.info(f"Database session {self._data.db_session_id} ended")
+                if repository.end_session(session_id, end_money, start_money=start_money):
+                    logger.info(f"Database session {session_id} ended")
+                else:
+                    logger.warning(f"Failed to finalize database session {session_id}")
             except Exception as e:
                 logger.error(f"Failed to end database session: {e}")
             finally:
-                self._repository.close()
+                repository.close()
 
     def pause(self) -> None:
         """Pause capture and detection."""
@@ -469,6 +477,8 @@ class GTABusinessManager:
         initial_balance = False
 
         with self._data_lock:
+            if self._data.db_start_money is None:
+                self._data.db_start_money = current_value
             # Initialize session start money
             if self._data.session_start_money is None:
                 self._data.session_start_money = current_value

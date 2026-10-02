@@ -204,26 +204,39 @@ class Repository:
             logger.error(f"Failed to set session opening balance: {e}")
             return False
 
-    def end_session(self, session_id: int, end_money: int = 0) -> bool:
-        """End a play session.
+    def end_session(
+        self, session_id: int, end_money: int = 0, *, start_money: Optional[int] = None
+    ) -> bool:
+        """Close an open session, optionally recovering its observed baseline.
 
-        Args:
-            session_id: Session ID to end
-            end_money: Money at session end
-
-        Returns:
-            True if successful
+        The opening balance, ending balance and net change commit together.
+        ``None`` preserves the stored opening balance; zero is a valid override.
+        Closed or missing sessions return False without rewriting history.
         """
+        updates = {
+            Session.ended_at: utc_now(),
+            Session.end_money: end_money,
+            Session.total_earnings: end_money - (
+                start_money if start_money is not None else Session.start_money
+            ),
+        }
+        if start_money is not None:
+            updates[Session.start_money] = start_money
         try:
             with self._session_scope() as db_session:
-                session = db_session.query(Session).filter_by(id=session_id).first()
-                if session:
-                    session.ended_at = utc_now()
-                    session.end_money = end_money
-                    session.total_earnings = end_money - session.start_money
-                    logger.info(f"Ended session {session_id}, earnings: ${session.total_earnings:,}")
-                    return True
-                return False
+                # The open-session condition belongs to the UPDATE itself so
+                # two concurrent finalizers cannot both rewrite the same row.
+                changed = db_session.query(Session).filter_by(
+                    id=session_id, ended_at=None
+                ).update(updates, synchronize_session=False)
+                if not changed:
+                    return False
+                earnings = db_session.query(Session.total_earnings).filter_by(
+                    id=session_id
+                ).scalar()
+            # Do not log success before the transaction has committed.
+            logger.info("Ended session %s, net earnings: %s", session_id, earnings)
+            return True
         except DatabaseError as e:
             logger.error(f"Failed to end session: {e}")
             return False
