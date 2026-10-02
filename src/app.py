@@ -122,10 +122,11 @@ class GTABusinessManager:
         self._analytics = Analytics()
         self._cooldown_tracker: Optional[CooldownTracker] = None
 
-        # Cached analytics (updated on activity completion)
+        # Cached analytics (updated on activity completion and throttled reads)
+        self._analytics_lock = threading.Lock()
         self._cached_efficiency: Optional[EfficiencyMetrics] = None
         self._cached_breakdown: Optional[EarningsBreakdown] = None
-        self._last_analytics_time: float = 0.0
+        self._last_analytics_time: Optional[float] = None
         self._analytics_min_interval: float = 1.0  # Min seconds between recalculations
 
         # Database
@@ -259,9 +260,7 @@ class GTABusinessManager:
                     self._last_capture_result = None
                 self._money_parser = MoneyParser()
                 self._activity_tracker.cancel_activity()
-                self._cached_efficiency = None
-                self._cached_breakdown = None
-                self._last_analytics_time = 0.0
+                self._invalidate_analytics()
 
                 self._initialize_components()
                 self._stop_event.clear()
@@ -805,35 +804,46 @@ class GTABusinessManager:
         except Exception as e:
             logger.error(f"Error processing business computer: {e}")
 
+    def _invalidate_analytics(self) -> None:
+        """Clear cached results and allow the next read to refresh immediately."""
+        with self._analytics_lock:
+            self._cached_efficiency = None
+            self._cached_breakdown = None
+            self._last_analytics_time = None
+
     def _recalculate_analytics(self, force: bool = False) -> None:
-        """Recalculate analytics from current activity data.
+        """Refresh the cache once per elapsed-time interval, unless forced."""
+        with self._analytics_lock:
+            current_time = time.monotonic()
+            if (
+                not force
+                and self._last_analytics_time is not None
+                and current_time - self._last_analytics_time < self._analytics_min_interval
+            ):
+                return
 
-        Args:
-            force: If True, ignore rate limiting and recalculate immediately
-        """
-        # Rate limit analytics recalculation to avoid O(n) operations too frequently
-        current_time = time.time()
-        if not force and (current_time - self._last_analytics_time) < self._analytics_min_interval:
-            return
-
-        try:
-            activities = self._activity_tracker.get_recent_activities(100)
-            session_time = self._session_tracker.duration_seconds
-
-            if activities and session_time > 0:
-                self._cached_efficiency = self._analytics.calculate_efficiency(
-                    activities, session_time
-                )
-                self._cached_breakdown = self._analytics.calculate_earnings_breakdown(
-                    activities
-                )
-                self._last_analytics_time = current_time
-                logger.debug(
-                    f"Analytics updated: {self._cached_efficiency.earnings_per_hour:.0f}/hr, "
-                    f"best: {self._cached_efficiency.best_activity_type}"
-                )
-        except Exception as e:
-            logger.error(f"Failed to recalculate analytics: {e}")
+            try:
+                activities = self._activity_tracker.get_recent_activities(100)
+                session_time = self._session_tracker.duration_seconds
+                if activities and session_time > 0:
+                    # Publish only after both calculations succeed, retaining the
+                    # prior snapshot if either raises.
+                    efficiency = self._analytics.calculate_efficiency(activities, session_time)
+                    breakdown = self._analytics.calculate_earnings_breakdown(activities)
+                    self._cached_efficiency = efficiency
+                    self._cached_breakdown = breakdown
+                    logger.debug(
+                        f"Analytics updated: {efficiency.earnings_per_hour:.0f}/hr, "
+                        f"best: {efficiency.best_activity_type}"
+                    )
+                else:
+                    self._cached_efficiency = None
+                    self._cached_breakdown = None
+            except Exception as e:
+                logger.error(f"Failed to recalculate analytics: {e}")
+            finally:
+                # Empty and failed attempts also consume the retry budget.
+                self._last_analytics_time = time.monotonic()
 
     def _adjust_capture_rate(self, state: GameState) -> None:
         """Adjust capture rate based on game state."""
@@ -991,21 +1001,19 @@ class GTABusinessManager:
     @property
     def efficiency_metrics(self) -> Optional[EfficiencyMetrics]:
         """Get calculated efficiency metrics from analytics."""
-        # Recalculate if not cached
-        if self._cached_efficiency is None:
-            self._recalculate_analytics()
+        self._recalculate_analytics()
         return self._cached_efficiency
 
     @property
     def earnings_breakdown(self) -> Optional[EarningsBreakdown]:
         """Get earnings breakdown by source."""
-        if self._cached_breakdown is None:
-            self._recalculate_analytics()
+        self._recalculate_analytics()
         return self._cached_breakdown
 
     @property
     def best_activity_type(self) -> Optional[str]:
         """Get the best performing activity type."""
+        self._recalculate_analytics()
         if self._cached_efficiency:
             return self._cached_efficiency.best_activity_type
         return None
@@ -1013,6 +1021,7 @@ class GTABusinessManager:
     @property
     def best_activity_rate(self) -> float:
         """Get the earnings rate of the best activity type."""
+        self._recalculate_analytics()
         if self._cached_efficiency:
             return self._cached_efficiency.best_activity_rate
         return 0.0
@@ -1031,9 +1040,7 @@ class GTABusinessManager:
 
         self._session_tracker.start_session(start_money=start_money)
 
-        # Clear cached analytics
-        self._cached_efficiency = None
-        self._cached_breakdown = None
+        self._invalidate_analytics()
 
         logger.info("Session reset")
 

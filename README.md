@@ -415,3 +415,19 @@ up on ordinary failures; an abrupt process exit or denied cleanup may leave a
 Local Python tests use disposable real files and injected failures. Native Windows
 filesystem behavior remains a separate runtime check; no existing saves are
 migrated or rewritten until the app performs its normal save operation.
+
+### Analytics cache refresh
+
+Analytics getters refresh at most once per one-second elapsed-time interval,
+including when a result is already cached, so elapsed-session rates do not stay
+frozen until another mission completes. Concurrent refresh calls share one
+calculation. Both earnings and efficiency calculations must succeed before their
+new results are published; empty histories clear stale results, while failures
+retain the previous snapshot and still respect the retry interval.
+
+Refresh scheduling uses a monotonic clock and starts its budget after each attempt
+finishes. Start/reset invalidates the cache and its budget; an explicit forced
+refresh can bypass the interval. This changes cache behavior, not the selected
+activity history or analytics formulas, and does not make every tracker operation
+thread-safe. Tests use real calculations with controlled clocks and threads;
+there is no native UI or FPS benchmark claim.
