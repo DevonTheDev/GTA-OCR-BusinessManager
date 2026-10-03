@@ -72,6 +72,29 @@ A smart companion app that runs alongside GTA Online, tracking your money, activ
 - **Session Stats** - See how much you've earned this session
 - **Earnings Rate** - Calculates your $/hour based on actual gameplay
 
+### Saved Session History
+
+Open the **History** tab to browse completed sessions, filter by character and
+page through older records. Select a session to inspect its recorded activities
+and balance changes, then choose **Export selected session as JSON…** to save it
+where you want. The view works while tracking is stopped and does not start a new
+session or change the active character. Use **Refresh history** to load newly
+completed sessions; sessions still in progress are excluded.
+
+Saved **Net balance change** includes spending, so it can differ from the live
+gross-earnings counter. Times are shown in UTC and missing legacy values stay
+unavailable rather than becoming zero. History pages contain 25 sessions; detail
+tables show up to 1,000 rows each, while the JSON includes every recorded activity
+and balance change for the selected session. Browsing does not edit the records.
+
+Local tests cover real SQLite paging/filtering and the actual Qt tab, selection,
+details, canceled/failed saves and JSON output. To run native UI checks with the
+existing UI dependencies installed, use `GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_history_panel_qt.py`
+(set the variables separately on shells without inline environment assignments).
+The ordinary suite skips these opt-in Qt tests. Linux offscreen rendering is
+validated; the native file chooser is substituted in tests, and Windows capture
+and interactive game integration remain unverified.
+
 ### Activity Detection
 - Automatically detects when you're doing:
   - Contact Missions

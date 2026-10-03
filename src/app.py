@@ -971,6 +971,14 @@ class GTABusinessManager:
         return self._last_capture_result
 
     @property
+    def history_repository(self) -> Repository:
+        """Access recorded history without starting capture or a new session."""
+        with self._lifecycle_lock:
+            if self._repository is None:
+                self._repository = get_repository()
+            return self._repository
+
+    @property
     def session_stats(self):
         """Get session statistics."""
         return self._session_tracker.stats

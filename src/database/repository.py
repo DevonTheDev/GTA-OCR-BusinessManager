@@ -1,6 +1,7 @@
 """Data access repository for GTA Business Manager."""
 
 from datetime import datetime, timedelta
+from dataclasses import dataclass
 from typing import Optional, List
 from contextlib import contextmanager
 
@@ -18,6 +19,34 @@ logger = get_logger("database")
 class DatabaseError(Exception):
     """Base exception for database operations."""
     pass
+
+
+@dataclass(frozen=True)
+class SessionHistoryItem:
+    """Detached completed-session values, preserving nullable legacy data.
+
+    Timestamps retain their stored UTC values. ``net_change`` is the stored
+    session total, not a recalculation from balances, activities or earnings.
+    """
+
+    id: int
+    character_id: int
+    character_name: str
+    started_at: Optional[datetime]
+    ended_at: datetime
+    start_money: Optional[int]
+    end_money: Optional[int]
+    net_change: Optional[int]
+    duration_seconds: Optional[float]
+    activities_count: int
+
+
+@dataclass(frozen=True)
+class SessionHistoryPage:
+    """A caller-owned session list and the matching total before pagination."""
+
+    sessions: List[SessionHistoryItem]
+    total: int
 
 
 class Repository:
@@ -267,6 +296,80 @@ class Repository:
         except DatabaseError as e:
             logger.error(f"Failed to get recent sessions: {e}")
             return []
+
+    def get_completed_session_history(
+        self, character_id: Optional[int] = None, limit: int = 50, offset: int = 0
+    ) -> SessionHistoryPage:
+        """Read completed sessions in stable newest-start, newest-ID order.
+
+        ``character_id=None`` includes all characters. ``total`` counts matching
+        sessions before applying the page bounds. Missing legacy start times
+        sort last and have no duration; stored money and timestamps are returned
+        unchanged. Activity counts include every activity belonging to a session.
+
+        Raises:
+            ValueError: A character ID is not positive, limit is outside 1..500,
+                or offset is negative. All arguments must be integers (not bool),
+                except the optional character ID.
+            DatabaseError: Initialization or querying failed. An unavailable
+                database is deliberately distinct from an empty history page.
+        """
+        if character_id is not None and (
+            isinstance(character_id, bool)
+            or not isinstance(character_id, int)
+            or character_id < 1
+        ):
+            raise ValueError("character_id must be None or a positive integer")
+        if isinstance(limit, bool) or not isinstance(limit, int) or not 1 <= limit <= 500:
+            raise ValueError("limit must be an integer between 1 and 500")
+        if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
+            raise ValueError("offset must be a nonnegative integer")
+
+        with self._session_scope() as db_session:
+            query = (
+                db_session.query(Session, Character.name)
+                .join(Character, Session.character_id == Character.id)
+                .filter(Session.ended_at.isnot(None))
+            )
+            if character_id is not None:
+                query = query.filter(Session.character_id == character_id)
+            total = query.count()
+
+            # Aggregate activities independently of earnings so neither count
+            # nor the stored net change can be multiplied by a join.
+            activity_counts = (
+                db_session.query(
+                    Activity.session_id,
+                    func.count(Activity.id).label("activities_count"),
+                )
+                .group_by(Activity.session_id)
+                .subquery()
+            )
+            rows = (
+                query.add_columns(func.coalesce(activity_counts.c.activities_count, 0))
+                .outerjoin(activity_counts, activity_counts.c.session_id == Session.id)
+                .order_by(Session.started_at.desc(), Session.id.desc())
+                .limit(limit)
+                .offset(offset)
+                .all()
+            )
+            items = [
+                SessionHistoryItem(
+                    id=record.id,
+                    character_id=record.character_id,
+                    character_name=character_name,
+                    started_at=record.started_at,
+                    ended_at=record.ended_at,
+                    start_money=record.start_money,
+                    end_money=record.end_money,
+                    net_change=record.total_earnings,
+                    duration_seconds=(record.ended_at - record.started_at).total_seconds()
+                    if record.started_at is not None else None,
+                    activities_count=activities_count,
+                )
+                for record, character_name, activities_count in rows
+            ]
+            return SessionHistoryPage(sessions=items, total=total)
 
     # Activity operations
 
@@ -531,7 +634,9 @@ class Repository:
         }
 
     def export_session_data(self, session_id: int) -> Optional[dict]:
-        """Export all data for a session.
+        """Export all data for a session, preserving missing legacy values.
+
+        Missing timestamps are None, as is duration when no start is recorded.
 
         Args:
             session_id: Session ID to export
@@ -560,12 +665,14 @@ class Repository:
                 return {
                     "session": {
                         "id": session.id,
-                        "started_at": session.started_at.isoformat(),
+                        "started_at": session.started_at.isoformat()
+                        if session.started_at is not None else None,
                         "ended_at": session.ended_at.isoformat() if session.ended_at else None,
                         "start_money": session.start_money,
                         "end_money": session.end_money,
                         "total_earnings": session.total_earnings,
-                        "duration_seconds": session.duration_seconds,
+                        "duration_seconds": session.duration_seconds
+                        if session.started_at is not None else None,
                     },
                     "activities": [
                         {
@@ -583,7 +690,7 @@ class Repository:
                             "amount": e.amount,
                             "source": e.source,
                             "balance_after": e.balance_after,
-                            "timestamp": e.timestamp.isoformat(),
+                            "timestamp": e.timestamp.isoformat() if e.timestamp is not None else None,
                         }
                         for e in earnings
                     ],

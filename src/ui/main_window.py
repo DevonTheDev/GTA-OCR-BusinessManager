@@ -20,6 +20,7 @@ from .widgets.dashboard import DashboardWidget
 from .widgets.business_panel import BusinessPanel
 from .widgets.activity_panel import ActivityPanel
 from .widgets.session_panel import SessionPanel
+from .widgets.history_panel import SessionHistoryPanel
 from .widgets.recommendations import RecommendationsPanel
 from .widgets.settings_panel import SettingsPanel
 from .styles.dark_theme import DarkTheme
@@ -126,6 +127,9 @@ class MainWindow(QMainWindow):
         self._session_panel = SessionPanel(self._app, self)
         self._tabs.addTab(self._session_panel, "Session")
 
+        self._history_panel = SessionHistoryPanel(self._app, self)
+        self._tabs.addTab(self._history_panel, "History")
+
         # Businesses tab
         self._business_panel = BusinessPanel(self._app, self)
         self._tabs.addTab(self._business_panel, "Businesses")
@@ -141,6 +145,11 @@ class MainWindow(QMainWindow):
         # Settings tab
         self._settings_panel = SettingsPanel(self._app, self)
         self._tabs.addTab(self._settings_panel, "Settings")
+        self._tabs.currentChanged.connect(self._on_tab_changed)
+
+    def _on_tab_changed(self, index: int) -> None:
+        if self._tabs.widget(index) is self._history_panel:
+            self._history_panel.refresh()
 
     def _setup_info_bar(self, parent_layout: QVBoxLayout) -> None:
         """Setup the top information bar."""
