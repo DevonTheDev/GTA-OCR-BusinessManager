@@ -193,9 +193,13 @@ class GameStateMachine:
             trigger: Description of what triggered the transition
 
         Returns:
-            True if transition was valid and executed
+            True if a transition was executed, False if the state was unchanged
         """
         current = self._context.state
+        # Detection repeats every capture cycle; only an actual state change
+        # starts a new context, history entry and listener event.
+        if new_state == current:
+            return False
 
         # Allow transition from any state if we can't determine validity
         if current == GameState.UNKNOWN or new_state == GameState.UNKNOWN:

@@ -594,3 +594,10 @@ Queries do not change the current state or retained history; the existing histor
 limit still applies. Local tests exercise actual transitions/listeners, ordering,
 empty requests and retention. Returned transition objects remain shared, and this
 does not add concurrent-access guarantees or native UI/gameplay validation.
+
+Repeated detections of the current state now leave its original context and entry
+time intact. They return `False` from `transition_to`, add no history row and send
+no state-change notification. A different detected state still starts a new timer
+and follows the existing transition/warning rules. Tests cover every state, a
+listener repeating the current state, and repeated capture cycles through the
+actual app method with synthetic frames; no native OCR or performance claim.
