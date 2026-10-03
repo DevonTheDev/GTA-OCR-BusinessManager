@@ -63,7 +63,7 @@ class CooldownInfo:
             started = self.started_at.replace(tzinfo=timezone.utc)
         else:
             started = self.started_at
-        return (now - started).total_seconds()
+        return max(0.0, (now - started).total_seconds())
 
     @property
     def remaining_seconds(self) -> float:

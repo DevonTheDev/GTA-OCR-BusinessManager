@@ -110,7 +110,7 @@ class PassiveIncomeState:
         else:
             last = self.last_updated
 
-        hours_elapsed = (now - last).total_seconds() / 3600
+        hours_elapsed = max(0.0, (now - last).total_seconds()) / 3600
         accumulated = int(hours_elapsed * self.rate_per_hour)
 
         return min(self.max_value, self.current_value + accumulated)

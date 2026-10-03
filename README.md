@@ -625,3 +625,19 @@ logged and do not skip later listeners. Local tests link callbacks to the actual
 trackers and SQLite, including repeated results, all active mission types and nested
 completions. This does not add general thread safety, change payout/detection policy,
 or validate native OCR/UI behavior.
+
+### Estimates after clock rollback
+
+Cooldowns, passive-income accumulation and nightclub popularity decay now treat
+time before their recorded start/update as zero elapsed time. A future saved
+timestamp or backward clock adjustment cannot create negative income, increase
+popularity above its recorded value, or extend a cooldown past its original
+duration. The stored observations and timestamps remain intact; ordinary estimates
+resume when the wall clock reaches those timestamps.
+
+Existing rates, capacities, decay rules and legacy-naive-as-UTC interpretation
+remain unchanged. This bounds these elapsed-time estimates, without replacing
+persisted wall-clock time with a monotonic clock or correcting old records. Local
+tests cover UTC/offset/legacy timestamps, real JSON reloads and normal later accrual
+and expiry. Native game timing and the accuracy of game-economy constants are not
+validated by this change.

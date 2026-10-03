@@ -212,7 +212,7 @@ class NightclubState:
         else:
             last_update = self.last_popularity_update
 
-        elapsed_minutes = (now - last_update).total_seconds() / 60
+        elapsed_minutes = max(0.0, (now - last_update).total_seconds()) / 60
         ingame_days = elapsed_minutes / INGAME_DAY_MINUTES
         decay = int(ingame_days * POPULARITY_DECAY_PER_DAY)
 
