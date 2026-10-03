@@ -420,6 +420,74 @@ native file choosers are substituted, and Windows/game capture is unverified.
   - Acid Lab
   - And more...
 
+### Manual Business Check-ins
+
+Open **Businesses → Manual check-ins…** to keep your own observations for a saved
+character. Choose a character, select a business, then **Record check-in…**.
+Enter any stock percentage, supply percentage, observed dollar value, or personal
+note you want to record. The editor starts with blank fields and keeps its chosen
+character and business even if you change the board or Settings while it is open.
+
+- Stock and supply accept whole percentages from 0 to 100. Observed value accepts
+  whole dollars from 0 to 9,223,372,036,854,775,807. Type digits without commas,
+  currency symbols, signs, decimal points or exponent notation
+- Blank measurements mean **unknown**; a typed zero is a known zero. Each check-in
+  is a complete independent observation, so omitted fields do not carry values
+  forward from an older entry. A note-only check-in is allowed
+- Notes allow up to 2,000 Unicode code points, including newlines and tabs. Names
+  and notes display literally. At least one measurement or a nonblank note is
+  required; invalid input or a failed Save keeps your draft
+- Save appends a new entry with a **Recorded at … UTC** timestamp. The latest board
+  and history follow save IDs, so equal timestamps or a backward clock do not
+  make an older entry replace a newer one
+- Select a business to browse earlier check-ins, 25 at a time, and inspect the
+  full selected note. Refresh reads current saved data; closing and reopening the
+  board retains the records
+- Export the displayed latest board or history page as JSON. These are separate
+  accepted observations; an export retains the chosen snapshot even if data or
+  selection changes while the file chooser is open
+
+Check-ins belong to existing saved characters. If none exist yet, set your
+character name in Settings and start normal tracking once. You can record
+check-ins after tracking stops. Opening this board does not create or activate a
+character, start a session, or start capture. When no current or unique active
+character can be selected unambiguously, choose one explicitly. Duplicate names
+are distinguished by their IDs.
+
+These are your saved observations, with the recorded time showing when Save ran.
+They do not advance stock over time, estimate sale prices or production, verify
+current game state, or drive the app's recommendations, live OCR cards, goals or
+earnings. The business selector uses the existing catalogue's names; it does not
+certify current game mechanics or which properties a character owns. Legacy
+business snapshots remain separate from these manual entries.
+
+The additive `manual_business_checkins` table and its character/business/save-ID
+index are created alongside existing SQLite tables. This workflow appends records
+and provides no edit, delete, backdating or import operation. A character must
+still exist when an entry is inserted. Failed commits are not reported as saves;
+if a successful save is followed by a failed display refresh, its success remains
+visible and Refresh retries only the read. Invalid stored entries are reported as
+unavailable instead of silently substituted with earlier values or zeros.
+
+Reads are bounded to 1,000 character choices, 256 latest business groups, and
+history pages of 1–100 rows with offsets up to 1,000,000. Board and history queries
+capture their context and rows within one SQL observation; the two views are not
+a shared multi-query transaction. JSON exports are limited to 8 MiB UTF-8 and
+write through same-directory staging before replacing the destination. A failed
+write preserves a previous export; this per-file replacement is not a power-loss
+durability guarantee. Exports include the selected character and your personal
+notes, so share them accordingly.
+
+Local tests exercise temporary real SQLite databases, validation and rollback,
+character isolation, insertion ordering, concurrent readers/writers, and the
+actual MainWindow → Businesses → editor → reopen/history/export path. Native tests:
+`GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_business_checkins_qt.py tests/test_business_checkins_app_qt.py`.
+Ordinary pytest skips these opt-in UI cases and does not require Qt. Native test
+mode keeps one QApplication alive for the entire pytest session, while each test
+cleans up its own widgets. Native Linux offscreen rendering is
+tested with substituted file choosers and synthetic capture boundaries; Windows,
+OCR accuracy and live game behavior remain unverified. No hosted tests are used.
+
 ### Smart Recommendations
 - Get suggestions like:
   - "Your bunker is ready to sell"
@@ -561,6 +629,7 @@ SQLite database stored at `%LOCALAPPDATA%\GTABusinessManager\gta_manager.db`
 - `sessions` - Play sessions with earnings
 - `activities` - Completed activities with earnings/duration
 - `business_snapshots` - Business stock/supply history
+- `manual_business_checkins` - Character-scoped manual observations and personal notes
 - `earnings` - Individual money transactions
 
 ### Architecture

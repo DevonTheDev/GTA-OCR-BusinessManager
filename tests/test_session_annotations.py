@@ -62,8 +62,11 @@ def journal(tmp_path):
 
 def captured_contents(path):
     with sqlite3.connect(path) as connection:
+        # Manual context and SQLite's sequence table are separate from captured
+        # accounting; compare the schema and rows of the legacy source tables.
         tables = [row[0] for row in connection.execute(
-            "SELECT name FROM sqlite_master WHERE type='table' AND name != 'session_annotations'"
+            "SELECT name FROM sqlite_master WHERE type='table' AND name IN "
+            "('characters', 'sessions', 'activities', 'earnings', 'business_snapshots')"
         )]
         return {name: (connection.execute("SELECT sql FROM sqlite_master WHERE name=?", (name,)).fetchone(),
                        connection.execute(f'SELECT * FROM "{name}" ORDER BY id').fetchall())

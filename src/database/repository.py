@@ -45,10 +45,43 @@ from .session_comparison import (
     finite_number,
     subtract_metrics,
 )
+from .business_checkins import (
+    BusinessCheckIn, BusinessCheckInBoard, BusinessCheckInPage,
+    BusinessCheckInDataError, BusinessCheckInLimitError, BusinessCheckInUnavailable,
+    CheckInCharacter, MAX_CHECKIN_BUSINESSES, MAX_CHECKIN_CHARACTERS,
+    MAX_CHECKIN_CHARACTER_NAME_BYTES, MAX_CHECKIN_NOTE_BYTES,
+    checkin_character_from_storage, checkin_from_storage, normalize_business_checkin,
+    validate_checkin_business_id, validate_checkin_id, validate_checkin_page,
+)
 from ..utils.logging import get_logger
 
 
 logger = get_logger("database")
+
+
+def _checkin_text_column(table, field, maximum, name=None):
+    """Bound bytes before driver decoding, including malformed UTF-8 and BLOBs."""
+    name = name or field
+    # Some SQLite versions return NULL for substr(empty BLOB); retain the
+    # original typeof separately so this never converts an actual NULL to text.
+    return (f"coalesce(substr(CAST({table}.{field} AS BLOB), 1, {maximum + 1}), x'') AS {name}, "
+            f"typeof({table}.{field}) AS {name}_type")
+
+
+_CHECKIN_CHARACTER_COLUMNS = (
+    "c.id AS context_character_id, "
+    + _checkin_text_column("c", "name", MAX_CHECKIN_CHARACTER_NAME_BYTES, "character_name")
+    + ", CASE WHEN typeof(c.is_active) = 'integer' THEN c.is_active END AS active_integer"
+)
+_CHECKIN_ROW_COLUMNS = ", ".join([
+    "m.id IS NOT NULL AS row_present",
+    *(f"CASE WHEN typeof(m.{field}) = 'integer' THEN m.{field} END AS {field}, "
+      f"typeof(m.{field}) AS {field}_type"
+      for field in ("id", "character_id", "stock_percent", "supply_percent", "stock_value")),
+    _checkin_text_column("m", "business_id", 50),
+    _checkin_text_column("m", "recorded_at", 64),
+    _checkin_text_column("m", "note", MAX_CHECKIN_NOTE_BYTES),
+])
 
 
 class DatabaseError(Exception):
@@ -189,6 +222,127 @@ class Repository:
                 logger.warning(f"Error closing database session: {e}")
             finally:
                 self._db_session = None
+
+    # Manual observations intentionally never call legacy business/accounting methods.
+
+    @contextmanager
+    def _business_checkin_scope(self):
+        """Keep operational failures strict and safe for direct display in the editor."""
+        try:
+            with self._session_scope() as db_session:
+                yield db_session
+        except (DatabaseError, SQLAlchemyError, UnicodeError, OverflowError):
+            raise BusinessCheckInUnavailable() from None
+
+    def get_business_checkin_characters(self) -> tuple[CheckInCharacter, ...]:
+        """Read existing choices only, with stable name/ID order and no hidden fallback."""
+        statement = text(
+            f"SELECT {_CHECKIN_CHARACTER_COLUMNS} FROM characters c "
+            "ORDER BY c.name, c.id LIMIT :maximum"
+        )
+        with self._business_checkin_scope() as db_session:
+            rows = db_session.execute(statement, {"maximum": MAX_CHECKIN_CHARACTERS + 1}).mappings().all()
+            if len(rows) > MAX_CHECKIN_CHARACTERS:
+                raise BusinessCheckInLimitError()
+            characters = tuple(checkin_character_from_storage(row) for row in rows)
+        return characters
+
+    def save_business_checkin(
+        self, character_id: int, business_id: str, stock_percent: int | None = None,
+        supply_percent: int | None = None, stock_value: int | None = None, note: str = "",
+    ) -> BusinessCheckIn:
+        """Atomically require an existing owner and append; return only after commit."""
+        validate_checkin_id(character_id)
+        validate_checkin_business_id(business_id, for_write=True)
+        stock_percent, supply_percent, stock_value, note = normalize_business_checkin(
+            stock_percent, supply_percent, stock_value, note)
+        # A single INSERT SELECT protects ownership even on legacy connections
+        # without PRAGMA foreign_keys; a separate preflight read would race.
+        with self._business_checkin_scope() as db_session:
+            recorded_at = utc_now()
+            result = db_session.execute(text(
+                "INSERT INTO manual_business_checkins "
+                "(character_id, business_id, recorded_at, stock_percent, supply_percent, stock_value, note) "
+                "SELECT id, :business_id, :recorded_at, :stock_percent, :supply_percent, :stock_value, :note "
+                "FROM characters WHERE id = :character_id"
+            ), {"character_id": character_id, "business_id": business_id,
+                "recorded_at": recorded_at.isoformat(sep=" "), "stock_percent": stock_percent,
+                "supply_percent": supply_percent, "stock_value": stock_value, "note": note})
+            if result.rowcount != 1:
+                raise BusinessCheckInUnavailable()
+            raw = db_session.execute(text(
+                f"SELECT {_CHECKIN_ROW_COLUMNS} FROM manual_business_checkins m WHERE m.id = :id"
+            ), {"id": result.lastrowid}).mappings().first()
+            if raw is None:
+                raise BusinessCheckInDataError()
+            saved = checkin_from_storage(raw)
+            if saved.character_id != character_id or saved.business_id != business_id:
+                raise BusinessCheckInDataError()
+        return saved
+
+    def get_business_checkin_board(self, character_id: int) -> BusinessCheckInBoard:
+        """Observe owner and latest insertion per business in one bounded SQL statement."""
+        validate_checkin_id(character_id)
+        statement = text(
+            "WITH latest AS ("
+            "SELECT MAX(id) AS id FROM manual_business_checkins "
+            "WHERE character_id = :character_id GROUP BY business_id LIMIT :maximum"
+            "), selected AS ("
+            f"SELECT {_CHECKIN_ROW_COLUMNS} FROM manual_business_checkins m "
+            "JOIN latest ON latest.id = m.id"
+            ") "
+            f"SELECT {_CHECKIN_CHARACTER_COLUMNS}, selected.* FROM characters c "
+            "LEFT JOIN selected ON 1 = 1 WHERE c.id = :character_id "
+            "ORDER BY selected.business_id, selected.id"
+        )
+        with self._business_checkin_scope() as db_session:
+            captured_at = utc_now()
+            raw = db_session.execute(statement, {"character_id": character_id,
+                                                "maximum": MAX_CHECKIN_BUSINESSES + 1}).mappings().all()
+            if not raw:
+                raise BusinessCheckInUnavailable()
+            if len(raw) > MAX_CHECKIN_BUSINESSES:
+                raise BusinessCheckInLimitError()
+            character = checkin_character_from_storage(raw[0])
+            rows = tuple(checkin_from_storage(row) for row in raw if row["row_present"])
+            if any(row.character_id != character.id for row in rows):
+                raise BusinessCheckInDataError()
+            board = BusinessCheckInBoard(character.id, character.name, captured_at, rows)
+        return board
+
+    def get_business_checkin_history(
+        self, character_id: int, business_id: str, offset: int = 0, limit: int = 25,
+    ) -> BusinessCheckInPage:
+        """One SQLite observation owns count, page payload and character context."""
+        validate_checkin_id(character_id)
+        validate_checkin_business_id(business_id)
+        validate_checkin_page(offset, limit)
+        statement = text(
+            "WITH counted AS ("
+            "SELECT COUNT(*) AS total FROM manual_business_checkins "
+            "WHERE character_id = :character_id AND business_id = :business_id"
+            "), page AS ("
+            f"SELECT {_CHECKIN_ROW_COLUMNS} FROM manual_business_checkins m "
+            "WHERE m.character_id = :character_id AND m.business_id = :business_id "
+            "ORDER BY m.id DESC LIMIT :limit OFFSET :offset"
+            ") "
+            f"SELECT {_CHECKIN_CHARACTER_COLUMNS}, counted.total, page.* FROM characters c "
+            "CROSS JOIN counted LEFT JOIN page ON 1 = 1 WHERE c.id = :character_id "
+            "ORDER BY page.id DESC"
+        )
+        with self._business_checkin_scope() as db_session:
+            captured_at = utc_now()
+            raw = db_session.execute(statement, {"character_id": character_id, "business_id": business_id,
+                                                "offset": offset, "limit": limit}).mappings().all()
+            if not raw:
+                raise BusinessCheckInUnavailable()
+            character = checkin_character_from_storage(raw[0])
+            rows = tuple(checkin_from_storage(row) for row in raw if row["row_present"])
+            if any(row.character_id != character.id or row.business_id != business_id for row in rows):
+                raise BusinessCheckInDataError()
+            page = BusinessCheckInPage(character.id, character.name, business_id, captured_at,
+                                       rows, offset, limit, raw[0]["total"])
+        return page
 
     # Character operations
 

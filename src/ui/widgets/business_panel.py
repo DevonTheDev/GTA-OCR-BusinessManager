@@ -12,12 +12,16 @@ from PyQt6.QtWidgets import (
     QGridLayout,
     QProgressBar,
     QScrollArea,
+    QPushButton,
 )
 from PyQt6.QtCore import QTimer, Qt
 
 from ...constants import UI, BUSINESS
 from ...game.businesses import BUSINESSES, Business
 from ...utils.helpers import format_money, format_money_short, format_time
+from ...utils.logging import get_logger
+
+logger = get_logger('ui.business_panel')
 
 if TYPE_CHECKING:
     from ...app import GTABusinessManager
@@ -200,6 +204,8 @@ class BusinessPanel(QWidget):
         super().__init__(parent)
         self._app = app
         self._cards: Dict[str, BusinessCard] = {}
+        self._checkins_dialog = None
+        self._opening_checkins = False
         self._setup_ui()
         self._setup_update_timer()
 
@@ -211,7 +217,18 @@ class BusinessPanel(QWidget):
         # Header
         header = QLabel("Business Status")
         header.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
-        layout.addWidget(header)
+        heading_row = QHBoxLayout()
+        heading_row.addWidget(header, 1)
+        self._manual_checkins_button = QPushButton('Manual check-ins…')
+        self._manual_checkins_button.setEnabled(self._app is not None)
+        self._manual_checkins_button.clicked.connect(self._open_manual_checkins)
+        heading_row.addWidget(self._manual_checkins_button)
+        layout.addLayout(heading_row)
+        self._checkins_status_label = QLabel()
+        self._checkins_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._checkins_status_label.setWordWrap(True)
+        self._checkins_status_label.hide()
+        layout.addWidget(self._checkins_status_label)
 
         info = QLabel("Visit each business in-game to update stock and supply levels")
         info.setStyleSheet("color: #666; font-size: 11px; margin-bottom: 10px;")
@@ -241,6 +258,44 @@ class BusinessPanel(QWidget):
         scroll_layout.setRowStretch(row + 1, 1)
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
+
+    def _open_manual_checkins(self):
+        """Resolve stopped-safe storage only when the manual workflow is requested."""
+        if self._opening_checkins or self._app is None:
+            return
+        if self._checkins_dialog is not None:
+            self._checkins_dialog.show()
+            self._checkins_dialog.raise_()
+            self._checkins_dialog.activateWindow()
+            return
+        self._opening_checkins = True
+        try:
+            from .business_checkins_dialog import BusinessCheckInsDialog
+            repository = self._app.history_repository
+            character_id = self._app.data.character_id
+            dialog = BusinessCheckInsDialog(repository, parent=self, character_id=character_id)
+            self._checkins_dialog = dialog
+            dialog.finished.connect(lambda result, closed=dialog: self._checkins_finished(closed))
+            self._checkins_status_label.hide()
+            dialog.show()
+        except Exception as exc:
+            logger.warning('Could not open manual check-ins (%s)', type(exc).__name__)
+            self._checkins_status_label.setText('Manual check-ins could not be opened. Try again when saved history is available.')
+            self._checkins_status_label.show()
+        finally:
+            self._opening_checkins = False
+
+    def _checkins_finished(self, dialog):
+        if self._checkins_dialog is not dialog:
+            return
+        self._checkins_dialog = None
+        dialog.deleteLater()
+
+    def closeEvent(self, event):
+        if self._checkins_dialog is not None and not self._checkins_dialog.close():
+            event.ignore()
+            return
+        super().closeEvent(event)
 
     def _setup_update_timer(self):
         """Setup update timer."""

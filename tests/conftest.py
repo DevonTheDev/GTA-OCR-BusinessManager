@@ -2,11 +2,32 @@
 
 import pytest
 import sys
+import os
 from pathlib import Path
 
 # Add src to path for imports
 src_path = Path(__file__).parent.parent
 sys.path.insert(0, str(src_path))
+
+
+@pytest.fixture(scope="session", autouse=True)
+def native_qt_application():
+    """Keep one QApplication alive across all opt-in native test modules.
+
+    Module fixtures can borrow this instance without destroying/recreating Qt
+    between suites. Ordinary Python tests do not import or require PyQt6 here.
+    Individual native modules still own their dependency skip behavior.
+    """
+    if os.environ.get("GTA_RUN_QT_TESTS") != "1":
+        yield None
+        return
+    try:
+        from PyQt6.QtWidgets import QApplication
+    except ImportError:
+        yield None
+        return
+    application = QApplication.instance() or QApplication([])
+    yield application
 
 
 @pytest.fixture(scope="session")

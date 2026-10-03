@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime, Float, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime, Float, ForeignKey, Index
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 
@@ -125,6 +125,24 @@ class BusinessSnapshot(Base):
 
     def __repr__(self) -> str:
         return f"<BusinessSnapshot(business='{self.business_type}', stock={self.stock_level}%)>"
+
+
+class ManualBusinessCheckInRecord(Base):
+    """Append-only user observations, separate from legacy OCR snapshots."""
+
+    __tablename__ = "manual_business_checkins"
+    __table_args__ = (Index("ix_manual_business_checkins_character_business_id",
+                           "character_id", "business_id", "id"),
+                      {"sqlite_autoincrement": True})
+
+    id = Column(Integer, primary_key=True)
+    character_id = Column(Integer, ForeignKey("characters.id"), nullable=False)
+    business_id = Column(String(50), nullable=False)
+    recorded_at = Column(DateTime, nullable=False, default=utc_now)
+    stock_percent = Column(Integer, nullable=True)
+    supply_percent = Column(Integer, nullable=True)
+    stock_value = Column(Integer, nullable=True)
+    note = Column(Text, nullable=False, default="")
 
 
 class Earnings(Base):
