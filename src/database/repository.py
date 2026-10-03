@@ -5,11 +5,20 @@ from dataclasses import dataclass
 from typing import Optional, List
 from contextlib import contextmanager
 
-from sqlalchemy import func
+from sqlalchemy import case, func
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.exc import SQLAlchemyError
 
 from .models import Character, Session, Activity, BusinessSnapshot, Earnings, init_database, utc_now
+from .session_comparison import (
+    ActivityTypeComparison,
+    SessionComparison,
+    SessionComparisonUnavailable,
+    SessionSummary,
+    build_session_metrics,
+    finite_number,
+    subtract_metrics,
+)
 from ..utils.logging import get_logger
 
 
@@ -370,6 +379,127 @@ class Repository:
                 for record, character_name, activities_count in rows
             ]
             return SessionHistoryPage(sessions=items, total=total)
+
+    def get_session_comparison(
+        self, baseline_id: int, comparison_id: int
+    ) -> SessionComparison:
+        """Read an exact pair of completed sessions in one SELECT.
+
+        All activities are grouped by session and actual type independently of
+        earnings events. The returned values are immutable and detached from
+        storage, so display and export can share this exact snapshot.
+
+        Raises:
+            ValueError: IDs are not distinct positive integers (bools excluded).
+            SessionComparisonUnavailable: A selected row is missing, open, or
+                has no available character; ``session_ids`` identifies it.
+            DatabaseError: Database initialization or the SELECT failed.
+        """
+        for name, value in (("baseline_id", baseline_id), ("comparison_id", comparison_id)):
+            if isinstance(value, bool) or not isinstance(value, int) or value < 1:
+                raise ValueError(f"{name} must be a positive integer")
+        if baseline_id == comparison_id:
+            raise ValueError("baseline_id and comparison_id must be different")
+        selected_ids = (baseline_id, comparison_id)
+        # SQLite row IDs cannot exceed signed 64-bit integers. Larger positive
+        # IDs are unavailable selections, not Python-to-SQLite binding faults.
+        query_ids = tuple(session_id for session_id in selected_ids if session_id < 2**63)
+
+        with self._session_scope() as db_session:
+            activity_counts = (
+                db_session.query(
+                    Activity.session_id,
+                    Activity.activity_type,
+                    func.count().label("recorded_activities"),
+                    func.sum(case((Activity.success.is_(True), 1), else_=0)).label("passed"),
+                    func.sum(case((Activity.success.is_(False), 1), else_=0)).label("failed"),
+                )
+                .filter(Activity.session_id.in_(query_ids))
+                .group_by(Activity.session_id, Activity.activity_type)
+                .subquery()
+            )
+            rows = (
+                db_session.query(
+                    Session.id.label("session_id"),
+                    Session.character_id,
+                    Character.name.label("character_name"),
+                    Session.started_at,
+                    Session.ended_at,
+                    Session.start_money,
+                    Session.end_money,
+                    Session.total_earnings,
+                    activity_counts.c.session_id.label("activity_session_id"),
+                    activity_counts.c.activity_type,
+                    activity_counts.c.recorded_activities,
+                    activity_counts.c.passed,
+                    activity_counts.c.failed,
+                )
+                .join(Character, Character.id == Session.character_id)
+                .outerjoin(activity_counts, activity_counts.c.session_id == Session.id)
+                .filter(Session.id.in_(query_ids), Session.ended_at.isnot(None))
+                .all()
+            )
+
+        records = {row.session_id: row for row in rows}
+        unavailable = tuple(session_id for session_id in selected_ids if session_id not in records)
+        if unavailable:
+            raise SessionComparisonUnavailable(unavailable)
+
+        counts = {session_id: [0, 0, 0] for session_id in selected_ids}
+        types = {session_id: {} for session_id in selected_ids}
+        for row in rows:
+            # The outer-join placeholder is not an actual null activity type.
+            if row.activity_session_id is None:
+                continue
+            totals = counts[row.session_id]
+            totals[0] += row.recorded_activities
+            totals[1] += row.passed
+            totals[2] += row.failed
+            types[row.session_id][row.activity_type] = row.recorded_activities
+
+        summaries = {}
+        for session_id in selected_ids:
+            row = records[session_id]
+            duration = (
+                (row.ended_at - row.started_at).total_seconds()
+                if row.started_at is not None else None
+            )
+            summaries[session_id] = SessionSummary(
+                session_id=session_id,
+                character_id=row.character_id,
+                character_name=row.character_name,
+                started_at=row.started_at,
+                ended_at=row.ended_at,
+                start_money=finite_number(row.start_money),
+                end_money=finite_number(row.end_money),
+                metrics=build_session_metrics(row.total_earnings, duration, *counts[session_id]),
+            )
+
+        baseline_types, comparison_types = types[baseline_id], types[comparison_id]
+        ordered_types = sorted(
+            baseline_types.keys() | comparison_types.keys(),
+            key=lambda activity_type: (activity_type is not None, activity_type or ""),
+        )
+        return SessionComparison(
+            baseline=summaries[baseline_id],
+            comparison=summaries[comparison_id],
+            differences=subtract_metrics(
+                summaries[baseline_id].metrics, summaries[comparison_id].metrics
+            ),
+            activity_types=tuple(
+                ActivityTypeComparison(
+                    activity_type=activity_type,
+                    baseline=baseline_types.get(activity_type, 0),
+                    comparison=comparison_types.get(activity_type, 0),
+                    difference=(
+                        comparison_types.get(activity_type, 0)
+                        - baseline_types.get(activity_type, 0)
+                    ),
+                )
+                for activity_type in ordered_types
+            ),
+            generated_at=utc_now(),
+        )
 
     # Activity operations
 

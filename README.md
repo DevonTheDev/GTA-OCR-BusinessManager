@@ -136,6 +136,48 @@ The ordinary suite skips these opt-in Qt tests. Linux offscreen rendering is
 validated; the native file chooser is substituted in tests, and Windows capture
 and interactive game integration remain unverified.
 
+### Compare Completed Sessions
+
+In **History**, select a completed session and choose **Use as baseline**. The
+visible baseline A stays pinned while you change character filters or browse
+other pages. Select a different session B and choose **Compare with baseline**;
+use **Clear baseline** or pin another session to change A.
+
+The comparison shows both session IDs, characters and saved UTC times, followed
+by stored net balance change, elapsed duration, net change per hour, and recorded
+activity/outcome counts. A second table compares the actual recorded activity
+types. Every difference is **B minus A**; a positive difference is not an
+automatic improvement. Cross-character comparisons are allowed and clearly
+labeled.
+
+Net change is the stored session total, even if a legacy record disagrees with
+its opening and ending balances. It includes spending and is separate from live
+gross earnings, recorded activity amounts and positive balance events. Those
+overlapping records are not added together or used to infer complete spending.
+The activity comparison counts records and passed/failed/unknown outcomes; it
+does not estimate game payouts. Aggregates include all recorded activities,
+independently of the 1,000-row detail display limit.
+
+Missing values stay unavailable, while known zero and negative values remain
+visible. Duration comes from saved start/end timestamps and includes elapsed
+paused time; anomalous zero/negative durations are retained but have no hourly
+rate. Rates require known net change and positive duration. Closed database
+sessions, rather than in-memory goal/statistics resets, define the compared
+periods. Opening a comparison rereads the exact selected IDs without starting
+capture, creating a session, changing the active character or editing history.
+
+The dialog is a fixed snapshot. **Export comparison as JSON…** saves that same
+pair and displayed values, including raw numbers/nulls, type counts, orientation
+and metric notes. It does not switch to a later History selection or reread an
+edited source while the file chooser is open. Close and compare again for fresh
+data. Cancellation writes nothing; a failed save preserves an existing complete
+destination and allows retry. Replacement is per file, not crash durability.
+
+Local verification uses real SQLite and actual Linux offscreen Qt controls,
+including the MainWindow History flow, pinned selections across filters/pages,
+failed saves and snapshot exports. Native Windows file dialogs, capture, OCR and
+interactive gameplay remain separate platform checks.
+
 ### Activity Detection
 - Automatically detects when you're doing:
   - Contact Missions

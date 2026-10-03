@@ -4,12 +4,15 @@ import csv
 import json
 from datetime import datetime, timezone
 from pathlib import Path
-from typing import Optional, List
+from typing import TYPE_CHECKING, Optional, List
 from dataclasses import dataclass
 
 from .logging import get_logger
 from .persistence import atomic_text_writer
 from ..database.repository import Repository, get_repository
+
+if TYPE_CHECKING:
+    from ..database.session_comparison import SessionComparison
 
 logger = get_logger("utils.exporter")
 
@@ -305,6 +308,34 @@ class DataExporter:
                 success=False,
                 error_message=str(e)
             )
+
+    def export_session_comparison(
+        self,
+        comparison: "SessionComparison",
+        output_file: Path,
+    ) -> ExportResult:
+        """Export the supplied comparison snapshot without rereading its sessions.
+
+        The complete report is serialized before opening output. A failed write,
+        close or replacement leaves any previous file intact. The two exported
+        rows are the baseline and comparison session summaries.
+        """
+        try:
+            payload = json.dumps(
+                comparison.to_report(), ensure_ascii=False, indent=2, allow_nan=False,
+            )
+            with atomic_text_writer(output_file) as stream:
+                stream.write(payload)
+
+            logger.info("Exported session comparison to JSON: %s", output_file)
+            return ExportResult(
+                success=True,
+                file_path=output_file,
+                rows_exported=2,
+            )
+        except Exception as e:
+            logger.error("Failed to export session comparison: %s", e)
+            return ExportResult(success=False, error_message=str(e))
 
     def export_earnings_breakdown(
         self,
