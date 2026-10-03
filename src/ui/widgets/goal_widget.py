@@ -26,18 +26,25 @@ class GoalProgressWidget(QFrame):
         self,
         tracker: Optional[GoalTracker] = None,
         parent: Optional[QWidget] = None,
+        *,
+        show_eta: bool = True,
+        auto_refresh: bool = True,
     ):
         """Initialize goal progress widget.
 
         Args:
             tracker: Goal tracker to use (uses global if None)
             parent: Parent widget
+            show_eta: Show estimates for standalone goal attempts
+            auto_refresh: Own a timer, or let the containing view refresh explicitly
         """
         super().__init__(parent)
         self._tracker = tracker or get_goal_tracker()
+        self._show_eta = show_eta
 
         self._setup_ui()
-        self._setup_update_timer()
+        if auto_refresh:
+            self._setup_update_timer()
         self._update_display()
 
     def _setup_ui(self) -> None:
@@ -83,6 +90,8 @@ class GoalProgressWidget(QFrame):
 
         # Goal name
         self._goal_name = QLabel("No Goal Set")
+        self._goal_name.setTextFormat(Qt.TextFormat.PlainText)
+        self._goal_name.setWordWrap(True)
         self._goal_name.setStyleSheet("color: white; font-size: 13px; font-weight: bold;")
         layout.addWidget(self._goal_name)
 
@@ -105,6 +114,7 @@ class GoalProgressWidget(QFrame):
                 border-radius: 6px;
             }
         """)
+        self._incomplete_bar_style = self._progress_bar.styleSheet()
         layout.addWidget(self._progress_bar)
 
         # Progress text row
@@ -135,7 +145,7 @@ class GoalProgressWidget(QFrame):
 
     def _setup_update_timer(self) -> None:
         """Setup timer for updating display."""
-        self._update_timer = QTimer()
+        self._update_timer = QTimer(self)
         self._update_timer.timeout.connect(self._update_display)
         self._update_timer.start(1000)  # Update every second
 
@@ -194,8 +204,10 @@ class GoalProgressWidget(QFrame):
             self._eta_label.setText("Goal Complete!")
             self._eta_label.show()
         else:
+            self._progress_bar.setStyleSheet(self._incomplete_bar_style)
+            self._progress_label.setStyleSheet("color: #4CAF50; font-size: 14px; font-weight: bold;")
             # Show ETA if available
-            eta = goal.estimated_completion_time
+            eta = goal.estimated_completion_time if self._show_eta else None
             if eta:
                 hours = int(eta.total_seconds() // 3600)
                 minutes = int((eta.total_seconds() % 3600) // 60)

@@ -17,6 +17,7 @@ from PyQt6.QtCore import QTimer, Qt
 from ...constants import UI
 from ...utils.helpers import format_money, format_money_short, format_time, format_percentage
 from .charts import SessionCharts
+from .session_goals_panel import SessionGoalsPanel
 
 if TYPE_CHECKING:
     from ...app import GTABusinessManager
@@ -48,6 +49,21 @@ class SessionPanel(QWidget):
         header_layout.addWidget(reset_btn)
 
         layout.addLayout(header_layout)
+
+        self._goals_panel = SessionGoalsPanel(self._app, self)
+        layout.addWidget(self._goals_panel)
+
+        # Keep the goal controls reachable at the main window's minimum size.
+        scroll = QScrollArea()
+        scroll.setObjectName("session_statistics_scroll")
+        scroll.setWidgetResizable(True)
+        scroll.setFrameShape(QFrame.Shape.NoFrame)
+        body = QWidget()
+        body_layout = QVBoxLayout(body)
+        body_layout.setContentsMargins(0, 0, 0, 0)
+        body_layout.setSpacing(16)
+        scroll.setWidget(body)
+        layout.addWidget(scroll, 1)
 
         # Stats grid
         stats_frame = QFrame()
@@ -85,7 +101,7 @@ class SessionPanel(QWidget):
         self._add_stat(stats_grid, 3, 2, "From Missions", "--", "from_missions")
         self._add_stat(stats_grid, 3, 3, "From Sells", "--", "from_sells")
 
-        layout.addWidget(stats_frame)
+        body_layout.addWidget(stats_frame)
 
         # Earnings breakdown
         breakdown_frame = QFrame()
@@ -107,13 +123,13 @@ class SessionPanel(QWidget):
         self._timeline_label.setWordWrap(True)
         breakdown_layout.addWidget(self._timeline_label)
 
-        layout.addWidget(breakdown_frame)
+        body_layout.addWidget(breakdown_frame)
 
         # Charts section
         self._charts = SessionCharts(app=self._app)
-        layout.addWidget(self._charts)
+        body_layout.addWidget(self._charts)
 
-        layout.addStretch()
+        body_layout.addStretch()
 
     def _add_stat(self, grid: QGridLayout, row: int, col: int, label: str, value: str, name: str) -> None:
         """Add a stat display to the grid."""
@@ -139,7 +155,7 @@ class SessionPanel(QWidget):
 
     def _setup_update_timer(self) -> None:
         """Setup update timer."""
-        self._timer = QTimer()
+        self._timer = QTimer(self)
         self._timer.timeout.connect(self._update_display)
         self._timer.start(UI.SESSION_UPDATE_INTERVAL_MS)
 
@@ -256,6 +272,7 @@ class SessionPanel(QWidget):
         """Reset the session."""
         if self._app:
             self._app.reset_session()
+            self._goals_panel.refresh()
 
         # Reset charts
         if hasattr(self, "_charts"):

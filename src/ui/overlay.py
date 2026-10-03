@@ -20,7 +20,7 @@ logger = get_logger("ui.overlay")
 
 class OverlaySize(Enum):
     """Overlay size modes."""
-    COMPACT = auto()  # Just money and rate
+    COMPACT = auto()  # Money, rate and the active session goal
     NORMAL = auto()   # Money, rate, state, recommendation
     EXPANDED = auto() # All info including cooldowns, goal, bonus
 
@@ -35,7 +35,7 @@ class OverlayWindow(QWidget):
         self._drag_position: Optional[QPoint] = None
         self._is_locked = False
         self._size_mode = OverlaySize.NORMAL
-        self._goal_tracker = None
+        self._goal_tracker = getattr(app, "goal_tracker", None)
         self._bonus_tracker = None
 
         self._setup_window()
@@ -64,6 +64,13 @@ class OverlayWindow(QWidget):
             OverlaySize.EXPANDED: (300, 280),
         }
         width, height = sizes.get(self._size_mode, (280, 200))
+        if self._goal_tracker and self._goal_tracker.has_goal:
+            height += 35
+        if (
+            self._size_mode != OverlaySize.COMPACT
+            and self._bonus_tracker and self._bonus_tracker.has_bonuses
+        ):
+            height += 30
         self.setFixedSize(width, height)
 
     def _position_overlay(self, position: str = "top-right") -> None:
@@ -112,9 +119,9 @@ class OverlayWindow(QWidget):
 
         # Header row
         header_layout = QHBoxLayout()
-        title = QLabel("GTA Manager")
-        title.setStyleSheet("color: #AAA; font-size: 10px;")
-        header_layout.addWidget(title)
+        self._title_label = QLabel("GTA Manager")
+        self._title_label.setStyleSheet("color: #AAA; font-size: 10px;")
+        header_layout.addWidget(self._title_label)
         header_layout.addStretch()
 
         self._state_badge = QLabel("IDLE")
@@ -133,9 +140,9 @@ class OverlayWindow(QWidget):
 
         # Session earnings
         session_layout = QHBoxLayout()
-        session_icon = QLabel("Session:")
-        session_icon.setStyleSheet("color: #AAA; font-size: 11px;")
-        session_layout.addWidget(session_icon)
+        self._session_icon = QLabel("Session:")
+        self._session_icon.setStyleSheet("color: #AAA; font-size: 11px;")
+        session_layout.addWidget(self._session_icon)
 
         self._session_label = QLabel("+$0")
         self._session_label.setStyleSheet("color: #FFD700; font-size: 14px; font-weight: bold;")
@@ -148,10 +155,10 @@ class OverlayWindow(QWidget):
         container_layout.addLayout(session_layout)
 
         # Divider
-        divider = QFrame()
-        divider.setFixedHeight(1)
-        divider.setStyleSheet("background-color: rgba(255,255,255,20);")
-        container_layout.addWidget(divider)
+        self._divider = QFrame()
+        self._divider.setFixedHeight(1)
+        self._divider.setStyleSheet("background-color: rgba(255,255,255,20);")
+        container_layout.addWidget(self._divider)
 
         # Current activity
         self._activity_label = QLabel("Idle")
@@ -164,8 +171,16 @@ class OverlayWindow(QWidget):
         container_layout.addWidget(self._timer_label)
 
         # Cooldowns (compact display)
+        # The child owns active/empty visibility on its own timer. Hide an ancestor
+        # for compact mode so that a child refresh cannot reintroduce this row.
+        self._cooldown_container = QWidget()
+        cooldown_layout = QVBoxLayout(self._cooldown_container)
+        cooldown_layout.setContentsMargins(0, 0, 0, 0)
+        cooldown_layout.setSpacing(0)
         self._cooldown_widget = CompactCooldownWidget(max_display=2)
-        container_layout.addWidget(self._cooldown_widget)
+        cooldown_layout.addWidget(self._cooldown_widget)
+        self._cooldown_widget._update_display()
+        container_layout.addWidget(self._cooldown_container)
 
         # Goal progress (hidden by default)
         self._goal_frame = QFrame()
@@ -176,6 +191,7 @@ class OverlayWindow(QWidget):
 
         goal_header = QHBoxLayout()
         self._goal_name_label = QLabel("")
+        self._goal_name_label.setTextFormat(Qt.TextFormat.PlainText)
         self._goal_name_label.setStyleSheet("color: #9C27B0; font-size: 10px;")
         goal_header.addWidget(self._goal_name_label)
         goal_header.addStretch()
@@ -231,10 +247,27 @@ class OverlayWindow(QWidget):
         container_layout.addWidget(self._recommendation_label)
 
         layout.addWidget(container)
+        self._apply_size_mode()
+
+    def _apply_size_mode(self) -> None:
+        """Keep compact content readable instead of squeezing all normal rows."""
+        show_details = self._size_mode != OverlaySize.COMPACT
+        for widget in (
+            self._title_label, self._state_badge, self._session_icon, self._session_label,
+            self._divider, self._activity_label, self._cooldown_container,
+        ):
+            widget.setVisible(show_details)
+        self._timer_label.setVisible(show_details and bool(self._timer_label.text()))
+        self._recommendation_label.setVisible(
+            show_details and bool(self._recommendation_label.text())
+        )
+        self._bonus_frame.setVisible(bool(
+            show_details and self._bonus_tracker and self._bonus_tracker.has_bonuses
+        ))
 
     def _setup_update_timer(self) -> None:
         """Setup timer for UI updates."""
-        self._update_timer = QTimer()
+        self._update_timer = QTimer(self)
         self._update_timer.timeout.connect(self._update_ui)
         self._update_timer.start(500)
 
@@ -288,6 +321,7 @@ class OverlayWindow(QWidget):
             self._timer_label.show()
         else:
             self._activity_label.setText(state_text)
+            self._timer_label.setText("")
             self._timer_label.hide()
 
         # Update recommendation
@@ -297,6 +331,7 @@ class OverlayWindow(QWidget):
             self._recommendation_label.setText(f"Next: {rec.action}")
             self._recommendation_label.show()
         else:
+            self._recommendation_label.setText("")
             self._recommendation_label.hide()
 
         # Update goal if tracker is set
@@ -307,9 +342,17 @@ class OverlayWindow(QWidget):
 
     def _update_goal(self) -> None:
         """Update goal progress display."""
+        if (
+            self._app is not None
+            and self._goal_tracker is not None
+            and self._goal_tracker is getattr(self._app, "goal_tracker", None)
+        ):
+            self._app.refresh_session_goal()
         if not self._goal_tracker:
+            self._goal_frame.hide()
             return
 
+        was_hidden = self._goal_frame.isHidden()
         goal = self._goal_tracker.current_goal
         if goal:
             self._goal_name_label.setText(goal.display_name)
@@ -330,15 +373,32 @@ class OverlayWindow(QWidget):
                         border-radius: 3px;
                     }
                 """)
+            else:
+                self._goal_percent_label.setStyleSheet(
+                    "color: #9C27B0; font-size: 10px; font-weight: bold;"
+                )
+                self._goal_progress.setStyleSheet("""
+                    QProgressBar {
+                        background-color: rgba(255, 255, 255, 20);
+                        border-radius: 3px;
+                    }
+                    QProgressBar::chunk {
+                        background-color: #9C27B0;
+                        border-radius: 3px;
+                    }
+                """)
 
             self._goal_frame.show()
         else:
             self._goal_frame.hide()
+        if was_hidden != self._goal_frame.isHidden():
+            self._update_size_for_content()
 
     def _update_bonus(self) -> None:
         """Update bonus badge display."""
         if not self._bonus_tracker or not self._bonus_tracker.has_bonuses:
             self._bonus_frame.hide()
+            self._apply_size_mode()
             return
 
         bonuses = self._bonus_tracker.active_bonuses
@@ -353,6 +413,7 @@ class OverlayWindow(QWidget):
             self._bonus_frame.show()
         else:
             self._bonus_frame.hide()
+        self._apply_size_mode()
 
     def set_goal_tracker(self, tracker) -> None:
         """Set the goal tracker to display progress.
@@ -361,6 +422,7 @@ class OverlayWindow(QWidget):
             tracker: GoalTracker instance
         """
         self._goal_tracker = tracker
+        self._update_goal()
         self._update_size_for_content()
 
     def set_bonus_tracker(self, tracker) -> None:
@@ -373,14 +435,8 @@ class OverlayWindow(QWidget):
         self._update_size_for_content()
 
     def _update_size_for_content(self) -> None:
-        """Adjust size based on visible content."""
-        # Calculate needed height
-        base_height = 180
-        if self._goal_tracker and self._goal_tracker.has_goal:
-            base_height += 35
-        if self._bonus_tracker and self._bonus_tracker.has_bonuses:
-            base_height += 30
-        self.setFixedSize(280, base_height)
+        """Make room for optional content without replacing the chosen size mode."""
+        self._update_size()
 
     def set_size_mode(self, mode: OverlaySize) -> None:
         """Change overlay size mode.
@@ -389,6 +445,7 @@ class OverlayWindow(QWidget):
             mode: New size mode
         """
         self._size_mode = mode
+        self._apply_size_mode()
         self._update_size()
 
     def cycle_size_mode(self) -> None:

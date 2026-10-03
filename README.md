@@ -72,6 +72,47 @@ A smart companion app that runs alongside GTA Online, tracking your money, activ
 - **Session Stats** - See how much you've earned this session
 - **Earnings Rate** - Calculates your $/hour based on actual gameplay
 
+### Live Session Goals
+
+Open **Session** and choose **Set Goal**. Pick a quick preset or enter a custom
+earnings, activity or time target. The card shows progress and what remains;
+the overlay displays the same goal. **Change Goal** includes the current
+statistics period's existing totals, while Cancel leaves the goal untouched.
+Use **Clear** to remove the target. The statistics below the card scroll, keeping
+the controls reachable at the normal window size.
+
+- **Earnings** count positive observed balance changes. Starting cash is excluded
+  and spending does not subtract progress. For example, a balance sequence of
+  $1,000,000 → $900,000 → $950,000 contributes $50,000 toward the goal, while the
+  saved session's net balance change is −$50,000. Mission summaries do not add the
+  same observed money again.
+- **Activities** count all finished activities, including failed activities.
+- **Time** counts whole elapsed session minutes, including paused capture time,
+  and freezes when the session tracker stops. Reset Session starts a new
+  statistics period under the existing reset behavior, even if capture is stopped.
+
+The selected target is remembered in `session_goal_target.json` beside the app's
+settings. **Progress starts fresh on Start, Reset Session and app restart.** Goal
+progress and completion history are session-local; they are not a durable attempt
+archive. A completed attempt keeps its first crossing until a new target or
+statistics period is chosen. No ETA is shown because a target selected midway
+through a session includes earlier progress.
+
+Target changes are saved atomically; routine progress refreshes do not write the
+file. A save failure leaves the current in-app selection usable and displays
+**Retry Save**. Until retry succeeds, reopening may restore the previous saved
+target. Invalid remembered targets stay untouched until Set or Clear is chosen.
+Target files are limited to 16 KiB and names to 200 characters. Names display as
+literal text. This per-file replacement does not provide crash durability or a
+transaction across multiple app instances.
+
+Local tests exercise actual app accounting/SQLite, goal lifecycle and persistence,
+plus real offscreen Qt dialogs, MainWindow controls and overlay. Native goal tests:
+`GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_session_goals_qt.py tests/test_session_goal_app_qt.py`
+(set the variables separately on shells without inline assignments). Ordinary
+pytest skips these opt-in UI tests. Linux offscreen rendering is verified;
+Windows capture, OCR accuracy and interactive gameplay remain unverified.
+
 ### Saved Session History
 
 Open the **History** tab to browse completed sessions, filter by character and

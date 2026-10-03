@@ -21,6 +21,8 @@ from .detection.parsers.business_parser import BusinessParser, BusinessReading
 from .game.state_machine import GameStateMachine, GameState, StateTransition
 from .game.activities import Activity, ActivityType
 from .tracking.session import SessionTracker
+from .tracking.session_goals import SessionGoalController
+from .tracking.goals import GoalType, SessionGoal
 from .tracking.activity_tracker import ActivityTracker
 from .tracking.analytics import Analytics, EfficiencyMetrics, EarningsBreakdown
 from .tracking.cooldowns import CooldownTracker, get_cooldown_tracker, ACTIVITY_COOLDOWNS
@@ -142,6 +144,12 @@ class GTABusinessManager:
         self._data = AppData()
         self._data_lock = threading.RLock()
         self._last_capture_result: Optional[CaptureResult] = None
+
+        # Remember the target only; progress belongs to the current statistics
+        # object and must never be restored into another capture run.
+        self._goal_controller = SessionGoalController(
+            self._settings.data_dir / "session_goal_target.json"
+        )
 
         # Callbacks
         self._on_money_change: List[Callable[[MoneyReading, int], None]] = []
@@ -265,6 +273,8 @@ class GTABusinessManager:
                 self._invalidate_analytics()
 
                 self._initialize_components()
+                with self._data_lock:
+                    self._refresh_session_goal_locked(force=True)
                 self._stop_event.clear()
                 self._capture_thread = threading.Thread(
                     target=self._capture_loop,
@@ -315,6 +325,11 @@ class GTABusinessManager:
                     self._session_tracker.end_session()
             except Exception as e:
                 logger.error(f"Failed to end session tracker: {e}")
+            try:
+                with self._data_lock:
+                    self._refresh_session_goal_locked(force=True)
+            except Exception as e:
+                logger.error(f"Failed to finalize session goal progress: {e}")
             try:
                 self._end_database_session()
             except Exception as e:
@@ -984,6 +999,50 @@ class GTABusinessManager:
         return self._session_tracker.stats
 
     @property
+    def goal_tracker(self) -> SessionGoalController:
+        """App-owned target controller shared by the Session card and overlay."""
+        return self._goal_controller
+
+    def _refresh_session_goal_locked(self, *, force: bool = False) -> Optional[SessionGoal]:
+        """Sample goal inputs under the app data lock, then its controller lock."""
+        if not self._goal_controller.has_goal:
+            return None
+        if not force and self._state in (AppState.STARTING, AppState.STOPPING):
+            return self._goal_controller.current_goal
+        stats = self._session_tracker.stats
+        self._goal_controller.sync(
+            stats,
+            earnings=max(0, self._data.session_earnings),
+            activities=max(0, stats.activities_completed) if stats else 0,
+            minutes=max(0, int(stats.duration_seconds // 60)) if stats else 0,
+        )
+        return self._goal_controller.current_goal
+
+    def refresh_session_goal(self) -> Optional[SessionGoal]:
+        """Refresh absolute progress without persisting frequently changing totals."""
+        with self._data_lock:
+            return self._refresh_session_goal_locked()
+
+    def set_session_goal(
+        self, goal_type: GoalType, target: int, display_name: str = "",
+    ) -> Optional[SessionGoal]:
+        """Choose a remembered target and include this statistics period's totals."""
+        with self._data_lock:
+            self._refresh_session_goal_locked()
+            self._goal_controller.set_goal(goal_type, target, display_name)
+            return self._refresh_session_goal_locked()
+
+    def clear_session_goal(self) -> None:
+        """Clear the remembered target and its current in-memory progress."""
+        with self._data_lock:
+            self._goal_controller.clear_goal()
+
+    def retry_session_goal_save(self) -> bool:
+        """Retry a target save explicitly; goal progress is never written."""
+        with self._data_lock:
+            return self._goal_controller.retry_save()
+
+    @property
     def recent_activities(self) -> List[Activity]:
         """Get recent completed activities."""
         return self._activity_tracker.get_recent_activities(10)
@@ -1073,12 +1132,14 @@ class GTABusinessManager:
 
     def reset_session(self) -> None:
         """Reset session tracking."""
-        with self._data_lock:
-            start_money = self._data.current_money or 0
-            self._data.session_start_money = self._data.current_money
-            self._data.session_earnings = 0
-
-        self._session_tracker.start_session(start_money=start_money)
+        with self._lifecycle_lock:
+            with self._data_lock:
+                self._refresh_session_goal_locked(force=True)
+                start_money = self._data.current_money or 0
+                self._data.session_start_money = self._data.current_money
+                self._data.session_earnings = 0
+                self._session_tracker.start_session(start_money=start_money)
+                self._refresh_session_goal_locked(force=True)
 
         self._invalidate_analytics()
 
