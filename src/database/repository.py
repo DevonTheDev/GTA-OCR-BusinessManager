@@ -30,6 +30,12 @@ from .activity_ledger import (
     ActivityLedgerRow,
     validate_ledger_request,
 )
+from .activity_insights import (
+    ActivityInsights,
+    MAX_ACTIVITY_TYPE_BYTES,
+    MAX_INSIGHT_RECORDS,
+    build_activity_insights,
+)
 from .session_comparison import (
     ActivityTypeComparison,
     SessionComparison,
@@ -79,6 +85,44 @@ class SessionHistoryPage:
 
     sessions: List[SessionHistoryItem]
     total: int
+
+
+def _completed_activity_selection(filters: ActivityLedgerFilters):
+    """Shared completed-activity joins and exact ledger filter semantics."""
+    activity_time = func.coalesce(Activity.ended_at, Activity.started_at)
+    outcome = case(
+        (Activity.success.is_(True), "passed"),
+        (Activity.success.is_(False), "failed"),
+        else_="unknown",
+    )
+    joined = (
+        Activity.__table__
+        .join(Session.__table__, Activity.session_id == Session.id)
+        .join(Character.__table__, Session.character_id == Character.id)
+    )
+    predicates = [Session.ended_at.isnot(None)]
+    if filters.character_id is not None:
+        predicates.append(Session.character_id == filters.character_id)
+    if filters.date_from is not None:
+        predicates.append(activity_time >= datetime.combine(filters.date_from, time.min))
+    if filters.date_until is not None:
+        if filters.date_until == date.max:
+            # There is no representable next day. This comparison includes
+            # every instant of date.max while still excluding null times.
+            predicates.append(activity_time <= datetime.max)
+        else:
+            end_exclusive = datetime.combine(filters.date_until + timedelta(days=1), time.min)
+            predicates.append(activity_time < end_exclusive)
+    if filters.activity_type is not None:
+        predicates.append(Activity.activity_type == filters.activity_type)
+    if filters.outcome is not None:
+        predicates.append(outcome == filters.outcome)
+    if filters.query is not None:
+        predicates.append(or_(
+            Activity.activity_name.icontains(filters.query, autoescape=True),
+            Activity.notes.icontains(filters.query, autoescape=True),
+        ))
+    return joined, predicates, activity_time, outcome
 
 
 class Repository:
@@ -526,39 +570,7 @@ class Repository:
         DatabaseError on initialization or query failure instead of an empty page.
         """
         filters = validate_ledger_request(filters, limit=limit, offset=offset)
-        activity_time = func.coalesce(Activity.ended_at, Activity.started_at)
-        outcome = case(
-            (Activity.success.is_(True), "passed"),
-            (Activity.success.is_(False), "failed"),
-            else_="unknown",
-        )
-        joined = (
-            Activity.__table__
-            .join(Session.__table__, Activity.session_id == Session.id)
-            .join(Character.__table__, Session.character_id == Character.id)
-        )
-        predicates = [Session.ended_at.isnot(None)]
-        if filters.character_id is not None:
-            predicates.append(Session.character_id == filters.character_id)
-        if filters.date_from is not None:
-            predicates.append(activity_time >= datetime.combine(filters.date_from, time.min))
-        if filters.date_until is not None:
-            if filters.date_until == date.max:
-                # There is no representable next day. This comparison includes
-                # every instant of date.max while still excluding null times.
-                predicates.append(activity_time <= datetime.max)
-            else:
-                end_exclusive = datetime.combine(filters.date_until + timedelta(days=1), time.min)
-                predicates.append(activity_time < end_exclusive)
-        if filters.activity_type is not None:
-            predicates.append(Activity.activity_type == filters.activity_type)
-        if filters.outcome is not None:
-            predicates.append(outcome == filters.outcome)
-        if filters.query is not None:
-            predicates.append(or_(
-                Activity.activity_name.icontains(filters.query, autoescape=True),
-                Activity.notes.icontains(filters.query, autoescape=True),
-            ))
+        joined, predicates, activity_time, outcome = _completed_activity_selection(filters)
 
         count = (
             select(func.count(Activity.id).label("total"))
@@ -597,6 +609,48 @@ class Repository:
                 filters=filters, rows=tuple(rows), total=records[0]["total"],
                 offset=offset, limit=limit, observed_at=utc_now(),
             )
+
+    def get_completed_activity_insights(
+        self, filters: ActivityLedgerFilters | None = None,
+    ) -> ActivityInsights:
+        """Summarize all matching completed activities within fixed safety limits.
+
+        One narrow SELECT projects bounded type bytes, session ID, classified
+        outcome and real numeric storage only. Its cursor remains open during
+        exact aggregation; no full activity objects or earnings events are read.
+        Requests beyond the source/type limits fail without a partial report.
+        """
+        filters = validate_ledger_request(filters)
+        joined, predicates, _, outcome = _completed_activity_selection(filters)
+        stored_type = case(
+            (func.typeof(Activity.activity_type) == "null", None),
+            (func.typeof(Activity.activity_type) == "text",
+             func.coalesce(
+                 func.substr(cast(Activity.activity_type, LargeBinary), 1,
+                             MAX_ACTIVITY_TYPE_BYTES + 1), b"",
+             )),
+            else_=0,  # Nontext storage marker, distinct from null and text bytes.
+        )
+
+        def numeric(column):
+            # Do not transfer malformed text/blobs or coerce them through SUM.
+            return case((func.typeof(column).in_(("integer", "real")), column), else_=None)
+
+        statement = (
+            select(
+                stored_type.label("activity_type"), Activity.session_id.label("session_id"),
+                outcome.label("outcome"), numeric(Activity.earnings).label("recorded_amount"),
+                numeric(Activity.duration_seconds).label("duration_seconds"),
+            )
+            .select_from(joined).where(*predicates).limit(MAX_INSIGHT_RECORDS + 1)
+        )
+        with self._session_scope() as db_session:
+            # A Core cursor avoids ORM entity materialization and eager row buffering.
+            records = db_session.connection().execute(statement).mappings()
+            try:
+                return build_activity_insights(records, filters)
+            finally:
+                records.close()
 
     def get_session_comparison(
         self, baseline_id: int, comparison_id: int

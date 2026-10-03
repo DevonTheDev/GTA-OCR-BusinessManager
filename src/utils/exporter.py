@@ -13,10 +13,12 @@ from ..database.repository import Repository, get_repository
 
 if TYPE_CHECKING:
     from ..database.activity_ledger import ActivityLedgerPage
+    from ..database.activity_insights import ActivityInsights
     from ..database.session_comparison import SessionComparison
 
 logger = get_logger("utils.exporter")
 MAX_ACTIVITY_LEDGER_EXPORT_BYTES = 8 * 1024 * 1024
+MAX_ACTIVITY_INSIGHTS_EXPORT_BYTES = 8 * 1024 * 1024
 
 
 @dataclass
@@ -360,6 +362,27 @@ class DataExporter:
             )
         except Exception as exc:
             logger.error("Failed to export activity ledger page: %s", exc)
+            return ExportResult(success=False, error_message=str(exc))
+
+    def export_activity_insights(
+        self,
+        snapshot: "ActivityInsights",
+        output_file: Path,
+    ) -> ExportResult:
+        """Save an accepted grouped summary, without querying its source again."""
+        try:
+            payload = json.dumps(
+                snapshot.to_report(), ensure_ascii=False, indent=2, allow_nan=False,
+            )
+            if len(payload.encode("utf-8")) > MAX_ACTIVITY_INSIGHTS_EXPORT_BYTES:
+                raise ValueError("The activity insights exceed the 8 MiB UTF-8 export limit")
+            rows_exported = len(snapshot.groups)
+            with atomic_text_writer(output_file) as stream:
+                stream.write(payload)
+            logger.info("Exported activity insights to JSON: %s", output_file)
+            return ExportResult(success=True, file_path=output_file, rows_exported=rows_exported)
+        except Exception as exc:
+            logger.error("Failed to export activity insights: %s", exc)
             return ExportResult(success=False, error_message=str(exc))
 
     def export_earnings_breakdown(

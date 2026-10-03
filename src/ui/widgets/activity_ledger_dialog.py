@@ -34,8 +34,17 @@ class ActivityLedgerDialog(QDialog):
 
     PAGE_SIZE = 25
 
-    def __init__(self, repository, parent=None, *, character_id=None):
+    def __init__(self, repository, parent=None, *, character_id=None, initial_filters=None):
         super().__init__(parent)
+        if initial_filters is not None:
+            initial_filters = validate_ledger_request(initial_filters, limit=self.PAGE_SIZE)
+            if initial_filters.activity_type == "":
+                raise ValueError("The ledger controls cannot select an exact blank activity type")
+            if character_id is not None:
+                validate_ledger_request(ActivityLedgerFilters(character_id=character_id))
+                if character_id != initial_filters.character_id:
+                    raise ValueError("character_id conflicts with the initial activity filters")
+            character_id = initial_filters.character_id
         self._repository = repository
         self._exporter = DataExporter(repository)
         self._page = None
@@ -50,6 +59,8 @@ class ActivityLedgerDialog(QDialog):
         self._setup_ui()
         try:
             self._reload_characters(character_id)
+            if initial_filters is not None:
+                self._seed_filters(initial_filters)
             self._apply_filters()
         except Exception as exc:
             self._show_error(exc)
@@ -199,6 +210,21 @@ class ActivityLedgerDialog(QDialog):
                 self._character_combo.addItem(f"Character #{selected} (unavailable)", selected)
                 index = self._character_combo.count() - 1
             self._character_combo.setCurrentIndex(max(0, index))
+
+    def _seed_filters(self, filters):
+        """Populate a captured insight selection before the first storage read."""
+        # Signals may retire an empty display during construction, but no query
+        # occurs until all controls have their exact accepted values.
+        for checkbox, control, value in (
+            (self._from_checkbox, self._from_date, filters.date_from),
+            (self._until_checkbox, self._until_date, filters.date_until),
+        ):
+            checkbox.setChecked(value is not None)
+            if value is not None:
+                control.setDate(QDate(value.year, value.month, value.day))
+        self._type_edit.setText(filters.activity_type or "")
+        self._outcome_combo.setCurrentIndex(self._outcome_combo.findData(filters.outcome))
+        self._query_edit.setText(filters.query or "")
 
     def _retire_page(self):
         self._page = None

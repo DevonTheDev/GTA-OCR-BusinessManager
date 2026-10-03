@@ -336,6 +336,72 @@ filter retirement, paging, failed saves and snapshot ownership. Native checks:
 The ordinary suite skips these opt-in Qt modules. Windows file dialogs, capture,
 OCR accuracy and interactive gameplay remain separate platform checks.
 
+### Historical Activity Insights
+
+Open **History → Activity insights…** to compare recorded activity types across
+completed sessions, including older records outside the live tracker's recent
+history. Choose a character, inclusive UTC activity-date bounds, outcome, or
+literal name/notes phrase, then **Apply filters**. The table groups exact stored
+types, including custom names, and shows activity/session counts, outcome and
+numeric coverage, recorded amounts, measured durations and paired rates.
+
+- **Passed / known outcomes** excludes unknown outcomes from its percentage and
+  keeps their count visible. Failed activities remain in amount/duration metrics
+  unless you explicitly filter them out
+- **Known recorded amount** includes finite zero and negative amounts. Missing,
+  nonnumeric and nonfinite values remain unavailable; totals and means disclose
+  their known sample count. These are stored activity amounts, separate from
+  session net balance changes and earnings-event totals
+- **Positive measured duration** uses stored seconds greater than zero. Zero,
+  negative and unavailable durations have separate counts in the selected
+  detail. Durations are not reconstructed from timestamps
+- **Recorded amount per measured activity hour** uses only rows with both a
+  known amount and positive finite duration: their amount sum divided by their
+  duration sum, multiplied by 3,600. It is not the mean of individual rates, a
+  session-wide earning rate, verified payout/profit, or a future prediction
+
+Select a type for its full coverage details and numeric issues. Exact integer
+sums are preserved; mixed finite values accumulate before final conversion.
+Unrepresentable totals/means/rates remain unavailable with an issue, including
+nonzero values too small to represent. An empty result is distinct from known
+zero amounts. Results cover the complete matching selection, with limits of
+100,000 source activities and 256 exact types. Exceeding a limit asks you to
+narrow the filters; no silently partial summary is shown. Unsupported stored
+activity types are reported instead of being folded into another type.
+
+**Browse matching activities…** opens the existing activity ledger with the accepted
+character/date/outcome/search/type filters. This reads current matching records,
+so later database changes may differ from the earlier summary. Missing, blank,
+or control-containing exact types show their summary but disable this
+shortcut rather than opening all activities. An already-open ledger keeps its
+original selection until closed. The insight dialog starts with History's current
+character; subsequent History changes and its separate session-note search do
+not retarget it or the independently pinned comparison baseline.
+
+Editing insight filters clears the accepted results and disables drill-down and
+export until Apply. Refresh rereads applied filters and keeps an unapplied draft
+explicit. **Export summary as JSON…** saves the accepted dated summary, coverage,
+filters and metric notes without rereading the database. A file chooser opened
+for an earlier snapshot keeps that captured export even if the view changes.
+It exports grouped summaries, not original activity rows. Serialization is
+bounded to 8 MiB and uses the existing atomic per-file replacement; cancellation
+writes nothing and a failed replacement preserves an existing output. This is
+not a multi-file transaction or a power-loss durability guarantee.
+
+Insights require an existing completed session and character for each activity.
+Activity time is completion with recorded-start fallback, using the ledger's UTC
+rules; undated rows appear only without date bounds. The query reads a narrow
+single-statement observation and does not alter captured records, active
+character, tracking or live analytics. Stored start times may be persistence-time
+defaults. Each Refresh and ledger opening is a new observation.
+
+Local verification uses temporary real SQLite records, concurrent WAL writes,
+extreme/missing numeric cases and actual offscreen Qt MainWindow, filters,
+ledger and export paths. Native tests:
+`GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_activity_insights_qt.py tests/test_activity_insights_ledger_qt.py tests/test_activity_insights_app_qt.py`.
+Ordinary pytest skips these opt-in UI cases. Linux offscreen rendering is tested;
+native file choosers are substituted, and Windows/game capture is unverified.
+
 ### Activity Detection
 - Automatically detects when you're doing:
   - Contact Missions
