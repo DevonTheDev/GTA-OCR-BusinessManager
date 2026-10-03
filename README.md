@@ -113,6 +113,49 @@ plus real offscreen Qt dialogs, MainWindow controls and overlay. Native goal tes
 pytest skips these opt-in UI tests. Linux offscreen rendering is verified;
 Windows capture, OCR accuracy and interactive gameplay remain unverified.
 
+### Cooldowns and Personal Reminders
+
+Open **Activities → Manage cooldowns…** to manage the same timers shown in the
+overlay. This works before capture starts. Start, Stop, Pause and Reset Session
+retain the timers; closing and reopening the manager does not restart them.
+
+- **Start timer…** offers the app's existing positive-duration presets and a
+  **Custom timer**. Enter hours, minutes and seconds from 1 second to 7 days.
+  Presets fill the app's saved default; changing this timer does not change that
+  default. Check the duration against your game
+- A custom name accepts 1–200 characters and displays as literal text. Custom
+  timers have separate identities, so two reminders can share a name
+- **Adjust…** sets the selected timer's remaining duration from the moment you
+  accept. Cancel leaves it unchanged. Acceptance deliberately sets that same
+  timer again even if it expires, is removed, or an automatic completion changes
+  it while the editor is open. Custom names can be edited
+- **Remove** clears only the selected timer. The list follows remaining-time
+  order and removes expired entries. The compact overlay keeps its existing
+  shortened names and display limit; the manager shows full names
+
+Timers are personal reminders **shared across this app's characters**. They use
+elapsed wall-clock time, including while capture or the app is stopped, and do
+not establish in-game availability or change optimizer recommendations. Existing
+successful-completion detection may restart the matching preset; failed or
+unmapped activities do not invent a timer. Game durations and detection policy
+are unchanged. Clock rollback retains the existing elapsed-time clamp.
+
+The app loads `cooldowns.json` once when it opens and keeps one tracker for its
+lifetime. Changes are saved with same-directory atomic replacement. If saving
+fails, the in-memory reminder remains usable and the manager shows **Retry save**;
+reopening the app may otherwise restore older timers. Retry saves the latest
+state without restarting any countdown. A malformed or unreadable saved file
+stays untouched merely by opening/refreshing the manager; the next successful
+timer change can replace it. The manager discloses that recovery behavior.
+This is per-file persistence with serialized access inside one tracker, not a
+transaction across multiple app instances or a power-loss durability guarantee.
+
+Local tests cover temporary real JSON/SQLite, controlled clocks and concurrent
+tracker access, plus the actual MainWindow → editor → full list/overlay workflow.
+Native tests: `GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_cooldown_manager_qt.py tests/test_cooldown_manager_app_qt.py`.
+Ordinary pytest skips the opt-in UI tests. Linux offscreen Qt is exercised;
+native Windows rendering, OCR accuracy and actual game cooldown timing are not.
+
 ### Saved Session History
 
 Open the **History** tab to browse completed sessions, filter by character and

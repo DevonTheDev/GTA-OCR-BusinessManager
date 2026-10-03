@@ -12,6 +12,7 @@ from PyQt6.QtWidgets import (
     QTableWidget,
     QTableWidgetItem,
     QHeaderView,
+    QPushButton,
 )
 from PyQt6.QtCore import QTimer, Qt
 
@@ -29,6 +30,7 @@ class ActivityPanel(QWidget):
     def __init__(self, app: Optional["GTABusinessManager"] = None, parent: Optional[QWidget] = None) -> None:
         super().__init__(parent)
         self._app = app
+        self._cooldown_dialog = None
         self._setup_ui()
         self._setup_update_timer()
 
@@ -38,9 +40,17 @@ class ActivityPanel(QWidget):
         layout.setContentsMargins(16, 16, 16, 16)
 
         # Header
+        header_row = QHBoxLayout()
         header = QLabel("Activity History")
         header.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
-        layout.addWidget(header)
+        header_row.addWidget(header)
+        header_row.addStretch()
+        self._manage_cooldowns_button = QPushButton("Manage cooldowns…")
+        self._manage_cooldowns_button.setObjectName("manage_cooldowns")
+        self._manage_cooldowns_button.setEnabled(self._app is not None)
+        self._manage_cooldowns_button.clicked.connect(self._open_cooldown_manager)
+        header_row.addWidget(self._manage_cooldowns_button)
+        layout.addLayout(header_row)
 
         # Summary stats
         stats_frame = QFrame()
@@ -104,9 +114,31 @@ class ActivityPanel(QWidget):
 
     def _setup_update_timer(self) -> None:
         """Setup update timer."""
-        self._timer = QTimer()
+        self._timer = QTimer(self)
         self._timer.timeout.connect(self._update_display)
         self._timer.start(UI.BUSINESS_UPDATE_INTERVAL_MS)
+
+    def _open_cooldown_manager(self) -> None:
+        """Keep one live, modeless manager without starting capture."""
+        if self._app is None:
+            return
+        if self._cooldown_dialog is not None:
+            self._cooldown_dialog.show()
+            self._cooldown_dialog.raise_()
+            self._cooldown_dialog.activateWindow()
+            return
+        from .cooldown_manager_dialog import CooldownManagerDialog
+
+        dialog = CooldownManagerDialog(self._app.cooldown_tracker, self)
+        self._cooldown_dialog = dialog
+        dialog.finished.connect(lambda result, closed=dialog: self._cooldown_finished(closed))
+        dialog.show()
+
+    def _cooldown_finished(self, dialog) -> None:
+        if self._cooldown_dialog is not dialog:
+            return
+        self._cooldown_dialog = None
+        dialog.deleteLater()
 
     def _update_display(self) -> None:
         """Update activity table."""

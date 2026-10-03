@@ -1,14 +1,17 @@
 """Cooldown tracking for GTA Online activities."""
 
 from datetime import datetime, timezone
-from dataclasses import dataclass, field
+from dataclasses import dataclass, replace
 from typing import Optional
 import json
+import math
 from pathlib import Path
+from threading import RLock
+import unicodedata
+from uuid import uuid4
 
 from ..utils.logging import get_logger
 from ..utils.persistence import atomic_text_writer
-from ..game.activities import ActivityType
 
 logger = get_logger("tracking.cooldowns")
 
@@ -45,6 +48,23 @@ ACTIVITY_COOLDOWNS: dict[str, int] = {
 }
 
 
+def _has_unsafe_characters(value: str) -> bool:
+    """Reject control, formatting, line-separator and surrogate characters."""
+    return any(unicodedata.category(char) in {"Cc", "Cf", "Cs", "Zl", "Zp"} for char in value)
+
+
+def validate_reminder_values(display_name: str, duration_seconds: int) -> tuple[str, int]:
+    """Validate manual input without changing any timer or saved state."""
+    if not isinstance(display_name, str) or _has_unsafe_characters(display_name):
+        raise ValueError("Use a plain-text timer name without control characters.")
+    display_name = display_name.strip()
+    if not 1 <= len(display_name) <= 200:
+        raise ValueError("Timer names must contain 1 to 200 characters.")
+    if type(duration_seconds) is not int or not 1 <= duration_seconds <= 604800:
+        raise ValueError("Choose a whole number of seconds from 1 to 604800 (seven days).")
+    return display_name, duration_seconds
+
+
 @dataclass
 class CooldownInfo:
     """Information about an active cooldown."""
@@ -57,7 +77,10 @@ class CooldownInfo:
     @property
     def elapsed_seconds(self) -> float:
         """Get seconds elapsed since cooldown started."""
-        now = datetime.now(timezone.utc)
+        return self._elapsed_at(datetime.now(timezone.utc))
+
+    def _elapsed_at(self, now: datetime) -> float:
+        """Use a caller's clock snapshot for coherent tracker operations."""
         # Handle timezone-naive started_at
         if self.started_at.tzinfo is None:
             started = self.started_at.replace(tzinfo=timezone.utc)
@@ -68,8 +91,10 @@ class CooldownInfo:
     @property
     def remaining_seconds(self) -> float:
         """Get seconds remaining on cooldown."""
-        remaining = self.duration_seconds - self.elapsed_seconds
-        return max(0, remaining)
+        return self._remaining_at(datetime.now(timezone.utc))
+
+    def _remaining_at(self, now: datetime) -> float:
+        return max(0, self.duration_seconds - self._elapsed_at(now))
 
     @property
     def is_expired(self) -> bool:
@@ -111,6 +136,15 @@ class CooldownInfo:
     @classmethod
     def from_dict(cls, data: dict) -> "CooldownInfo":
         """Create from dictionary."""
+        if not isinstance(data, dict):
+            raise ValueError("Invalid cooldown record")
+        if not isinstance(data["activity_name"], str) or not isinstance(data["display_name"], str):
+            raise ValueError("Invalid cooldown names")
+        duration = data["duration_seconds"]
+        # Existing files may contain fractional, zero or negative durations.
+        # The stricter manual bounds apply only to the new reminder methods.
+        if type(duration) not in (int, float) or not math.isfinite(duration):
+            raise ValueError("Invalid cooldown duration")
         started_at = datetime.fromisoformat(data["started_at"])
         # Ensure timezone awareness
         if started_at.tzinfo is None:
@@ -133,42 +167,100 @@ class CooldownTracker:
             data_path: Path to save cooldown data. If None, cooldowns won't persist.
         """
         self._data_path = data_path
+        self._lock = RLock()
         self._cooldowns: dict[str, CooldownInfo] = {}
+        self._storage_error: str | None = None
+        self._needs_save_retry = False
         self._load()
         logger.info("Cooldown tracker initialized")
 
     def _load(self) -> None:
-        """Load cooldowns from file."""
-        if not self._data_path or not self._data_path.exists():
-            return
-
-        try:
-            with open(self._data_path, "r", encoding="utf-8") as f:
-                data = json.load(f)
-
-            for key, cd_data in data.get("cooldowns", {}).items():
-                cooldown = CooldownInfo.from_dict(cd_data)
-                # Only load if not expired
-                if not cooldown.is_expired:
-                    self._cooldowns[key] = cooldown
-
+        """Publish only a complete valid load; observation never repairs its file."""
+        with self._lock:
+            if not self._data_path:
+                return
+            try:
+                with open(self._data_path, "r", encoding="utf-8") as f:
+                    data = json.load(f)
+                if not isinstance(data, dict) or not isinstance(data.get("cooldowns", {}), dict):
+                    raise ValueError("Invalid cooldown file structure")
+                staged = {}
+                now = datetime.now(timezone.utc)
+                for key, cd_data in data.get("cooldowns", {}).items():
+                    cooldown = CooldownInfo.from_dict(cd_data)
+                    if key != cooldown.activity_name or key != key.lower():
+                        raise ValueError("Cooldown key does not match its activity")
+                    if cooldown._remaining_at(now) > 0:
+                        staged[key] = cooldown
+            except FileNotFoundError:
+                staged = {}
+            except Exception as e:
+                self._cooldowns = {}
+                self._storage_error = "load_failed"
+                self._needs_save_retry = False
+                logger.error(f"Failed to load cooldowns: {e}")
+                return
+            self._cooldowns = staged
+            self._storage_error = None
+            self._needs_save_retry = False
             logger.debug(f"Loaded {len(self._cooldowns)} active cooldowns")
-        except Exception as e:
-            logger.error(f"Failed to load cooldowns: {e}")
 
-    def _save(self) -> None:
-        """Save cooldowns to file."""
-        if not self._data_path:
-            return
+    @property
+    def storage_error(self) -> str | None:
+        """A stable UI-safe failure code, without exception details or paths."""
+        with self._lock:
+            return self._storage_error
 
-        try:
-            # Only save non-expired cooldowns
-            active = {k: v.to_dict() for k, v in self._cooldowns.items() if not v.is_expired}
+    @property
+    def needs_save_retry(self) -> bool:
+        """Whether an in-memory change still needs to be saved."""
+        with self._lock:
+            return self._needs_save_retry
 
-            with atomic_text_writer(self._data_path) as f:
-                json.dump({"cooldowns": active}, f, indent=2)
-        except Exception as e:
-            logger.error(f"Failed to save cooldowns: {e}")
+    def retry_save(self) -> bool:
+        """Retry pending changes without restarting timers or repairing a bad load."""
+        with self._lock:
+            if not self._needs_save_retry:
+                return False
+            return self._save()
+
+    def _save(self, now: Optional[datetime] = None) -> bool:
+        """Serialize the latest state while retaining the same mutation lock."""
+        with self._lock:
+            if self._storage_error == "load_failed" and not self._needs_save_retry:
+                return False
+            if self._data_path:
+                try:
+                    if now is None:
+                        now = datetime.now(timezone.utc)
+                    active = {
+                        key: info.to_dict() for key, info in self._cooldowns.items()
+                        if info._remaining_at(now) > 0
+                    }
+                    with atomic_text_writer(self._data_path) as f:
+                        json.dump({"cooldowns": active}, f, indent=2)
+                except Exception as e:
+                    self._storage_error = "save_failed"
+                    logger.error(f"Failed to save cooldowns: {e}")
+                    return False
+            self._needs_save_retry = False
+            self._storage_error = None
+            return True
+
+    def start_custom_timer(self, display_name: str, duration_seconds: int) -> CooldownInfo:
+        """Start a distinct named reminder, even when its label matches another."""
+        display_name, duration_seconds = validate_reminder_values(display_name, duration_seconds)
+        return self.set_timer(f"manual:{uuid4()}", display_name, duration_seconds)
+
+    def set_timer(
+        self, activity_name: str, display_name: str, duration_seconds: int,
+    ) -> CooldownInfo:
+        """Set this stable timer key from now, replacing or recreating it."""
+        display_name, duration_seconds = validate_reminder_values(display_name, duration_seconds)
+        if (not isinstance(activity_name, str) or not activity_name.strip()
+                or len(activity_name) > 256 or _has_unsafe_characters(activity_name)):
+            raise ValueError("Use a nonblank timer key of at most 256 plain-text characters.")
+        return self.start_cooldown(activity_name, display_name, duration_seconds)
 
     def start_cooldown(
         self,
@@ -194,18 +286,20 @@ class CooldownTracker:
         if display_name is None:
             display_name = activity_name.replace("_", " ").title()
 
-        cooldown = CooldownInfo(
-            activity_name=activity_name.lower(),
-            display_name=display_name,
-            started_at=datetime.now(timezone.utc),
-            duration_seconds=duration_seconds,
-        )
-
-        self._cooldowns[activity_name.lower()] = cooldown
-        self._save()
-
+        with self._lock:
+            now = datetime.now(timezone.utc)
+            cooldown = CooldownInfo(
+                activity_name=activity_name.lower(),
+                display_name=display_name,
+                started_at=now,
+                duration_seconds=duration_seconds,
+            )
+            self._cooldowns[activity_name.lower()] = cooldown
+            self._needs_save_retry = True
+            self._save(now)
+            result = replace(cooldown)
         logger.info(f"Started cooldown: {display_name} ({duration_seconds}s)")
-        return cooldown
+        return result
 
     def get_cooldown(self, activity_name: str) -> Optional[CooldownInfo]:
         """Get cooldown info for an activity.
@@ -216,10 +310,16 @@ class CooldownTracker:
         Returns:
             CooldownInfo if cooldown is active, None otherwise
         """
-        cooldown = self._cooldowns.get(activity_name.lower())
-        if cooldown and cooldown.is_expired:
-            del self._cooldowns[activity_name.lower()]
-            self._save()
+        with self._lock:
+            cooldown = self._get_cooldown_locked(activity_name.lower(), datetime.now(timezone.utc))
+            return replace(cooldown) if cooldown else None
+
+    def _get_cooldown_locked(self, key: str, now: datetime) -> Optional[CooldownInfo]:
+        cooldown = self._cooldowns.get(key)
+        if cooldown and cooldown._remaining_at(now) <= 0:
+            del self._cooldowns[key]
+            self._needs_save_retry = True
+            self._save(now)
             return None
         return cooldown
 
@@ -243,8 +343,10 @@ class CooldownTracker:
         Returns:
             Remaining seconds, or 0 if not on cooldown
         """
-        cooldown = self.get_cooldown(activity_name)
-        return cooldown.remaining_seconds if cooldown else 0
+        with self._lock:
+            now = datetime.now(timezone.utc)
+            cooldown = self._get_cooldown_locked(activity_name.lower(), now)
+            return cooldown._remaining_at(now) if cooldown else 0
 
     def clear_cooldown(self, activity_name: str) -> None:
         """Clear a cooldown manually.
@@ -252,10 +354,12 @@ class CooldownTracker:
         Args:
             activity_name: Activity name to clear
         """
-        if activity_name.lower() in self._cooldowns:
-            del self._cooldowns[activity_name.lower()]
-            self._save()
-            logger.info(f"Cleared cooldown: {activity_name}")
+        with self._lock:
+            if activity_name.lower() in self._cooldowns:
+                del self._cooldowns[activity_name.lower()]
+                self._needs_save_retry = True
+                self._save()
+                logger.info(f"Cleared cooldown: {activity_name}")
 
     def get_active_cooldowns(self) -> list[CooldownInfo]:
         """Get all active (non-expired) cooldowns.
@@ -263,18 +367,13 @@ class CooldownTracker:
         Returns:
             List of active CooldownInfo objects, sorted by remaining time
         """
-        # Clean up expired cooldowns
-        expired = [k for k, v in self._cooldowns.items() if v.is_expired]
-        for key in expired:
-            del self._cooldowns[key]
-
-        if expired:
-            self._save()
-
-        # Return sorted by remaining time
-        active = list(self._cooldowns.values())
-        active.sort(key=lambda c: c.remaining_seconds)
-        return active
+        with self._lock:
+            now = datetime.now(timezone.utc)
+            self._prune_expired_locked(now)
+            active = sorted(
+                self._cooldowns.items(), key=lambda item: (item[1]._remaining_at(now), item[0]),
+            )
+            return [replace(info) for _, info in active]
 
     def get_ready_activities(self) -> list[str]:
         """Get activities that are off cooldown and ready.
@@ -282,11 +381,9 @@ class CooldownTracker:
         Returns:
             List of activity names that are ready
         """
-        ready = []
-        for activity_name in ACTIVITY_COOLDOWNS.keys():
-            if not self.is_on_cooldown(activity_name):
-                ready.append(activity_name)
-        return ready
+        with self._lock:
+            self._prune_expired_locked(datetime.now(timezone.utc))
+            return [name for name in ACTIVITY_COOLDOWNS if name not in self._cooldowns]
 
     def cleanup_expired(self) -> int:
         """Remove expired cooldowns.
@@ -294,12 +391,17 @@ class CooldownTracker:
         Returns:
             Number of cooldowns removed
         """
-        expired = [k for k, v in self._cooldowns.items() if v.is_expired]
+        with self._lock:
+            return self._prune_expired_locked(datetime.now(timezone.utc))
+
+    def _prune_expired_locked(self, now: datetime) -> int:
+        expired = [key for key, info in self._cooldowns.items() if info._remaining_at(now) <= 0]
         for key in expired:
             del self._cooldowns[key]
 
         if expired:
-            self._save()
+            self._needs_save_retry = True
+            self._save(now)
             logger.debug(f"Cleaned up {len(expired)} expired cooldowns")
 
         return len(expired)

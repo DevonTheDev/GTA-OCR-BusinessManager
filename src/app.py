@@ -25,7 +25,7 @@ from .tracking.session_goals import SessionGoalController
 from .tracking.goals import GoalType, SessionGoal
 from .tracking.activity_tracker import ActivityTracker
 from .tracking.analytics import Analytics, EfficiencyMetrics, EarningsBreakdown
-from .tracking.cooldowns import CooldownTracker, get_cooldown_tracker, ACTIVITY_COOLDOWNS
+from .tracking.cooldowns import CooldownTracker, ACTIVITY_COOLDOWNS
 from .optimization.optimizer import Optimizer, Recommendation
 from .database.repository import Repository, get_repository
 from .utils.logging import setup_logging, get_logger
@@ -124,7 +124,10 @@ class GTABusinessManager:
         self._activity_tracker = ActivityTracker()
         self._optimizer = Optimizer(solo_mode=self._settings.get("optimization.solo_mode", True))
         self._analytics = Analytics()
-        self._cooldown_tracker: Optional[CooldownTracker] = None
+        # Reminders belong to the app, including while capture is stopped.
+        self._cooldown_tracker = CooldownTracker(
+            data_path=self._settings.data_dir / "cooldowns.json"
+        )
 
         # Cached analytics (updated on activity completion and throttled reads)
         self._analytics_lock = threading.Lock()
@@ -209,10 +212,6 @@ class GTABusinessManager:
 
         # Performance monitor
         self._perf_monitor = PerformanceMonitor()
-
-        # Cooldown tracker (use data directory for persistence)
-        cooldown_path = self._settings.data_dir / "cooldowns.json"
-        self._cooldown_tracker = CooldownTracker(data_path=cooldown_path)
 
         # Initialize database
         self._initialize_database()
@@ -1126,8 +1125,8 @@ class GTABusinessManager:
         return 0.0
 
     @property
-    def cooldown_tracker(self) -> Optional[CooldownTracker]:
-        """Get the cooldown tracker instance."""
+    def cooldown_tracker(self) -> CooldownTracker:
+        """Get the app-owned reminder tracker, available before capture starts."""
         return self._cooldown_tracker
 
     def reset_session(self) -> None:

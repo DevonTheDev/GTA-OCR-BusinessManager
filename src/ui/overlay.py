@@ -177,7 +177,9 @@ class OverlayWindow(QWidget):
         cooldown_layout = QVBoxLayout(self._cooldown_container)
         cooldown_layout.setContentsMargins(0, 0, 0, 0)
         cooldown_layout.setSpacing(0)
-        self._cooldown_widget = CompactCooldownWidget(max_display=2)
+        self._cooldown_widget = CompactCooldownWidget(
+            tracker=getattr(self._app, "cooldown_tracker", None), max_display=2
+        )
         cooldown_layout.addWidget(self._cooldown_widget)
         self._cooldown_widget._update_display()
         container_layout.addWidget(self._cooldown_container)

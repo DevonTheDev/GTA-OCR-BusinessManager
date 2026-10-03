@@ -1,175 +1,197 @@
-"""Cooldown timer widget for displaying active cooldowns."""
+"""Cooldown displays shared by the reminder manager and the overlay."""
 
+from math import ceil
 from typing import Optional
 
 from PyQt6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
-    QFrame, QProgressBar, QScrollArea, QSizePolicy
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QFrame, QProgressBar, QScrollArea, QSizePolicy,
 )
-from PyQt6.QtCore import Qt, QTimer
-from PyQt6.QtGui import QFont
+from PyQt6.QtCore import QPointF, Qt, QTimer, pyqtSignal
+from PyQt6.QtGui import QPainter, QTextLayout, QTextOption
 
 from ...tracking.cooldowns import CooldownTracker, CooldownInfo, get_cooldown_tracker
-from ...utils.logging import get_logger
 
 
-logger = get_logger("ui.cooldown_widget")
+def _remaining_text(cooldown: CooldownInfo) -> str:
+    """Show a countdown, including the final fraction of a second."""
+    remaining = max(0, ceil(cooldown.remaining_seconds))
+    minutes, seconds = divmod(remaining, 60)
+    if minutes >= 60:
+        hours, minutes = divmod(minutes, 60)
+        return f"{hours}h {minutes}m"
+    if minutes:
+        return f"{minutes}m {seconds}s"
+    return f"{seconds}s"
+
+
+class _WrappingNameLabel(QLabel):
+    """Plain text that also wraps a single long word instead of clipping it."""
+
+    def _layout_text(self, width: int):
+        text_layout = QTextLayout(self.text(), self.font())
+        option = QTextOption()
+        option.setWrapMode(QTextOption.WrapMode.WrapAtWordBoundaryOrAnywhere)
+        text_layout.setTextOption(option)
+        text_layout.beginLayout()
+        height = 0.0
+        while True:
+            line = text_layout.createLine()
+            if not line.isValid():
+                break
+            line.setLineWidth(max(1, width))
+            line.setPosition(QPointF(0, height))
+            height += line.height()
+        text_layout.endLayout()
+        return text_layout, ceil(height)
+
+    def heightForWidth(self, width: int) -> int:
+        return self._layout_text(width)[1]
+
+    def paintEvent(self, event) -> None:
+        painter = QPainter(self)
+        painter.setPen(self.palette().color(self.foregroundRole()))
+        text_layout, _ = self._layout_text(self.contentsRect().width())
+        text_layout.draw(painter, QPointF(self.contentsRect().topLeft()))
 
 
 class CooldownItemWidget(QFrame):
-    """Widget displaying a single cooldown timer."""
+    """Display a detached timer record, with optional stable-key actions."""
 
-    def __init__(self, cooldown: CooldownInfo, parent: Optional[QWidget] = None):
-        """Initialize cooldown item widget.
+    adjust_requested = pyqtSignal(str)
+    remove_requested = pyqtSignal(str)
 
-        Args:
-            cooldown: Cooldown info to display
-            parent: Parent widget
-        """
+    def __init__(self, cooldown: CooldownInfo, parent: Optional[QWidget] = None,
+                 management: bool = False):
         super().__init__(parent)
         self._cooldown = cooldown
+        self._management = management
+        self._near_completion = None
+        self.setObjectName("cooldown_item")
+        self.setProperty("activity_name", cooldown.activity_name)
         self._setup_ui()
+        self.update_display()
 
     def _setup_ui(self) -> None:
-        """Setup the widget UI."""
         self.setStyleSheet("""
-            QFrame {
+            QFrame#cooldown_item {
                 background-color: rgba(40, 40, 60, 180);
                 border-radius: 6px;
-                padding: 4px;
             }
         """)
-
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 6, 8, 6)
-        layout.setSpacing(4)
-
-        # Header row with name and time
-        header_layout = QHBoxLayout()
-
-        self._name_label = QLabel(self._cooldown.display_name)
+        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setSpacing(6)
+        header = QHBoxLayout()
+        self._name_label = _WrappingNameLabel(self._cooldown.display_name)
+        self._name_label.setObjectName("cooldown_name_label")
+        self._name_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._name_label.setWordWrap(True)
+        self._name_label.setMinimumWidth(0)
+        self._name_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._name_label.setStyleSheet("color: white; font-size: 11px; font-weight: bold;")
-        header_layout.addWidget(self._name_label)
-
-        header_layout.addStretch()
-
-        self._time_label = QLabel(self._cooldown.remaining_formatted)
-        self._time_label.setStyleSheet("color: #FFD700; font-size: 11px;")
-        header_layout.addWidget(self._time_label)
-
-        layout.addLayout(header_layout)
-
-        # Progress bar
+        header.addWidget(self._name_label, 1)
+        self._time_label = QLabel()
+        self._time_label.setObjectName("cooldown_remaining")
+        self._time_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._time_label.setSizePolicy(QSizePolicy.Policy.Minimum, QSizePolicy.Policy.Preferred)
+        header.addWidget(self._time_label)
+        layout.addLayout(header)
         self._progress_bar = QProgressBar()
         self._progress_bar.setFixedHeight(8)
         self._progress_bar.setTextVisible(False)
         self._progress_bar.setRange(0, 1000)
-        self._progress_bar.setValue(int(self._cooldown.progress * 1000))
-        self._progress_bar.setStyleSheet("""
-            QProgressBar {
-                background-color: rgba(255, 255, 255, 30);
-                border: none;
-                border-radius: 4px;
-            }
-            QProgressBar::chunk {
-                background-color: qlineargradient(
-                    x1: 0, y1: 0, x2: 1, y2: 0,
-                    stop: 0 #4CAF50, stop: 1 #8BC34A
-                );
-                border-radius: 4px;
-            }
-        """)
         layout.addWidget(self._progress_bar)
+        if self._management:
+            actions = QHBoxLayout()
+            actions.addStretch()
+            adjust = QPushButton("Adjust…")
+            adjust.setObjectName("cooldown_adjust")
+            adjust.clicked.connect(lambda: self.adjust_requested.emit(self.activity_name))
+            actions.addWidget(adjust)
+            remove = QPushButton("Remove")
+            remove.setObjectName("cooldown_remove")
+            remove.clicked.connect(lambda: self.remove_requested.emit(self.activity_name))
+            actions.addWidget(remove)
+            layout.addLayout(actions)
+
+    def rebind(self, cooldown: CooldownInfo) -> None:
+        """Keep the card while refreshing its detached, possibly replaced record."""
+        self._cooldown = cooldown
+        self.setProperty("activity_name", cooldown.activity_name)
+        self._name_label.setText(cooldown.display_name)
+        self.update_display()
 
     def update_display(self) -> bool:
-        """Update the display with current cooldown state.
-
-        Returns:
-            True if cooldown is still active, False if expired
-        """
-        if self._cooldown.is_expired:
-            return False
-
-        self._time_label.setText(self._cooldown.remaining_formatted)
-        self._progress_bar.setValue(int(self._cooldown.progress * 1000))
-
-        # Change color as cooldown nears completion
+        self._time_label.setText(_remaining_text(self._cooldown))
         progress = self._cooldown.progress
-        if progress >= 0.9:
-            self._progress_bar.setStyleSheet("""
-                QProgressBar {
+        self._progress_bar.setValue(int(progress * 1000))
+        near_completion = progress >= 0.9
+        if near_completion != self._near_completion:
+            self._near_completion = near_completion
+            start, end = ("#FFD700", "#FFC107") if near_completion else ("#4CAF50", "#8BC34A")
+            self._progress_bar.setStyleSheet(f"""
+                QProgressBar {{
                     background-color: rgba(255, 255, 255, 30);
                     border: none;
                     border-radius: 4px;
-                }
-                QProgressBar::chunk {
+                }}
+                QProgressBar::chunk {{
                     background-color: qlineargradient(
                         x1: 0, y1: 0, x2: 1, y2: 0,
-                        stop: 0 #FFD700, stop: 1 #FFC107
+                        stop: 0 {start}, stop: 1 {end}
                     );
                     border-radius: 4px;
-                }
+                }}
             """)
-            self._time_label.setStyleSheet("color: #4CAF50; font-size: 11px; font-weight: bold;")
-
-        return True
+            self._time_label.setStyleSheet(
+                "color: #4CAF50; font-size: 11px; font-weight: bold;" if near_completion
+                else "color: #FFD700; font-size: 11px;"
+            )
+        return not self._cooldown.is_expired
 
     @property
     def activity_name(self) -> str:
-        """Get the activity name for this cooldown."""
         return self._cooldown.activity_name
 
 
 class CooldownWidget(QWidget):
-    """Widget displaying all active cooldowns with progress bars."""
+    """Full, scrollable countdown list with opt-in management signals."""
 
-    def __init__(
-        self,
-        tracker: Optional[CooldownTracker] = None,
-        parent: Optional[QWidget] = None,
-        compact: bool = False,
-    ):
-        """Initialize cooldown widget.
+    adjust_requested = pyqtSignal(str)
+    remove_requested = pyqtSignal(str)
+    refreshed = pyqtSignal()
 
-        Args:
-            tracker: Cooldown tracker to use (uses global if None)
-            parent: Parent widget
-            compact: Use compact display mode
-        """
+    def __init__(self, tracker: Optional[CooldownTracker] = None,
+                 parent: Optional[QWidget] = None, compact: bool = False,
+                 management: bool = False):
         super().__init__(parent)
-        self._tracker = tracker or get_cooldown_tracker()
+        self._tracker = tracker if tracker is not None else get_cooldown_tracker()
         self._compact = compact
+        self._management = management
         self._item_widgets: dict[str, CooldownItemWidget] = {}
-
         self._setup_ui()
         self._setup_update_timer()
         self._refresh_cooldowns()
 
     def _setup_ui(self) -> None:
-        """Setup the widget UI."""
         layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(4)
-
-        # Header
         if not self._compact:
-            header = QLabel("Active Cooldowns")
+            header = QLabel("Active timers" if self._management else "Active Cooldowns")
             header.setStyleSheet("color: #AAA; font-size: 11px; font-weight: bold;")
             layout.addWidget(header)
-
-        # Scroll area for cooldowns
         scroll = QScrollArea()
+        scroll.setObjectName("cooldown_scroll")
         scroll.setWidgetResizable(True)
         scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
         scroll.setVerticalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
         scroll.setStyleSheet("""
-            QScrollArea {
-                background: transparent;
-                border: none;
-            }
+            QScrollArea { background: transparent; border: none; }
             QScrollBar:vertical {
                 background: rgba(255, 255, 255, 10);
-                width: 6px;
+                width: 8px;
                 border-radius: 3px;
             }
             QScrollBar::handle:vertical {
@@ -178,102 +200,73 @@ class CooldownWidget(QWidget):
                 min-height: 20px;
             }
         """)
-
-        # Container for cooldown items
         self._container = QWidget()
         self._container_layout = QVBoxLayout(self._container)
         self._container_layout.setContentsMargins(0, 0, 0, 0)
         self._container_layout.setSpacing(4)
         self._container_layout.addStretch()
-
         scroll.setWidget(self._container)
-        layout.addWidget(scroll)
-
-        # Empty state label
-        self._empty_label = QLabel("No active cooldowns")
-        self._empty_label.setStyleSheet("color: #666; font-size: 10px; font-style: italic;")
+        self._container.setAutoFillBackground(False)
+        scroll.viewport().setAutoFillBackground(False)
+        layout.addWidget(scroll, 1)
+        self._empty_label = QLabel("No active timers. Start a timer to add a personal reminder."
+                                   if self._management else "No active cooldowns")
+        self._empty_label.setObjectName("cooldown_empty")
+        self._empty_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._empty_label.setWordWrap(True)
+        self._empty_label.setStyleSheet("color: #AAA; font-size: 11px;")
         self._empty_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
         layout.addWidget(self._empty_label)
 
     def _setup_update_timer(self) -> None:
-        """Setup timer for updating cooldown displays."""
-        self._update_timer = QTimer()
+        self._update_timer = QTimer(self)
         self._update_timer.timeout.connect(self._update_cooldowns)
-        self._update_timer.start(1000)  # Update every second
+        self._update_timer.start(1000)
 
     def _refresh_cooldowns(self) -> None:
-        """Refresh the list of cooldowns from tracker."""
         active = self._tracker.get_active_cooldowns()
-
-        # Track which activities we've seen
-        active_names = {cd.activity_name for cd in active}
-
-        # Remove widgets for expired cooldowns
-        to_remove = [name for name in self._item_widgets if name not in active_names]
-        for name in to_remove:
-            widget = self._item_widgets.pop(name)
-            self._container_layout.removeWidget(widget)
-            widget.deleteLater()
-
-        # Add widgets for new cooldowns
-        for cooldown in active:
-            if cooldown.activity_name not in self._item_widgets:
-                widget = CooldownItemWidget(cooldown)
+        active_names = {cooldown.activity_name for cooldown in active}
+        for name in list(self._item_widgets):
+            if name not in active_names:
+                widget = self._item_widgets.pop(name)
+                self._container_layout.removeWidget(widget)
+                widget.hide()
+                widget.deleteLater()
+        for index, cooldown in enumerate(active):
+            widget = self._item_widgets.get(cooldown.activity_name)
+            if widget is None:
+                widget = CooldownItemWidget(cooldown, self._container, management=self._management)
+                widget.adjust_requested.connect(self.adjust_requested.emit)
+                widget.remove_requested.connect(self.remove_requested.emit)
                 self._item_widgets[cooldown.activity_name] = widget
-                # Insert before the stretch
-                self._container_layout.insertWidget(
-                    self._container_layout.count() - 1, widget
-                )
+            else:
+                widget.rebind(cooldown)
+            # Moving an existing widget also updates ordering after replacement.
+            self._container_layout.insertWidget(index, widget)
+        self._empty_label.setVisible(not active)
+        self.refreshed.emit()
 
-        # Update visibility
-        has_cooldowns = len(self._item_widgets) > 0
-        self._empty_label.setVisible(not has_cooldowns)
-
-    def _update_cooldowns(self) -> None:
-        """Update all cooldown displays."""
-        # Check for expired cooldowns
-        expired = []
-        for name, widget in self._item_widgets.items():
-            if not widget.update_display():
-                expired.append(name)
-
-        # Remove expired widgets
-        for name in expired:
-            widget = self._item_widgets.pop(name)
-            self._container_layout.removeWidget(widget)
-            widget.deleteLater()
-
-        # Refresh to pick up new cooldowns
+    def refresh(self) -> None:
+        """Refresh records and order from the shared tracker."""
         self._refresh_cooldowns()
 
-    def add_cooldown(
-        self,
-        activity_name: str,
-        display_name: Optional[str] = None,
-        duration_seconds: Optional[int] = None,
-    ) -> None:
-        """Add a cooldown manually.
+    def _update_cooldowns(self) -> None:
+        # Fetch replacements before deciding whether an old card has expired.
+        self._refresh_cooldowns()
 
-        Args:
-            activity_name: Internal activity name
-            display_name: Human-readable name
-            duration_seconds: Cooldown duration
-        """
+    def add_cooldown(self, activity_name: str, display_name: Optional[str] = None,
+                     duration_seconds: Optional[int] = None) -> None:
+        """Keep the existing standalone programmatic API."""
         self._tracker.start_cooldown(activity_name, display_name, duration_seconds)
         self._refresh_cooldowns()
 
     def clear_cooldown(self, activity_name: str) -> None:
-        """Clear a specific cooldown.
-
-        Args:
-            activity_name: Activity to clear
-        """
         self._tracker.clear_cooldown(activity_name)
         self._refresh_cooldowns()
 
     def clear_all(self) -> None:
-        """Clear all cooldowns."""
-        for name in list(self._item_widgets.keys()):
+        """Legacy programmatic API; the manager exposes no bulk-clear control."""
+        for name in list(self._item_widgets):
             self._tracker.clear_cooldown(name)
         self._refresh_cooldowns()
 
@@ -281,87 +274,47 @@ class CooldownWidget(QWidget):
 class CompactCooldownWidget(QWidget):
     """Compact cooldown display for overlay use."""
 
-    def __init__(
-        self,
-        tracker: Optional[CooldownTracker] = None,
-        parent: Optional[QWidget] = None,
-        max_display: int = 3,
-    ):
-        """Initialize compact cooldown widget.
-
-        Args:
-            tracker: Cooldown tracker to use
-            parent: Parent widget
-            max_display: Maximum number of cooldowns to show
-        """
+    def __init__(self, tracker: Optional[CooldownTracker] = None,
+                 parent: Optional[QWidget] = None, max_display: int = 3):
         super().__init__(parent)
-        self._tracker = tracker or get_cooldown_tracker()
+        self._tracker = tracker if tracker is not None else get_cooldown_tracker()
         self._max_display = max_display
         self._labels: list[QLabel] = []
-
         self._setup_ui()
         self._setup_update_timer()
 
     def _setup_ui(self) -> None:
-        """Setup the widget UI."""
         layout = QHBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(8)
-
-        # Create labels for displaying cooldowns
         for _ in range(self._max_display):
             label = QLabel()
-            label.setStyleSheet("""
-                color: #888;
-                font-size: 10px;
-                background-color: rgba(0, 0, 0, 50);
-                padding: 2px 6px;
-                border-radius: 3px;
-            """)
+            label.setTextFormat(Qt.TextFormat.PlainText)
             label.hide()
             self._labels.append(label)
             layout.addWidget(label)
-
         layout.addStretch()
 
     def _setup_update_timer(self) -> None:
-        """Setup timer for updating display."""
-        self._update_timer = QTimer()
+        self._update_timer = QTimer(self)
         self._update_timer.timeout.connect(self._update_display)
         self._update_timer.start(1000)
 
     def _update_display(self) -> None:
-        """Update the cooldown display."""
         cooldowns = self._tracker.get_active_cooldowns()[:self._max_display]
-
-        # Update labels
         for i, label in enumerate(self._labels):
             if i < len(cooldowns):
-                cd = cooldowns[i]
-                # Use short name and time
-                short_name = cd.display_name[:10]
-                label.setText(f"{short_name}: {cd.remaining_formatted}")
-
-                # Color based on progress
-                if cd.progress >= 0.9:
-                    label.setStyleSheet("""
-                        color: #4CAF50;
-                        font-size: 10px;
-                        background-color: rgba(0, 0, 0, 50);
-                        padding: 2px 6px;
-                        border-radius: 3px;
-                    """)
-                else:
-                    label.setStyleSheet("""
-                        color: #FFD700;
-                        font-size: 10px;
-                        background-color: rgba(0, 0, 0, 50);
-                        padding: 2px 6px;
-                        border-radius: 3px;
-                    """)
+                cooldown = cooldowns[i]
+                label.setText(f"{cooldown.display_name[:10]}: {_remaining_text(cooldown)}")
+                color = "#4CAF50" if cooldown.progress >= 0.9 else "#FFD700"
+                label.setStyleSheet(f"""
+                    color: {color};
+                    font-size: 10px;
+                    background-color: rgba(0, 0, 0, 50);
+                    padding: 2px 6px;
+                    border-radius: 3px;
+                """)
                 label.show()
             else:
                 label.hide()
-
-        # Show/hide widget based on cooldowns
-        self.setVisible(len(cooldowns) > 0)
+        self.setVisible(bool(cooldowns))
