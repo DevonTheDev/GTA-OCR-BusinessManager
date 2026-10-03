@@ -73,6 +73,24 @@ AGENCY_SAFE_MAX = 250_000
 AGENCY_SAFE_INTERVAL_MINUTES = 48
 
 
+def _format_time_until_full(remaining: Optional[timedelta]) -> str:
+    """Format a duration shared by observed-state and estimated-view callers."""
+    if remaining is None:
+        return "N/A"
+    if remaining.total_seconds() <= 0:
+        return "Full"
+    hours = int(remaining.total_seconds() // 3600)
+    minutes = int((remaining.total_seconds() % 3600) // 60)
+    if hours >= 24:
+        days = hours // 24
+        hours = hours % 24
+        return f"{days}d {hours}h"
+    elif hours > 0:
+        return f"{hours}h {minutes}m"
+    else:
+        return f"{minutes}m"
+
+
 @dataclass
 class PassiveIncomeState:
     """State of a passive income source."""
@@ -135,24 +153,7 @@ class PassiveIncomeState:
     @property
     def time_until_full_formatted(self) -> str:
         """Get formatted time until full."""
-        remaining = self.time_until_full
-        if remaining is None:
-            return "N/A"
-
-        if remaining.total_seconds() <= 0:
-            return "Full"
-
-        hours = int(remaining.total_seconds() // 3600)
-        minutes = int((remaining.total_seconds() % 3600) // 60)
-
-        if hours >= 24:
-            days = hours // 24
-            hours = hours % 24
-            return f"{days}d {hours}h"
-        elif hours > 0:
-            return f"{hours}h {minutes}m"
-        else:
-            return f"{minutes}m"
+        return _format_time_until_full(self.time_until_full)
 
     def to_dict(self) -> dict:
         """Convert to dictionary for serialization."""
@@ -449,24 +450,27 @@ class PassiveIncomeTracker:
         """
         predictions = []
 
-        if self._nightclub:
+        for name, state in (("Nightclub", self._nightclub), ("Agency Safe", self._agency)):
+            if state is None:
+                continue
+            # Sample once so the amount, percentage, fullness and ETA describe
+            # the same estimate without overwriting the last OCR observation.
+            value = state.estimated_current_value
+            full = value >= state.max_value
+            fill_percent = min(100.0, value / state.max_value * 100) if state.max_value > 0 else 0.0
+            if full:
+                remaining = timedelta(0)
+            elif not state.is_linked or state.rate_per_hour <= 0:
+                remaining = None
+            else:
+                remaining = timedelta(hours=(state.max_value - value) / state.rate_per_hour)
             predictions.append({
-                "name": "Nightclub",
-                "current_value": self._nightclub.estimated_current_value,
-                "max_value": self._nightclub.max_value,
-                "fill_percent": self._nightclub.fill_percent,
-                "time_until_full": self._nightclub.time_until_full_formatted,
-                "is_full": self._nightclub.is_full,
-            })
-
-        if self._agency:
-            predictions.append({
-                "name": "Agency Safe",
-                "current_value": self._agency.estimated_current_value,
-                "max_value": self._agency.max_value,
-                "fill_percent": self._agency.fill_percent,
-                "time_until_full": self._agency.time_until_full_formatted,
-                "is_full": self._agency.is_full,
+                "name": name,
+                "current_value": value,
+                "max_value": state.max_value,
+                "fill_percent": fill_percent,
+                "time_until_full": _format_time_until_full(remaining),
+                "is_full": full,
             })
 
         return predictions

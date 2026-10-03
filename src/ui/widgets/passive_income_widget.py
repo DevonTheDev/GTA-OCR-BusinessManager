@@ -244,7 +244,7 @@ class PassiveIncomeWidget(QWidget):
         predictions = self._tracker.get_predictions()
 
         # Update total
-        total = self._tracker.total_passive_value
+        total = sum(pred["current_value"] for pred in predictions)
         self._total_value.setText(f"{format_money_short(total)}")
 
         # Update individual widgets
@@ -329,12 +329,13 @@ class CompactPassiveIncomeWidget(QWidget):
 
     def _update_display(self) -> None:
         """Update the display."""
-        nc = self._tracker.nightclub
+        predictions = {pred["name"]: pred for pred in self._tracker.get_predictions()}
+        nc = predictions.get("Nightclub")
         if nc:
-            value = format_money_short(nc.estimated_current_value)
-            pct = nc.fill_percent
+            value = format_money_short(nc["current_value"])
+            pct = nc["fill_percent"]
 
-            if nc.is_full:
+            if nc["is_full"]:
                 self._nc_label.setText(f"NC: {value} FULL")
                 self._nc_label.setStyleSheet("""
                     color: #FF9800;
@@ -354,12 +355,12 @@ class CompactPassiveIncomeWidget(QWidget):
                     border-radius: 3px;
                 """)
 
-        agency = self._tracker.agency
+        agency = predictions.get("Agency Safe")
         if agency:
-            value = format_money_short(agency.estimated_current_value)
-            pct = agency.fill_percent
+            value = format_money_short(agency["current_value"])
+            pct = agency["fill_percent"]
 
-            if agency.is_full:
+            if agency["is_full"]:
                 self._agency_label.setText(f"Safe: {value} FULL")
                 self._agency_label.setStyleSheet("""
                     color: #FF9800;

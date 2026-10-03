@@ -641,3 +641,18 @@ persisted wall-clock time with a monotonic clock or correcting old records. Loca
 tests cover UTC/offset/legacy timestamps, real JSON reloads and normal later accrual
 and expiry. Native game timing and the accuracy of game-economy constants are not
 validated by this change.
+
+### Consistent passive-income predictions
+
+Each prediction now samples its estimated value once and derives the percentage,
+full flag and remaining time from that amount. An estimated full safe or warehouse
+therefore shows 100% and Full together. Both the detailed and compact widgets use
+these prediction rows, and the detailed total sums the displayed amounts instead
+of sampling them again.
+
+Reading predictions does not update saved balances, timestamps or the state
+properties describing the last observation. Existing rate/capacity tables,
+recommendation thresholds and time model remain unchanged. Local tests cover
+partial/full estimates, inactive sources, clock rollback, ETA formatting and the
+actual widget update methods using stand-in Qt labels. Native Qt rendering and
+in-game forecast accuracy remain unverified.
