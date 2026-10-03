@@ -670,4 +670,21 @@ zero balances still display as zero. This changes presentation only: reset keeps
 the existing recent activity history, average calculation and analytics selection.
 Local regressions run the actual update methods against real app accounting,
 session resets and disposable SQLite, substituting only the Qt display objects.
-Native Qt rendering and in-game capture remain unverified.
+These dashboard, overlay and session-panel label tests do not validate native
+rendering or in-game capture.
+
+Session earnings charts also follow the current session object. A reset or new
+run clears the previous points even when initiated outside the session panel.
+Elapsed chart time comes from session duration, so a chart opened later uses the
+correct timeline and a completed session's endpoint stops advancing. Empty or
+unavailable activity breakdowns clear the previous bars and labels. Existing
+sampling, earnings and retained-history analytics calculations are unchanged.
+
+The regular Python suite uses actual chart methods with stand-in plots. With the
+existing PyQt6/pyqtgraph dependencies installed, opt-in native chart smoke tests
+run with `GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_charts_qt.py`
+on a shell supporting inline environment variables. These tests exercise real
+widgets without screen capture or model downloads; set the same environment
+variables separately on other shells. They are skipped in the ordinary suite.
+The offscreen Qt path is validated on Linux; Windows and in-game rendering remain
+unverified.

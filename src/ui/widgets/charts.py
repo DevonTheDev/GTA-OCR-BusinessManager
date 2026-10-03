@@ -1,7 +1,6 @@
 """Charts and graphs for session visualization."""
 
 from typing import TYPE_CHECKING, List, Dict, Optional, Tuple
-from datetime import datetime
 
 from PyQt6.QtWidgets import QWidget, QVBoxLayout, QHBoxLayout, QLabel, QFrame
 from PyQt6.QtCore import QTimer
@@ -26,7 +25,7 @@ class EarningsChart(QWidget):
         self._app = app
         self._earnings_history: List[Tuple[float, int]] = []  # [(elapsed_minutes, cumulative_earnings), ...]
         self._last_earnings: int = 0
-        self._session_start: datetime = datetime.now()
+        self._session_stats = None
         self._setup_ui()
         self._setup_timer()
 
@@ -77,18 +76,24 @@ class EarningsChart(QWidget):
         if not PYQTGRAPH_AVAILABLE or not self._app:
             return
 
+        stats = self._app.session_stats
+        if stats is not self._session_stats:
+            # App-level resets and new runs replace the stats without recreating this widget.
+            self.reset()
+            self._session_stats = stats
+        if stats is None:
+            return
+
         current_earnings = self._app.session_earnings
+        elapsed = stats.duration_seconds / 60
 
         # Record data point if earnings changed
         if current_earnings != self._last_earnings:
-            elapsed = (datetime.now() - self._session_start).total_seconds() / 60
             self._earnings_history.append((elapsed, current_earnings))
             self._last_earnings = current_earnings
 
         # Add current point even if no change (for continuous line)
         if self._earnings_history:
-            elapsed = (datetime.now() - self._session_start).total_seconds() / 60
-
             # Prepare data for plotting
             times = [point[0] for point in self._earnings_history]
             earnings = [point[1] for point in self._earnings_history]
@@ -103,7 +108,7 @@ class EarningsChart(QWidget):
         """Reset chart for new session."""
         self._earnings_history = []
         self._last_earnings = 0
-        self._session_start = datetime.now()
+        self._session_stats = None
         if PYQTGRAPH_AVAILABLE:
             self._curve.setData([], [])
 
@@ -160,6 +165,7 @@ class ActivityBreakdownChart(QWidget):
 
         breakdown = self._app.earnings_breakdown
         if not breakdown:
+            self.reset()
             return
 
         # Prepare data
@@ -182,6 +188,7 @@ class ActivityBreakdownChart(QWidget):
                 colors.append(color)
 
         if not values:
+            self.reset()
             return
 
         # Update bar chart
@@ -201,6 +208,7 @@ class ActivityBreakdownChart(QWidget):
         """Reset chart."""
         if PYQTGRAPH_AVAILABLE:
             self._plot.clear()
+            self._plot.getAxis("bottom").setTicks([])
 
 
 class SessionCharts(QWidget):
