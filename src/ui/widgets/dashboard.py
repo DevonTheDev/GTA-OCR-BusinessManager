@@ -239,15 +239,17 @@ class DashboardWidget(QWidget):
 
         # Update activities card
         activities = self._app.recent_activities
-        self._activities_card.set_value(str(len(activities)))
+        stats = self._app.session_stats
+        self._activities_card.set_value(str(stats.activities_completed if stats else 0))
 
         # Update time card
-        stats = self._app.session_stats
         if stats:
             self._time_card.set_value(format_time(stats.duration_seconds))
             rate = stats.earnings_per_hour
-            if rate > 0:
-                self._time_card.set_subtitle(f"{format_money_short(rate)}/hr")
+            self._time_card.set_subtitle(f"{format_money_short(rate)}/hr")
+        else:
+            self._time_card.set_value("--")
+            self._time_card.set_subtitle("")
 
         # Update activity card
         last_capture = self._app.last_capture

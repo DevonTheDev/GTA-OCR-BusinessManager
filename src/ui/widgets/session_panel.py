@@ -154,9 +154,13 @@ class SessionPanel(QWidget):
         # Money stats
         if data.session_start_money is not None:
             self._get_stat_label("start_money").setText(format_money(data.session_start_money))
+        else:
+            self._get_stat_label("start_money").setText("--")
 
         if data.current_money is not None:
             self._get_stat_label("current_money").setText(format_money(data.current_money))
+        else:
+            self._get_stat_label("current_money").setText("--")
 
         self._get_stat_label("earnings").setText(f"+{format_money(data.session_earnings)}")
         self._get_stat_label("earnings").setStyleSheet("color: #4CAF50; font-size: 20px; font-weight: bold;")
@@ -165,15 +169,18 @@ class SessionPanel(QWidget):
         if stats and stats.duration_seconds > 60:
             rate = stats.earnings_per_hour
             self._get_stat_label("rate").setText(f"{format_money_short(rate)}/hr")
+        else:
+            self._get_stat_label("rate").setText("--")
 
         # Duration
         if stats:
             self._get_stat_label("duration").setText(format_time(stats.duration_seconds))
+        else:
+            self._get_stat_label("duration").setText("--")
 
         # Activities
         activities = self._app.recent_activities
-        total = len(activities)
-        self._get_stat_label("activities").setText(str(total))
+        self._get_stat_label("activities").setText(str(stats.activities_completed if stats else 0))
 
         # Success rate
         if stats and (stats.missions_passed + stats.missions_failed) > 0:
@@ -181,19 +188,26 @@ class SessionPanel(QWidget):
             self._get_stat_label("success_rate").setText(format_percentage(rate))
             color = "#4CAF50" if rate >= 0.8 else "#FFD700" if rate >= 0.5 else "#F44336"
             self._get_stat_label("success_rate").setStyleSheet(f"color: {color}; font-size: 20px; font-weight: bold;")
+        else:
+            self._get_stat_label("success_rate").setText("--")
+            self._get_stat_label("success_rate").setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
 
         # Average earnings
-        if total > 0:
-            successful = [a for a in activities if a.success]
-            if successful:
-                avg = sum(a.earnings for a in successful) // len(successful)
-                self._get_stat_label("avg_earnings").setText(format_money_short(avg))
+        successful = [a for a in activities if a.success]
+        if successful:
+            avg = sum(a.earnings for a in successful) // len(successful)
+            self._get_stat_label("avg_earnings").setText(format_money_short(avg))
+        else:
+            self._get_stat_label("avg_earnings").setText("--")
 
         # Time breakdown
         if stats:
             self._get_stat_label("mission_time").setText(format_time(stats.time_in_missions))
             self._get_stat_label("idle_time").setText(format_time(stats.time_idle))
             self._get_stat_label("sells").setText(str(stats.sells_completed))
+        else:
+            for name in ("mission_time", "idle_time", "sells"):
+                self._get_stat_label(name).setText("--")
 
         # Last change
         if data.last_money_change != 0:
@@ -201,6 +215,9 @@ class SessionPanel(QWidget):
             self._get_stat_label("last_change").setText(f"{sign}{format_money_short(data.last_money_change)}")
             color = "#4CAF50" if data.last_money_change > 0 else "#F44336"
             self._get_stat_label("last_change").setStyleSheet(f"color: {color}; font-size: 20px; font-weight: bold;")
+        else:
+            self._get_stat_label("last_change").setText("--")
+            self._get_stat_label("last_change").setStyleSheet("color: white; font-size: 20px; font-weight: bold;")
 
         # Analytics insights
         best_activity = self._app.best_activity_type
@@ -211,6 +228,9 @@ class SessionPanel(QWidget):
             self._get_stat_label("best_activity").setStyleSheet(
                 "color: #FFD700; font-size: 16px; font-weight: bold;"
             )
+        else:
+            self._get_stat_label("best_activity").setText("--")
+            self._get_stat_label("best_activity").setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
 
         best_rate = self._app.best_activity_rate
         if best_rate > 0:
@@ -218,23 +238,19 @@ class SessionPanel(QWidget):
             self._get_stat_label("best_rate").setStyleSheet(
                 "color: #4CAF50; font-size: 16px; font-weight: bold;"
             )
+        else:
+            self._get_stat_label("best_rate").setText("--")
+            self._get_stat_label("best_rate").setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
 
         breakdown = self._app.earnings_breakdown
-        if breakdown:
-            if breakdown.from_missions > 0:
-                self._get_stat_label("from_missions").setText(
-                    f"+{format_money_short(breakdown.from_missions)}"
-                )
-                self._get_stat_label("from_missions").setStyleSheet(
-                    "color: #4CAF50; font-size: 16px; font-weight: bold;"
-                )
-            if breakdown.from_sells > 0:
-                self._get_stat_label("from_sells").setText(
-                    f"+{format_money_short(breakdown.from_sells)}"
-                )
-                self._get_stat_label("from_sells").setStyleSheet(
-                    "color: #4CAF50; font-size: 16px; font-weight: bold;"
-                )
+        for name in ("from_missions", "from_sells"):
+            amount = getattr(breakdown, name) if breakdown else 0
+            if amount > 0:
+                self._get_stat_label(name).setText(f"+{format_money_short(amount)}")
+                self._get_stat_label(name).setStyleSheet("color: #4CAF50; font-size: 16px; font-weight: bold;")
+            else:
+                self._get_stat_label(name).setText("--")
+                self._get_stat_label(name).setStyleSheet("color: white; font-size: 16px; font-weight: bold;")
 
     def _reset_session(self) -> None:
         """Reset the session."""

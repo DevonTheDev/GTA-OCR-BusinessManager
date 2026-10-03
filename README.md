@@ -656,3 +656,18 @@ recommendation thresholds and time model remain unchanged. Local tests cover
 partial/full estimates, inactive sources, clock rollback, ETA formatting and the
 actual widget update methods using stand-in Qt labels. Native Qt rendering and
 in-game forecast accuracy remain unverified.
+
+### Session displays after reset
+
+The dashboard, overlay and session panel refresh their hourly-rate labels even
+when the new rate is zero or not yet available. Reset Session therefore clears the
+previous rate immediately; the overlay and session panel retain their existing
+60-second warm-up. Both Activities Completed counters use the current session's
+full count, including failed completions, rather than the ten-row recent list.
+
+Unavailable session-panel values clear their old text and status color. Valid
+zero balances still display as zero. This changes presentation only: reset keeps
+the existing recent activity history, average calculation and analytics selection.
+Local regressions run the actual update methods against real app accounting,
+session resets and disposable SQLite, substituting only the Qt display objects.
+Native Qt rendering and in-game capture remain unverified.

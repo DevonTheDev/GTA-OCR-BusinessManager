@@ -259,6 +259,8 @@ class OverlayWindow(QWidget):
         if stats and stats.duration_seconds > 60:
             rate = stats.earnings_per_hour
             self._rate_label.setText(f"({format_money_short(rate)}/hr)")
+        else:
+            self._rate_label.setText("")
 
         # Update state badge
         state = self._app.game_state
