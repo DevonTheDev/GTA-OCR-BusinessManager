@@ -81,7 +81,11 @@ def test_default_activity_can_be_cancelled_or_replaced_then_measured(clock, repl
     tracker = ActivityTracker()
     original = tracker.start_activity(ActivityType.CONTACT_MISSION, "Original")
     assert original.started_at.tzinfo is None
-    clock.instant = original.started_at.astimezone(timezone.utc) + timedelta(seconds=120)
+    # The dataclass default factory retains the real datetime.now callable.
+    # Keep the default-naive check, then measure against this fixed test clock
+    # rather than a real local time that can straddle a DST transition.
+    original.started_at = clock.now()
+    clock.instant += timedelta(seconds=120)
 
     if replace:
         replacement = tracker.start_activity(ActivityType.HEIST_PREP, "Replacement")

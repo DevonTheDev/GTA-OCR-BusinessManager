@@ -8,9 +8,11 @@ from PyQt6.QtCore import Qt, QSignalBlocker
 from PyQt6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton, QComboBox,
     QTableWidget, QTableWidgetItem, QHeaderView, QTabWidget, QFileDialog,
+    QLineEdit, QPlainTextEdit,
 )
 
 from ...database.repository import Repository
+from ...database.session_annotations import normalize_annotation_query
 from ...utils.exporter import DataExporter
 from ...utils.helpers import format_money, format_time
 from ...utils.logging import get_logger
@@ -43,7 +45,7 @@ def _duration(value) -> str:
 
 
 class SessionHistoryPanel(QWidget):
-    """A paged, read-only view of completed SQLite sessions."""
+    """Browse captured history and edit its separately saved personal context."""
 
     PAGE_SIZE = 25
     DETAIL_LIMIT = 1000
@@ -62,6 +64,11 @@ class SessionHistoryPanel(QWidget):
         self._activity_ledger_dialog = None
         self._opening_activity_ledger = False
         self._comparing = False
+        self._annotation_dialog = None
+        self._opening_annotation = False
+        self._annotation_available = False
+        self._applied_annotation_query = None
+        self._annotation_query_dirty = False
         self._setup_ui()
 
     def _label(self, text=""):
@@ -101,9 +108,22 @@ class SessionHistoryPanel(QWidget):
         self._refresh_button = QPushButton("Refresh history")
         controls.addWidget(self._refresh_button)
         layout.addLayout(controls)
+        search = QHBoxLayout()
+        search.addWidget(self._label("Session notes"))
+        self._annotation_query_edit = QLineEdit()
+        self._annotation_query_edit.setObjectName("sessionAnnotationQuery")
+        self._annotation_query_edit.setPlaceholderText("Find a label, tag or personal note; empty means all")
+        self._annotation_query_edit.setToolTip(
+            "Literal search: %, _ and \\ match themselves. A–Z ignores case; other letters match exactly. "
+            "Up to 200 characters. Edit, then Apply."
+        )
+        self._annotation_apply_button = QPushButton("Apply search")
+        search.addWidget(self._annotation_query_edit, 1)
+        search.addWidget(self._annotation_apply_button)
+        layout.addLayout(search)
 
         self._sessions_table = self._table([
-            "Session", "Character", "Started (UTC)", "Duration", "Net balance change", "Activities",
+            "Session", "Character", "Started (UTC)", "Duration", "Net balance change", "Activities", "Label / tags",
         ])
         layout.addWidget(self._sessions_table, 2)
         paging = QHBoxLayout()
@@ -136,17 +156,38 @@ class SessionHistoryPanel(QWidget):
             "Timestamp (UTC)", "Change", "Source", "Balance after",
         ])
         details = QTabWidget()
+        self._detail_tabs = details
         details.addTab(self._activities_table, "Activities")
         details.addTab(self._earnings_table, "Balance changes")
+        self._annotation_preview = QPlainTextEdit()
+        self._annotation_preview.setReadOnly(True)
+        self._annotation_preview.setTextInteractionFlags(
+            Qt.TextInteractionFlag.TextSelectableByMouse | Qt.TextInteractionFlag.TextSelectableByKeyboard
+        )
+        self._annotation_preview.setPlaceholderText("Select a completed session to read its saved personal context.")
+        details.addTab(self._annotation_preview, "Session notes")
         layout.addWidget(details, 2)
+        detail_actions = QHBoxLayout()
+        self._edit_annotation_button = QPushButton("Edit session notes…")
+        detail_actions.addWidget(self._edit_annotation_button)
+        detail_actions.addStretch()
         self._export_button = QPushButton("Export selected session as JSON…")
-        layout.addWidget(self._export_button)
+        detail_actions.addWidget(self._export_button)
+        layout.addLayout(detail_actions)
+        self._annotation_notice_label = self._label()
+        self._annotation_notice_label.setVisible(False)
+        layout.addWidget(self._annotation_notice_label)
         self._status_label = self._label("Refresh to load recorded sessions. Tracking does not need to be running.")
         layout.addWidget(self._status_label)
 
         self._previous_button.setEnabled(False)
         self._next_button.setEnabled(False)
         self._export_button.setEnabled(False)
+        self._edit_annotation_button.setEnabled(False)
+        self._annotation_query_edit.textChanged.connect(self._annotation_query_changed)
+        self._annotation_query_edit.returnPressed.connect(self._apply_annotation_query)
+        self._annotation_apply_button.clicked.connect(self._apply_annotation_query)
+        self._edit_annotation_button.clicked.connect(self._open_annotation)
         self._activity_ledger_button.clicked.connect(self._open_activity_ledger)
         self._refresh_button.clicked.connect(self.refresh)
         self._character_combo.currentIndexChanged.connect(self._filter_changed)
@@ -158,6 +199,95 @@ class SessionHistoryPanel(QWidget):
         self._clear_baseline_button.clicked.connect(self._clear_baseline)
         self._compare_button.clicked.connect(self._compare_selected)
         self._update_comparison_controls()
+
+    def _annotation_query_changed(self):
+        self._annotation_query_dirty = True
+        self._retire_annotation_query()
+
+    def _retire_annotation_query(self):
+        self._clear_details()
+        with QSignalBlocker(self._sessions_table):
+            self._sessions_table.setRowCount(0)
+        self._previous_button.setEnabled(False)
+        self._next_button.setEnabled(False)
+        self._page_label.setText("Search changed")
+        self._status_label.setText("Session-note search changed. Apply search to load matching completed sessions.")
+
+    def _apply_annotation_query(self):
+        try:
+            query = normalize_annotation_query(self._annotation_query_edit.text())
+        except (TypeError, ValueError) as exc:
+            self._annotation_query_dirty = True
+            self._retire_annotation_query()
+            self._status_label.setText(f"Invalid search: {exc}. Correct it and Apply search again.")
+            return
+        self._applied_annotation_query = query
+        self._annotation_query_dirty = False
+        with QSignalBlocker(self._annotation_query_edit):
+            self._annotation_query_edit.setText(query or "")
+        self._offset = 0
+        self._load_page()
+
+    def _open_annotation(self):
+        if self._annotation_dialog is not None:
+            self._annotation_dialog.show()
+            self._annotation_dialog.raise_()
+            self._annotation_dialog.activateWindow()
+            return
+        session_id = self._selected_id
+        if session_id is None or not self._annotation_available or self._opening_annotation:
+            return
+        row = self._sessions_table.currentRow()
+        cell = self._sessions_table.item(row, 0)
+        if cell is None or cell.data(Qt.ItemDataRole.UserRole) != session_id:
+            return
+        from .session_annotation_dialog import SessionAnnotationDialog
+
+        character_name = self._sessions_table.item(row, 1).text()
+        started_at = self._sessions_table.item(row, 2).text()
+        self._opening_annotation = True
+        try:
+            dialog = SessionAnnotationDialog(
+                self._get_repository(), session_id, character_name=character_name,
+                started_at=started_at, parent=self,
+            )
+            self._annotation_dialog = dialog
+            dialog.saved.connect(self._annotation_saved)
+            dialog.finished.connect(lambda result, closed=dialog: self._annotation_finished(closed))
+            dialog.show()
+        except Exception as exc:
+            logger.warning("Could not open notes for session %s (%s)", session_id, type(exc).__name__)
+            self._status_label.setText("Session notes could not be opened. Try again or refresh history.")
+        finally:
+            self._opening_annotation = False
+
+    def _annotation_finished(self, dialog):
+        if self._annotation_dialog is not dialog:
+            return
+        self._annotation_dialog = None
+        dialog.deleteLater()
+
+    def _annotation_saved(self, session_id):
+        # Refresh the current selection, never the editor's possibly old target.
+        # Keep committed acknowledgement separate from a failed/stale page refresh.
+        self._annotation_notice_label.setText(f"Saved notes for session #{session_id}.")
+        self._annotation_notice_label.setVisible(True)
+        self.refresh()
+
+    def _show_annotation(self, annotation):
+        self._annotation_available = not annotation or annotation.get("available") is True
+        if not annotation:
+            text = "No saved session notes. Use Edit session notes to add personal context."
+        elif not self._annotation_available:
+            text = ("Saved session notes are unavailable because their stored data is invalid. "
+                    "Recorded history and export are still available. The notes have not been replaced.")
+        else:
+            text = (f"Label: {annotation['label'] or '(none)'}\n"
+                    f"Tags: {', '.join(annotation['tags']) or '(none)'}\n"
+                    f"Saved (UTC): {annotation['updated_at']}\n\n"
+                    f"Personal note:\n{annotation['note']}")
+        self._annotation_preview.setPlainText(text)
+        self._edit_annotation_button.setEnabled(self._annotation_available)
 
     def _open_activity_ledger(self):
         if self._activity_ledger_dialog is not None:
@@ -284,7 +414,7 @@ class SessionHistoryPanel(QWidget):
                 self._character_combo.setCurrentIndex(max(0, index))
                 if index < 0:
                     self._offset = 0
-            self._load_page(previous_id)
+            return self._load_page(previous_id)
         except Exception as exc:
             self._show_load_error(exc)
 
@@ -293,16 +423,23 @@ class SessionHistoryPanel(QWidget):
         self._load_page()
 
     def _previous_page(self):
+        if self._annotation_query_dirty:
+            return
         self._offset = max(0, self._offset - self.PAGE_SIZE)
         self._load_page()
 
     def _next_page(self):
+        if self._annotation_query_dirty:
+            return
         if self._offset + self.PAGE_SIZE < self._total:
             self._offset += self.PAGE_SIZE
             self._load_page()
 
     def _clear_details(self):
         self._selected_id = None
+        self._annotation_available = False
+        self._edit_annotation_button.setEnabled(False)
+        self._annotation_preview.clear()
         self._update_comparison_controls()
         self._export_button.setEnabled(False)
         self._activities_table.setRowCount(0)
@@ -321,16 +458,21 @@ class SessionHistoryPanel(QWidget):
         self._status_label.setText(f"Could not load history: {error}. Use Refresh to retry.")
 
     def _load_page(self, previous_id=None):
+        if self._annotation_query_dirty:
+            self._retire_annotation_query()
+            return False
         try:
             repository = self._get_repository()
             character_id = self._character_combo.currentData()
             page = repository.get_completed_session_history(
                 character_id=character_id, limit=self.PAGE_SIZE, offset=self._offset,
+                annotation_query=self._applied_annotation_query,
             )
             if page.total and self._offset >= page.total:
                 self._offset = ((page.total - 1) // self.PAGE_SIZE) * self.PAGE_SIZE
                 page = repository.get_completed_session_history(
                     character_id=character_id, limit=self.PAGE_SIZE, offset=self._offset,
+                    annotation_query=self._applied_annotation_query,
                 )
             self._total = page.total
             self._clear_details()
@@ -340,6 +482,10 @@ class SessionHistoryPanel(QWidget):
                 for row, item in enumerate(page.sessions):
                     values = [str(item.id), item.character_name, _time(item.started_at),
                               _duration(item.duration_seconds), _money(item.net_change), str(item.activities_count)]
+                    context = "Notes unavailable" if item.annotation_status == "unavailable" else " · ".join(
+                        part for part in (item.annotation_label, ", ".join(item.annotation_tags)) if part
+                    )
+                    values.append(context)
                     for column, value in enumerate(values):
                         cell = QTableWidgetItem(value)
                         if column == 0:
@@ -356,7 +502,11 @@ class SessionHistoryPanel(QWidget):
                 self._selection_changed()
             else:
                 self._page_label.setText("0 completed sessions")
-                self._status_label.setText("No completed sessions yet for this character. A session is completed when tracking stops.")
+                self._status_label.setText(
+                    "No completed sessions match this character and session-note search." if self._applied_annotation_query
+                    else "No completed sessions yet for this character. A session is completed when tracking stops."
+                )
+            return True
         except Exception as exc:
             self._show_load_error(exc)
 
@@ -368,6 +518,8 @@ class SessionHistoryPanel(QWidget):
 
     def _selection_changed(self):
         self._clear_details()
+        if self._annotation_query_dirty:
+            return
         row = self._sessions_table.currentRow()
         if row < 0:
             return
@@ -397,6 +549,7 @@ class SessionHistoryPanel(QWidget):
                  _money(item.get("balance_after"))] for item in earnings[:self.DETAIL_LIMIT]
             ])
             self._selected_id = session_id
+            self._show_annotation(data.get("annotation"))
             self._export_button.setEnabled(not self._exporting)
             self._update_comparison_controls()
             self._status_label.setText(

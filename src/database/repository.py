@@ -5,11 +5,25 @@ from dataclasses import dataclass
 from typing import Optional, List
 from contextlib import contextmanager
 
-from sqlalchemy import case, func, or_, select, true
+from sqlalchemy import LargeBinary, case, cast, func, or_, select, text, true
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.exc import SQLAlchemyError
 
-from .models import Character, Session, Activity, BusinessSnapshot, Earnings, init_database, utc_now
+from .models import (
+    Character, Session, Activity, BusinessSnapshot, Earnings, SessionAnnotationRecord,
+    init_database, utc_now,
+)
+from .session_annotations import (
+    InvalidSessionAnnotation,
+    SessionAnnotation,
+    SessionAnnotationConflict,
+    SessionAnnotationUnavailable,
+    annotation_from_storage,
+    normalize_annotation,
+    normalize_annotation_query,
+    validate_annotation_id,
+    validate_annotation_revision,
+)
 from .activity_ledger import (
     ActivityLedgerFilters,
     ActivityLedgerPage,
@@ -54,6 +68,9 @@ class SessionHistoryItem:
     net_change: Optional[int]
     duration_seconds: Optional[float]
     activities_count: int
+    annotation_label: Optional[str] = None
+    annotation_tags: tuple[str, ...] = ()
+    annotation_status: str = "missing"
 
 
 @dataclass(frozen=True)
@@ -312,8 +329,90 @@ class Repository:
             logger.error(f"Failed to get recent sessions: {e}")
             return []
 
+    @staticmethod
+    def _annotation_rows(db_session, session_ids):
+        """Read bounded raw annotation values without eager text/date decoding."""
+        table = SessionAnnotationRecord.__table__
+        # SQLite's dynamic typing permits TEXT (even malformed UTF-8) in an
+        # INTEGER column. Never ask the driver to decode a corrupt revision.
+        columns = [table.c.session_id, case(
+            (func.typeof(table.c.revision) == "integer", table.c.revision),
+            else_=None,
+        ).label("revision")]
+        for name in ("label", "tags_text", "note", "updated_at"):
+            column = table.c[name]
+            columns.extend([
+                cast(column, LargeBinary).label(name),
+                func.typeof(column).label(f"{name}_type"),
+            ])
+        return db_session.execute(
+            select(*columns).where(table.c.session_id.in_(session_ids))
+        ).mappings().all()
+
+    @classmethod
+    def _read_annotation(cls, db_session, session_id):
+        rows = cls._annotation_rows(db_session, [session_id])
+        return annotation_from_storage(rows[0]) if rows else None
+
+    @staticmethod
+    def _require_annotation_target(db_session, session_id):
+        # Avoid a Python-to-SQLite binding overflow for an unavailable large ID.
+        if session_id >= 2**63 or db_session.execute(
+            select(Session.id).join(Character, Session.character_id == Character.id)
+            .where(Session.id == session_id, Session.ended_at.isnot(None))
+        ).first() is None:
+            raise SessionAnnotationUnavailable()
+
+    def get_session_annotation(self, session_id: int) -> SessionAnnotation | None:
+        """Read saved context for a completed session, distinguishing corruption from absence."""
+        validate_annotation_id(session_id)
+        with self._session_scope() as db_session:
+            self._require_annotation_target(db_session, session_id)
+            return self._read_annotation(db_session, session_id)
+
+    def save_session_annotation(
+        self, session_id: int, label: str, tags: tuple[str, ...] | list[str],
+        note: str, expected_revision: int,
+    ) -> SessionAnnotation:
+        """Commit an annotation only if its saved revision still matches the editor.
+
+        Revision zero means genuinely absent. Clearing retains a row/revision so
+        an older editor cannot recreate context over a newer clear. An immediate
+        SQLite transaction protects target validation and serializes first saves;
+        existing saves also use a revision-conditioned UPDATE. No retry overwrites
+        another editor, and no value is returned before commit has succeeded.
+        """
+        validate_annotation_id(session_id)
+        validate_annotation_revision(expected_revision)
+        label, tags, note = normalize_annotation(label, tags, note)
+        with self._session_scope() as db_session:
+            db_session.execute(text("BEGIN IMMEDIATE"))
+            self._require_annotation_target(db_session, session_id)
+            current = self._read_annotation(db_session, session_id)
+            if expected_revision != (current.revision if current is not None else 0):
+                raise SessionAnnotationConflict(current)
+            if current is not None and (label, tags, note) == (current.label, current.tags, current.note):
+                saved = current
+            else:
+                if expected_revision >= 2**63 - 1:
+                    raise DatabaseError("Saved session notes have reached the revision limit.")
+                values = dict(label=label, tags_text=", ".join(tags), note=note,
+                              revision=expected_revision + 1, updated_at=utc_now())
+                table = SessionAnnotationRecord.__table__
+                if current is None:
+                    db_session.execute(table.insert().values(session_id=session_id, **values))
+                else:
+                    result = db_session.execute(table.update().where(
+                        table.c.session_id == session_id, table.c.revision == expected_revision,
+                    ).values(**values))
+                    if result.rowcount != 1:
+                        raise SessionAnnotationConflict(self._read_annotation(db_session, session_id))
+                saved = self._read_annotation(db_session, session_id)
+        return saved
+
     def get_completed_session_history(
-        self, character_id: Optional[int] = None, limit: int = 50, offset: int = 0
+        self, character_id: Optional[int] = None, limit: int = 50, offset: int = 0,
+        *, annotation_query: Optional[str] = None,
     ) -> SessionHistoryPage:
         """Read completed sessions in stable newest-start, newest-ID order.
 
@@ -321,6 +420,9 @@ class Repository:
         sessions before applying the page bounds. Missing legacy start times
         sort last and have no duration; stored money and timestamps are returned
         unchanged. Activity counts include every activity belonging to a session.
+        Annotation search is a literal substring across saved label, displayed
+        tags, and note. ASCII letters match case-insensitively; other Unicode
+        letters match exactly, following the activity-ledger SQLite convention.
 
         Raises:
             ValueError: A character ID is not positive, limit is outside 1..500,
@@ -339,6 +441,7 @@ class Repository:
             raise ValueError("limit must be an integer between 1 and 500")
         if isinstance(offset, bool) or not isinstance(offset, int) or offset < 0:
             raise ValueError("offset must be a nonnegative integer")
+        annotation_query = normalize_annotation_query(annotation_query)
 
         with self._session_scope() as db_session:
             query = (
@@ -348,6 +451,15 @@ class Repository:
             )
             if character_id is not None:
                 query = query.filter(Session.character_id == character_id)
+            if annotation_query is not None:
+                query = query.filter(select(SessionAnnotationRecord.session_id).where(
+                    SessionAnnotationRecord.session_id == Session.id,
+                    or_(
+                        SessionAnnotationRecord.label.icontains(annotation_query, autoescape=True),
+                        SessionAnnotationRecord.tags_text.icontains(annotation_query, autoescape=True),
+                        SessionAnnotationRecord.note.icontains(annotation_query, autoescape=True),
+                    ),
+                ).exists())
             total = query.count()
 
             # Aggregate activities independently of earnings so neither count
@@ -368,6 +480,15 @@ class Repository:
                 .offset(offset)
                 .all()
             )
+            annotation_summaries = {}
+            for annotation_row in self._annotation_rows(db_session, [row[0].id for row in rows]):
+                try:
+                    annotation = annotation_from_storage(annotation_row)
+                    summary = dict(annotation_label=annotation.label,
+                                   annotation_tags=annotation.tags, annotation_status="saved")
+                except InvalidSessionAnnotation:
+                    summary = dict(annotation_status="unavailable")
+                annotation_summaries[annotation_row["session_id"]] = summary
             items = [
                 SessionHistoryItem(
                     id=record.id,
@@ -381,6 +502,7 @@ class Repository:
                     duration_seconds=(record.ended_at - record.started_at).total_seconds()
                     if record.started_at is not None else None,
                     activities_count=activities_count,
+                    **annotation_summaries.get(record.id, {}),
                 )
                 for record, character_name, activities_count in rows
             ]
@@ -888,7 +1010,7 @@ class Repository:
                     .all()
                 )
 
-                return {
+                payload = {
                     "session": {
                         "id": session.id,
                         "started_at": session.started_at.isoformat()
@@ -921,6 +1043,13 @@ class Repository:
                         for e in earnings
                     ],
                 }
+                try:
+                    annotation = self._read_annotation(db_session, session_id)
+                    if annotation is not None:
+                        payload["annotation"] = annotation.to_dict()
+                except InvalidSessionAnnotation:
+                    payload["annotation"] = {"available": False, "error_code": "invalid_annotation"}
+                return payload
         except DatabaseError as e:
             logger.error(f"Failed to export session data: {e}")
             return None

@@ -3,7 +3,7 @@
 from datetime import datetime, timezone
 from typing import Optional
 
-from sqlalchemy import create_engine, Column, Integer, String, Boolean, DateTime, Float, ForeignKey
+from sqlalchemy import create_engine, Column, Integer, String, Text, Boolean, DateTime, Float, ForeignKey
 from sqlalchemy.orm import declarative_base, relationship, sessionmaker
 
 
@@ -68,6 +68,19 @@ class Session(Base):
 
     def __repr__(self) -> str:
         return f"<Session(id={self.id}, started_at={self.started_at})>"
+
+
+class SessionAnnotationRecord(Base):
+    """User-authored context, separate from captured session accounting."""
+
+    __tablename__ = "session_annotations"
+
+    session_id = Column(Integer, ForeignKey("sessions.id"), primary_key=True)
+    label = Column(Text, nullable=False, default="")
+    tags_text = Column(Text, nullable=False, default="")
+    note = Column(Text, nullable=False, default="")
+    revision = Column(Integer, nullable=False)
+    updated_at = Column(DateTime, default=utc_now)
 
 
 class Activity(Base):

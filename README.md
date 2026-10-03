@@ -179,6 +179,68 @@ The ordinary suite skips these opt-in Qt tests. Linux offscreen rendering is
 validated; the native file chooser is substituted in tests, and Windows capture
 and interactive game integration remain unverified.
 
+### Saved Session Notes and Tags
+
+In **History**, select a completed session and choose **Edit session notes…**.
+Give the run an optional short label, comma-separated tags and a personal note.
+For example, label a solo heist run, tag it `solo, heist`, and record the route you
+want to try next time. Save commits that context; reopening the same session
+shows it again even while tracking is stopped.
+
+Labels accept up to 80 Unicode characters, notes up to 4,000, and at most eight
+tags of 1–32 characters each. Tags are trimmed and deduplicated without regard
+to case, keeping the first spelling and order. Commas separate tags, so they
+cannot be part of an individual tag. Label/tag controls are single-line; notes
+preserve ordinary multiline text. All labels and notes display as plain text.
+Saving an unchanged note, including a label/tag-only edit, retains its original
+saved characters. Editing the note content normalizes paragraph breaks to line
+feeds while retaining nonbreaking spaces.
+
+Use History's annotation search to find a literal phrase in saved labels, tags
+or notes, optionally with the existing character filter. Apply starts at the
+first matching page. `%`, `_` and escape characters are literal. A–Z ignores
+case; other letters match exactly, as in the activity ledger. Empty search shows
+all completed sessions. Editing the query clears the old rows/details/export
+until it is applied; it does not alter an already-open note editor's session.
+The comparison baseline remains independently pinned.
+
+The editor owns the session ID selected when it opened. Changing History's row,
+page or character cannot retarget its save. **Clear draft** changes the editor;
+it only clears saved context after Save. Cancel or closing the editor writes
+nothing, with a discard choice when a draft has changed. A failed save preserves
+the draft for retry. If another app instance has changed that note, the stale
+save is refused; explicitly reload the saved version before deciding what to
+keep. Reload warns before replacing a changed draft. A successful save is
+acknowledged separately if History's subsequent refresh fails.
+
+Annotations live in a separate `session_annotations` table in the same SQLite
+database. Existing databases acquire that additional table on initialization;
+captured session, activity, earnings and character rows are not rewritten. Each
+save validates that its session still exists and is completed, and commits all
+annotation fields together using a revision check. Clearing keeps an empty
+versioned record so an old editor cannot overwrite a newer clear as a first save.
+These are personal observations, not verified game events or changes to recorded
+money, activity outcomes, goals or live tracking.
+
+**Export selected session as JSON…** adds saved annotation context when present.
+The existing export captures the selected session ID before opening the chooser
+and reads its saved values afterward; it never exports an editor's pending draft.
+Thus a later committed note for that same ID can be included. Unannotated exports
+retain their existing shape. Corrupt annotation data is marked unavailable while
+captured session/activity/balance records stay readable and exportable; it is not
+silently replaced with empty notes. Database failures remain visible failures.
+An export failure preserves an existing complete destination through the existing
+per-file staging writer, without a crash-durability guarantee.
+
+Local tests use real disposable SQLite for additive initialization, competing
+first saves and edits, clear/revision ownership, malformed data and literal search.
+Actual Linux offscreen Qt tests cover MainWindow → later-page session → edit →
+search → reopen → JSON export, selection changes, failures and long literal notes.
+Run native journal checks with
+`GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_session_annotation_qt.py tests/test_session_annotation_app_qt.py`.
+The ordinary suite skips these native modules. Windows file dialogs, capture,
+OCR accuracy and interactive gameplay remain separate platform checks.
+
 ### Compare Completed Sessions
 
 In **History**, select a completed session and choose **Use as baseline**. The

@@ -100,6 +100,9 @@ def test_history_exposes_stored_money_utc_times_and_unmultiplied_activity_count(
         "net_change": -300,
         "duration_seconds": 1800.0,
         "activities_count": 3,
+        "annotation_label": None,
+        "annotation_tags": (),
+        "annotation_status": "missing",
     }
     assert [item.activities_count for item in page.sessions] == [0, 0, 1, 3]
 
