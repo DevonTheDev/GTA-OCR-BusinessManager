@@ -608,3 +608,20 @@ no state-change notification. A different detected state still starts a new time
 and follows the existing transition/warning rules. Tests cover every state, a
 listener repeating the current state, and repeated capture cycles through the
 actual app method with synthetic frames; no native OCR or performance claim.
+
+### Mission completion listeners
+
+The app clears the completed mission's start time, opening balance and name before
+calling `on_mission_complete` listeners. The completed `Activity` still carries its
+name, type and payout, and tracking/session/database updates happen first. A listener
+reprocessing the old result therefore cannot count it again. A listener may also
+start or complete the next activity without the outer notification clearing that
+new mission's state.
+
+Each completion uses a snapshot of its listeners. Registration changes take effect
+for later completions, including a distinct nested completion, while the current
+event retains its captured activity and listener list. Listener exceptions remain
+logged and do not skip later listeners. Local tests link callbacks to the actual
+trackers and SQLite, including repeated results, all active mission types and nested
+completions. This does not add general thread safety, change payout/detection policy,
+or validate native OCR/UI behavior.

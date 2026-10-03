@@ -653,8 +653,12 @@ class GTABusinessManager:
             if activity:
                 self._start_activity_cooldown(activity)
 
+            # Consume this result before external listeners can process another
+            # state or start a new mission. Do not reset their new state afterward.
+            self._reset_mission_state()
+
             if activity:
-                for callback in self._on_mission_complete:
+                for callback in tuple(self._on_mission_complete):
                     try:
                         callback(activity)
                     except Exception as e:
@@ -663,7 +667,6 @@ class GTABusinessManager:
             # Recalculate analytics after activity completion
             self._recalculate_analytics()
 
-            self._reset_mission_state()
             logger.info(f"Mission complete, earnings: ${earnings:,}")
 
         # Mission failed
