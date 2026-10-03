@@ -448,7 +448,8 @@ class GTABusinessManager:
 
             # OCR timer if in mission
             if timer_img is not None and state_result.state in (
-                GameState.MISSION_ACTIVE, GameState.SELLING
+                GameState.MISSION_ACTIVE, GameState.SELLING,
+                GameState.HEIST_PREP, GameState.HEIST_FINALE,
             ):
                 timer_ocr = self._ocr.recognize_preprocessed(timer_img, invert=True, scale=2.0)
                 timer_reading = self._timer_parser.parse(timer_ocr.text)
@@ -874,7 +875,8 @@ class GTABusinessManager:
 
     def _adjust_capture_rate(self, state: GameState) -> None:
         """Adjust capture rate based on game state."""
-        if state in (GameState.MISSION_ACTIVE, GameState.SELLING):
+        if state in (GameState.MISSION_ACTIVE, GameState.SELLING,
+                     GameState.HEIST_PREP, GameState.HEIST_FINALE):
             fps = self._settings.get("capture.active_fps", 2.0)
             fps = self._validate_fps(fps, default=2.0, name="active_fps")
         elif state == GameState.BUSINESS_COMPUTER:

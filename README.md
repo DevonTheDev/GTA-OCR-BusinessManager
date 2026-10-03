@@ -570,6 +570,13 @@ synthetic recognized text, including both outcomes and intermediate state change
 This does not change OCR keywords, detection confidence, automatic phase-boundary
 recognition or native gameplay behavior; no screenshot/Windows OCR accuracy claim.
 
+Detected heist prep/finale states also use the configured active capture rate and
+the existing HUD timer OCR path when a timer image is available. They share the
+same active-rate validation/fallback as other missions. Local tests run the real
+capture loop and timer parser with synthetic frames, covering normal missions,
+sells, heists, missing timer captures and existing idle/business rates; this is
+policy/processing coverage rather than a native FPS or OCR-accuracy benchmark.
+
 ### Activity timestamp compatibility
 
 Activity duration checks, completion and cancellation now obtain the current time
