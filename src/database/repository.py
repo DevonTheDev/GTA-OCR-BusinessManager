@@ -1,15 +1,21 @@
 """Data access repository for GTA Business Manager."""
 
-from datetime import datetime, timedelta
+from datetime import date, datetime, time, timedelta
 from dataclasses import dataclass
 from typing import Optional, List
 from contextlib import contextmanager
 
-from sqlalchemy import case, func
+from sqlalchemy import case, func, or_, select, true
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy.exc import SQLAlchemyError
 
 from .models import Character, Session, Activity, BusinessSnapshot, Earnings, init_database, utc_now
+from .activity_ledger import (
+    ActivityLedgerFilters,
+    ActivityLedgerPage,
+    ActivityLedgerRow,
+    validate_ledger_request,
+)
 from .session_comparison import (
     ActivityTypeComparison,
     SessionComparison,
@@ -379,6 +385,96 @@ class Repository:
                 for record, character_name, activities_count in rows
             ]
             return SessionHistoryPage(sessions=items, total=total)
+
+    def get_completed_activity_ledger(
+        self, filters: ActivityLedgerFilters | None = None, *, limit: int = 25, offset: int = 0
+    ) -> ActivityLedgerPage:
+        """Read a bounded page of completed-session activities in one SELECT.
+
+        Count and page use the same predicates and statement observation. The
+        count anchor survives an empty or out-of-range page. Only the page's
+        payload is selected; no full matching payload is materialized in Python
+        or a shared CTE. Counting/filtering may still scan the database.
+
+        Stored timestamps follow the existing naive UTC convention. The primary
+        time is completion, falling back to recorded start; missing times sort
+        last. Separate calls do not retain a multi-page snapshot.
+
+        Raises ValueError for invalid inputs before accessing storage, and
+        DatabaseError on initialization or query failure instead of an empty page.
+        """
+        filters = validate_ledger_request(filters, limit=limit, offset=offset)
+        activity_time = func.coalesce(Activity.ended_at, Activity.started_at)
+        outcome = case(
+            (Activity.success.is_(True), "passed"),
+            (Activity.success.is_(False), "failed"),
+            else_="unknown",
+        )
+        joined = (
+            Activity.__table__
+            .join(Session.__table__, Activity.session_id == Session.id)
+            .join(Character.__table__, Session.character_id == Character.id)
+        )
+        predicates = [Session.ended_at.isnot(None)]
+        if filters.character_id is not None:
+            predicates.append(Session.character_id == filters.character_id)
+        if filters.date_from is not None:
+            predicates.append(activity_time >= datetime.combine(filters.date_from, time.min))
+        if filters.date_until is not None:
+            if filters.date_until == date.max:
+                # There is no representable next day. This comparison includes
+                # every instant of date.max while still excluding null times.
+                predicates.append(activity_time <= datetime.max)
+            else:
+                end_exclusive = datetime.combine(filters.date_until + timedelta(days=1), time.min)
+                predicates.append(activity_time < end_exclusive)
+        if filters.activity_type is not None:
+            predicates.append(Activity.activity_type == filters.activity_type)
+        if filters.outcome is not None:
+            predicates.append(outcome == filters.outcome)
+        if filters.query is not None:
+            predicates.append(or_(
+                Activity.activity_name.icontains(filters.query, autoescape=True),
+                Activity.notes.icontains(filters.query, autoescape=True),
+            ))
+
+        count = (
+            select(func.count(Activity.id).label("total"))
+            .select_from(joined).where(*predicates).subquery("ledger_count")
+        )
+        page = (
+            select(
+                Activity.id.label("id"), Activity.session_id.label("session_id"),
+                Character.id.label("character_id"), Character.name.label("character_name"),
+                Activity.activity_type.label("activity_type"), Activity.activity_name.label("name"),
+                Activity.business_type.label("business_type"), Activity.notes.label("notes"),
+                Activity.started_at.label("recorded_start"), Activity.ended_at.label("completed_at"),
+                activity_time.label("activity_time"), Activity.earnings.label("recorded_amount"),
+                Activity.duration_seconds.label("duration_seconds"), outcome.label("outcome"),
+            )
+            .select_from(joined).where(*predicates)
+            .order_by(activity_time.desc(), Activity.id.desc())
+            .limit(limit).offset(offset).subquery("ledger_page")
+        )
+        statement = (
+            select(count.c.total, *page.c)
+            .select_from(count.outerjoin(page, true()))
+            .order_by(page.c.activity_time.desc(), page.c.id.desc())
+        )
+        with self._session_scope() as db_session:
+            records = db_session.execute(statement).mappings().all()
+            rows = []
+            for record in records:
+                if record["id"] is None:
+                    continue
+                values = {key: record[key] for key in page.c.keys()}
+                values["recorded_amount"] = finite_number(values["recorded_amount"])
+                values["duration_seconds"] = finite_number(values["duration_seconds"])
+                rows.append(ActivityLedgerRow(**values))
+            return ActivityLedgerPage(
+                filters=filters, rows=tuple(rows), total=records[0]["total"],
+                offset=offset, limit=limit, observed_at=utc_now(),
+            )
 
     def get_session_comparison(
         self, baseline_id: int, comparison_id: int

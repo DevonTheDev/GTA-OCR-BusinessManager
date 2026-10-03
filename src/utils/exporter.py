@@ -12,9 +12,11 @@ from .persistence import atomic_text_writer
 from ..database.repository import Repository, get_repository
 
 if TYPE_CHECKING:
+    from ..database.activity_ledger import ActivityLedgerPage
     from ..database.session_comparison import SessionComparison
 
 logger = get_logger("utils.exporter")
+MAX_ACTIVITY_LEDGER_EXPORT_BYTES = 8 * 1024 * 1024
 
 
 @dataclass
@@ -336,6 +338,29 @@ class DataExporter:
         except Exception as e:
             logger.error("Failed to export session comparison: %s", e)
             return ExportResult(success=False, error_message=str(e))
+
+    def export_activity_ledger_page(
+        self,
+        page: "ActivityLedgerPage",
+        output_file: Path,
+    ) -> ExportResult:
+        """Export exactly the accepted page without reading its database again."""
+        try:
+            payload = json.dumps(
+                page.to_report(), ensure_ascii=False, indent=2, allow_nan=False,
+            )
+            rows_exported = len(page.rows)
+            if len(payload.encode("utf-8")) > MAX_ACTIVITY_LEDGER_EXPORT_BYTES:
+                raise ValueError("The activity ledger page exceeds the 8 MiB UTF-8 export limit")
+            with atomic_text_writer(output_file) as stream:
+                stream.write(payload)
+            logger.info("Exported activity ledger page to JSON: %s", output_file)
+            return ExportResult(
+                success=True, file_path=output_file, rows_exported=rows_exported,
+            )
+        except Exception as exc:
+            logger.error("Failed to export activity ledger page: %s", exc)
+            return ExportResult(success=False, error_message=str(exc))
 
     def export_earnings_breakdown(
         self,

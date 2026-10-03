@@ -59,6 +59,8 @@ class SessionHistoryPanel(QWidget):
         self._exporting = False
         self._baseline_id = None
         self._comparison_dialog = None
+        self._activity_ledger_dialog = None
+        self._opening_activity_ledger = False
         self._comparing = False
         self._setup_ui()
 
@@ -94,6 +96,8 @@ class SessionHistoryPanel(QWidget):
         self._character_combo.addItem("All characters", None)
         controls.addWidget(self._character_combo)
         controls.addStretch()
+        self._activity_ledger_button = QPushButton("Browse recorded activities…")
+        controls.addWidget(self._activity_ledger_button)
         self._refresh_button = QPushButton("Refresh history")
         controls.addWidget(self._refresh_button)
         layout.addLayout(controls)
@@ -143,6 +147,7 @@ class SessionHistoryPanel(QWidget):
         self._previous_button.setEnabled(False)
         self._next_button.setEnabled(False)
         self._export_button.setEnabled(False)
+        self._activity_ledger_button.clicked.connect(self._open_activity_ledger)
         self._refresh_button.clicked.connect(self.refresh)
         self._character_combo.currentIndexChanged.connect(self._filter_changed)
         self._previous_button.clicked.connect(self._previous_page)
@@ -153,6 +158,36 @@ class SessionHistoryPanel(QWidget):
         self._clear_baseline_button.clicked.connect(self._clear_baseline)
         self._compare_button.clicked.connect(self._compare_selected)
         self._update_comparison_controls()
+
+    def _open_activity_ledger(self):
+        if self._activity_ledger_dialog is not None:
+            self._activity_ledger_dialog.show()
+            self._activity_ledger_dialog.raise_()
+            self._activity_ledger_dialog.activateWindow()
+            return
+        if self._opening_activity_ledger:
+            return
+        from .activity_ledger_dialog import ActivityLedgerDialog
+
+        self._opening_activity_ledger = True
+        try:
+            dialog = ActivityLedgerDialog(
+                self._get_repository(), self, character_id=self._character_combo.currentData(),
+            )
+            self._activity_ledger_dialog = dialog
+            dialog.finished.connect(lambda result, closed=dialog: self._activity_ledger_finished(closed))
+            dialog.show()
+        except Exception as exc:
+            logger.warning("Could not open recorded activities: %s", exc)
+            self._status_label.setText(f"Could not open recorded activities: {exc}. Try again.")
+        finally:
+            self._opening_activity_ledger = False
+
+    def _activity_ledger_finished(self, dialog):
+        if self._activity_ledger_dialog is not dialog:
+            return
+        self._activity_ledger_dialog = None
+        dialog.deleteLater()
 
     def _update_comparison_controls(self):
         self._pin_baseline_button.setEnabled(self._selected_id is not None)

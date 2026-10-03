@@ -178,6 +178,59 @@ including the MainWindow History flow, pinned selections across filters/pages,
 failed saves and snapshot exports. Native Windows file dialogs, capture, OCR and
 interactive gameplay remain separate platform checks.
 
+### Recorded Activity Ledger
+
+In **History**, choose **Browse recorded activities…** to inspect individual
+records across completed sessions. The modeless ledger starts with History's
+character filter and then keeps its own controls. It works while tracking is
+stopped and does not start capture, create a session, switch characters or edit
+history. The existing live **Activities** tab remains a view of recent tracking.
+
+Filter by character, optional inclusive UTC From/Until dates, exact stored
+activity type, Passed/Failed/Unknown outcome, or a literal phrase in activity
+names and notes. Choose **Apply** to load the first page. Empty text fields mean
+all; type matching is exact, while name/notes search ignores A–Z case and matches
+other letters exactly. `%`, `_` and escape characters are literal, not search
+patterns. Phrases accept up to 200 characters without controls or line separators.
+Null, blank and custom type values remain visible when viewing all types.
+
+Pages contain 25 records in newest activity-time order, with activity ID breaking
+ties. Activity time uses recorded completion time, falling back to recorded start;
+undated records appear last without date bounds and are excluded when a date
+boundary is active. Recorded start can be a persistence-time default, so it is
+not reconstructed gameplay start. Duration is the stored measurement and is not
+recomputed from those timestamps. Recorded amounts are separate from session net
+balance change and do not establish verified payouts or profitability.
+
+Passed and Failed use the stored true/false values; missing or other legacy
+outcomes are Unknown. Missing or invalid numeric values stay unavailable, while
+known zero and negative amounts/durations remain visible. Open sessions and
+orphaned rows without an available session/character are excluded. A missing
+outcome or timestamp does not imply cancellation or current gameplay activity.
+
+Select a row to read its saved details as plain text. Editing a filter clears the
+old page, details and export until Apply. Refresh reloads the applied selection;
+with unapplied edits, it refreshes available characters while keeping the page
+retired. Each query obtains its matching total and bounded page in one SQLite
+statement. Different pages or refreshes can observe later writes; this is not a
+permanent multi-page archive. Counting/filtering may scan the database even
+though the returned page is bounded.
+
+**Export this page as JSON…** saves the accepted page, including applied filters,
+observation time, total/page counts, raw numbers/nulls, saved fields and explanatory
+notes. It exports this displayed page only. Changing the database or controls
+while the file chooser is open cannot switch that captured export. Cancellation
+writes nothing, and failed writes preserve a previous complete destination.
+Reports over 8 MiB of UTF-8 JSON are refused before staging. File replacement is
+per-file recovery, not crash durability or a database transaction.
+
+Local verification uses real disposable SQLite, actual Linux offscreen Qt controls
+and the MainWindow History → ledger → export path, including literal/long data,
+filter retirement, paging, failed saves and snapshot ownership. Native checks:
+`GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_activity_ledger_qt.py tests/test_activity_ledger_app_qt.py`.
+The ordinary suite skips these opt-in Qt modules. Windows file dialogs, capture,
+OCR accuracy and interactive gameplay remain separate platform checks.
+
 ### Activity Detection
 - Automatically detects when you're doing:
   - Contact Missions
