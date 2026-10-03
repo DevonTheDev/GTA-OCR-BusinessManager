@@ -210,13 +210,14 @@ def test_explicit_active_and_only_character_selection(records, qt):
     only.close()
 
 
-def test_empty_character_state_explains_normal_start_without_creating_records(tmp_path, qt):
+def test_empty_character_state_offers_explicit_creation_without_creating_records(tmp_path, qt):
     repo = Repository(str(tmp_path / 'empty.db'))
     assert repo.initialize()
     board = make_board(repo, None, qt)
     try:
-        assert 'Start' in board._status_label.text()
-        assert 'configured character' in board._status_label.text()
+        assert 'Add saved character' in board._status_label.text()
+        assert 'without starting tracking or OCR' in board._status_label.text()
+        assert board._add_character_button.isEnabled()
         assert repo.get_all_characters() == []
         assert not board._record_button.isEnabled()
         assert not board._export_board_button.isEnabled()

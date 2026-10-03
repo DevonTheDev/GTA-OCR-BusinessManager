@@ -447,12 +447,41 @@ character and business even if you change the board or Settings while it is open
   accepted observations; an export retains the chosen snapshot even if data or
   selection changes while the file chooser is open
 
-Check-ins belong to existing saved characters. If none exist yet, set your
-character name in Settings and start normal tracking once. You can record
-check-ins after tracking stops. Opening this board does not create or activate a
-character, start a session, or start capture. When no current or unique active
-character can be selected unambiguously, choose one explicitly. Duplicate names
-are distinguished by their IDs.
+Check-ins belong to saved characters. Choose **Add saved character…**, enter a
+name, and choose **Create and select** to get started on an empty database without
+running capture or OCR. You can immediately record a check-in, reopen it later,
+and export its board or history. The new character also appears in History's
+character filter, with no tracking sessions until you actually start tracking.
+
+Names use 1–50 Unicode characters after surrounding spaces are removed. Case,
+internal spaces and Unicode form are preserved; line breaks and control characters
+are rejected. Exactly one existing character with that exact name is reused,
+without changing its stored fields. Several legacy rows with the same name are
+not merged or chosen automatically: select the intended ID in the board, or use
+a different name. The creator supports up to 1,000 saved characters and can still
+reuse an existing name at that limit.
+
+Creation adds an inactive saved character and selects its exact committed ID in
+this board. It does not change active-character flags, Settings, a running
+session, live business observations or the character used for the next tracking
+Start. That tracking name remains configured separately in Settings. Opening the
+board alone creates nothing. When no current or unique active character can be
+selected unambiguously, choose one explicitly; duplicate names show their IDs.
+
+The character editor is modeless, retains an invalid or failed-save draft, and
+asks before discarding it. An already-open check-in editor keeps its original
+character/business even when you create or select another character. A committed
+creation is acknowledged before the board refreshes; a failed refresh cannot
+turn it into a second creation. Refresh retries the exact saved ID, while choosing
+another character explicitly replaces that pending selection.
+
+The manual creator and the existing tracking creator acquire SQLite's writer
+lock before checking a name. This serializes these two app creation paths, at the
+cost of briefly locking even an existing-name lookup. It does not add a database
+unique constraint, repair old duplicate rows, or coordinate arbitrary external
+database writers. Failed saves roll back; the workflow provides no rename,
+delete or merge operation. Linux offscreen tests exercise the actual MainWindow,
+dialogs, persistence and export; native Windows, gameplay and OCR remain untested.
 
 These are your saved observations, with the recorded time showing when Save ran.
 They do not advance stock over time, estimate sale prices or production, verify

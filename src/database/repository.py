@@ -53,6 +53,11 @@ from .business_checkins import (
     checkin_character_from_storage, checkin_from_storage, normalize_business_checkin,
     validate_checkin_business_id, validate_checkin_id, validate_checkin_page,
 )
+from .character_profiles import (
+    CharacterProfileAmbiguous, CharacterProfileLimitError, CharacterProfileUnavailable,
+    MAX_CHARACTER_NAME_BYTES, SavedCharacterResult,
+    normalize_character_name, saved_character_from_storage,
+)
 from ..utils.logging import get_logger
 
 
@@ -346,6 +351,52 @@ class Repository:
 
     # Character operations
 
+    def create_saved_character(self, name: str) -> SavedCharacterResult:
+        """Commit one inactive saved character or reuse one exact existing name.
+
+        Validation precedes initialization. The SQLite writer lock precedes all
+        lookups, serializing cooperating manual and legacy creators. Existing
+        rows retain every field; old duplicate names are explicitly ambiguous.
+        This does not activate a character, create a session, or alter settings.
+        Minimal legacy schemas may be read but are never migrated for insertion.
+        """
+        name = normalize_character_name(name)
+        columns = (
+            "CASE WHEN typeof(c.id) = 'integer' THEN c.id END AS id, "
+            + _checkin_text_column("c", "name", MAX_CHARACTER_NAME_BYTES)
+        )
+        try:
+            with self._session_scope() as session:
+                session.execute(text("BEGIN IMMEDIATE"))
+                matches = session.execute(text(
+                    f"SELECT {columns} FROM characters c "
+                    "WHERE c.name = :name COLLATE BINARY LIMIT 2"
+                ), {"name": name}).mappings().all()
+                if len(matches) > 1:
+                    raise CharacterProfileAmbiguous()
+                if matches:
+                    saved = saved_character_from_storage(matches[0], created=False)
+                else:
+                    count = session.execute(text(
+                        "SELECT count(*) FROM (SELECT 1 FROM characters LIMIT :maximum)"
+                    ), {"maximum": MAX_CHECKIN_CHARACTERS}).scalar_one()
+                    if count >= MAX_CHECKIN_CHARACTERS:
+                        raise CharacterProfileLimitError()
+                    character = Character(name=name, is_active=False)
+                    session.add(character)
+                    session.flush()
+                    row = session.execute(text(
+                        f"SELECT {columns} FROM characters c WHERE c.id = :id"
+                    ), {"id": character.id}).mappings().first()
+                    if row is None:
+                        raise CharacterProfileUnavailable()
+                    saved = saved_character_from_storage(row, created=True)
+                if saved.name != name:
+                    raise CharacterProfileUnavailable()
+        except (DatabaseError, SQLAlchemyError, UnicodeError, OverflowError, OSError):
+            raise CharacterProfileUnavailable() from None
+        return saved
+
     def get_or_create_character(self, name: str) -> Optional[Character]:
         """Get existing character or create new one.
 
@@ -354,9 +405,14 @@ class Repository:
 
         Returns:
             Character instance or None on error
+
+        Existing-name lookups briefly acquire SQLite's writer lock so this
+        legacy entry point cannot race manual saved-character creation. Its
+        permissive names, first-match reuse and default-active insertion remain.
         """
         try:
             with self._session_scope() as session:
+                session.execute(text("BEGIN IMMEDIATE"))
                 character = session.query(Character).filter_by(name=name).first()
 
                 if not character:

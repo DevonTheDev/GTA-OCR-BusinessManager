@@ -42,7 +42,12 @@ class BusinessCheckInsDialog(QDialog):
         self._page = None
         self._editor = None
         self._opening_editor = False
+        self._creator = None
+        self._opening_creator = False
+        self._saved_character_result = None
+        self._pending_character_id = None
         self._busy = False
+        self._refresh_after_busy = False
         self._exporting = False
         self._closed = False
         self._closing = False
@@ -88,8 +93,10 @@ class BusinessCheckInsDialog(QDialog):
         self._character_combo.setSizeAdjustPolicy(QComboBox.SizeAdjustPolicy.AdjustToMinimumContentsLengthWithIcon)
         controls.addWidget(self._character_combo, 1)
         self._refresh_button = QPushButton('Refresh')
+        self._add_character_button = QPushButton('Add saved character…')
         self._record_button = QPushButton('Record check-in…')
         controls.addWidget(self._refresh_button)
+        controls.addWidget(self._add_character_button)
         controls.addWidget(self._record_button)
         layout.addLayout(controls)
         self._context_label = self._label()
@@ -135,6 +142,10 @@ class BusinessCheckInsDialog(QDialog):
         self._saved_notice_label = self._label()
         self._saved_notice_label.hide()
         layout.addWidget(self._saved_notice_label)
+        self._character_saved_notice_label = self._label()
+        self._character_saved_notice_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        self._character_saved_notice_label.hide()
+        layout.addWidget(self._character_saved_notice_label)
         self._status_label = self._label()
         layout.addWidget(self._status_label)
         actions = QHBoxLayout()
@@ -151,6 +162,7 @@ class BusinessCheckInsDialog(QDialog):
         self._businesses_table.itemSelectionChanged.connect(self._business_changed)
         self._history_table.itemSelectionChanged.connect(self._history_changed)
         self._refresh_button.clicked.connect(self.refresh)
+        self._add_character_button.clicked.connect(self._open_creator)
         self._record_button.clicked.connect(self._open_editor)
         self._previous_button.clicked.connect(self._previous_page)
         self._next_button.clicked.connect(self._next_page)
@@ -162,6 +174,7 @@ class BusinessCheckInsDialog(QDialog):
         available = not (self._busy or self._closed or self._closing)
         self._character_combo.setEnabled(available)
         self._refresh_button.setEnabled(available)
+        self._add_character_button.setEnabled(available and not self._exporting and not self._opening_creator)
         self._record_button.setEnabled(available and self._board is not None and self._selected_business_id() in BUSINESS_LABELS)
         self._previous_button.setEnabled(available and self._page is not None and self._page.offset > 0)
         self._next_button.setEnabled(available and self._page is not None and self._page.has_more)
@@ -176,6 +189,13 @@ class BusinessCheckInsDialog(QDialog):
         self._note_edit.clear()
         self._page_label.setText('No history loaded')
         self._update_actions()
+
+    def _finish_read(self):
+        self._busy = False
+        self._update_actions()
+        if self._refresh_after_busy:
+            self._refresh_after_busy = False
+            self.refresh()
 
     def _retire_board(self):
         self._board = None
@@ -208,7 +228,8 @@ class BusinessCheckInsDialog(QDialog):
     def refresh(self, _checked=False, *, character_id=None, initial=False):
         if self._closed or self._busy or self._closing:
             return
-        selected = character_id if initial else self._character_combo.currentData()
+        pending = self._pending_character_id
+        selected = pending if pending is not None else (character_id if initial else self._character_combo.currentData())
         business = self._selected_business_id()
         offset = self._page.offset if self._page is not None else 0
         self._generation += 1
@@ -216,22 +237,30 @@ class BusinessCheckInsDialog(QDialog):
         self._busy = True
         self._retire_board()
         try:
-            characters = self._reload_characters(selected, initial)
+            # A committed creation is an exact identity request, with no active
+            # or sole-character fallback even if the row disappears afterwards.
+            characters = self._reload_characters(selected, initial and pending is None)
             owner = self._character_combo.currentData()
-            if not characters:
+            if pending is not None and owner is None:
                 self._status_label.setText(
-                    'No saved characters yet. A normal tracking Start creates the configured character. '
-                    'After that, return here and Refresh to record a manual check-in.'
+                    f'Saved character #{pending} is currently unavailable. '
+                    'Choose another saved character or Refresh after restoring it.'
+                )
+            elif not characters:
+                self._status_label.setText(
+                    'No saved characters yet. Use Add saved character to create an owner '
+                    'for manual check-ins, without starting tracking or OCR.'
                 )
             elif owner is None:
                 self._status_label.setText('Choose a saved character to view or record manual check-ins.')
             else:
                 self._load_board(owner, business, offset, generation)
+                if self._board is not None and self._board.character_id == pending:
+                    self._pending_character_id = None
         except Exception as exc:
             self._show_error(exc)
         finally:
-            self._busy = False
-            self._update_actions()
+            self._finish_read()
 
     def _load_board(self, owner, business, offset, generation):
         board = self._repository.get_business_checkin_board(owner)
@@ -274,6 +303,7 @@ class BusinessCheckInsDialog(QDialog):
             )
 
     def _character_changed(self, *_):
+        self._pending_character_id = None
         self._generation += 1
         self._retire_board()
         if self._busy:
@@ -298,8 +328,7 @@ class BusinessCheckInsDialog(QDialog):
         except Exception as exc:
             self._show_error(exc)
         finally:
-            self._busy = False
-            self._update_actions()
+            self._finish_read()
 
     def _load_history(self, offset, generation):
         board = self._board
@@ -355,8 +384,7 @@ class BusinessCheckInsDialog(QDialog):
         except Exception as exc:
             self._show_error(exc)
         finally:
-            self._busy = False
-            self._update_actions()
+            self._finish_read()
 
     def _previous_page(self):
         if self._page is not None and self._page.offset:
@@ -402,6 +430,57 @@ class BusinessCheckInsDialog(QDialog):
             self._status_label.setText('The check-in editor could not be opened. Try again or Refresh.')
         finally:
             self._opening_editor = False
+
+    def _open_creator(self):
+        if self._closed or self._closing or self._busy or self._exporting or self._opening_creator:
+            return
+        if self._creator is not None:
+            self._creator.show()
+            self._creator.raise_()
+            self._creator.activateWindow()
+            return
+        from .saved_character_dialog import SavedCharacterDialog
+        self._opening_creator = True
+        self._update_actions()
+        try:
+            creator = SavedCharacterDialog(self._repository, parent=self)
+            self._creator = creator
+            creator.saved.connect(self._character_saved)
+            creator.finished.connect(lambda result, closed=creator: self._creator_finished(closed))
+            creator.show()
+        except Exception as exc:
+            logger.warning('Could not open saved-character editor (%s)', type(exc).__name__)
+            self._status_label.setText('The saved-character editor could not be opened. Try again or Refresh.')
+        finally:
+            self._opening_creator = False
+            self._update_actions()
+
+    def _creator_finished(self, creator):
+        if self._creator is not creator:
+            return
+        self._creator = None
+        creator.deleteLater()
+
+    def _character_saved(self, result):
+        if self._closed:
+            return
+        self._saved_character_result = result
+        self._pending_character_id = result.id
+        self._refresh_after_busy = self._busy
+        if self._busy:
+            self._generation += 1
+            self._retire_board()
+        # Retire an unrelated selector value before reading storage. If the
+        # character-list refresh fails, it must not still claim another owner.
+        with QSignalBlocker(self._character_combo):
+            self._character_combo.setCurrentIndex(max(0, self._character_combo.findData(result.id)))
+        if result.created:
+            notice = f'Created saved character #{result.id} · {result.name}.'
+        else:
+            notice = f'Saved character #{result.id} · {result.name} already exists. Reusing this saved identity.'
+        self._character_saved_notice_label.setText(notice)
+        self._character_saved_notice_label.show()
+        self.refresh()
 
     def _editor_finished(self, editor):
         if self._editor is not editor:
@@ -452,12 +531,18 @@ class BusinessCheckInsDialog(QDialog):
             self._update_actions()
 
     def _prepare_close(self):
-        if self._closed or self._closing or self._busy or self._opening_editor or self._exporting:
+        if (self._closed or self._closing or self._busy or self._opening_editor
+                or self._opening_creator or self._exporting):
+            return False
+        children = (self._editor, self._creator)
+        if any(child is not None and (child._busy or child._confirming_discard) for child in children):
             return False
         self._closing = True
+        self._update_actions()
         try:
-            if self._editor is not None and not self._editor.close():
-                return False
+            for child in children:
+                if child is not None and not child.close():
+                    return False
             self._closed = True
             self._retire_board()
             return True
