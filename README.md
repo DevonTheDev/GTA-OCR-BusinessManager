@@ -420,6 +420,45 @@ native file choosers are substituted, and Windows/game capture is unverified.
   - Acid Lab
   - And more...
 
+### Choose a Business Screen Target
+
+In **Businesses**, use **Business screen target** when the OCR text does not
+identify the business you are viewing, or its automatic text match is wrong.
+Choose **Automatic** or one of the eleven supported business-card names. The
+next detected business-screen reading is assigned to your explicit selection,
+even if its text mentions another business. Check that the selection matches
+the screen, and change it or return to Automatic when visiting another business.
+
+The normal GUI starts tracking automatically. You can change this selection
+while tracking or paused; selecting a target does not itself start capture or
+create a saved record. It survives tab changes and pause/resume, stays only in
+memory, and clears on **Stop** or application exit. A stopped app can also hold
+a preselection for its next Start through the app API. The selector reflects
+programmatic changes through the existing window/panel refresh, with no new
+tracking controls or background service.
+
+Each accepted live card keeps its own source label: **Selected target** or
+**OCR text match**, alongside its status and update age. Changing the selector
+does not move, clear or relabel earlier observations. If the choice changes while
+OCR is processing a business batch, that batch is discarded before parsing and
+publication, including a change away and back to the same target. Stop also
+retires pending batches. The next normal capture uses the new selection.
+
+The target assigns identity; it does not verify the screen or improve OCR
+accuracy. Existing business-screen detection and numeric parsing still apply.
+For example, `Stock: 5/10 Supplies: 3/4 Value: $123,456` can be assigned without
+a business name. Bare `5/10 3/4 $123,456` is not newly supported. Existing
+missing-field defaults, value estimates and cross-character live-cache behavior
+remain unchanged, so verify incomplete readings against the game. **Manual
+check-ins…** remains an independent saved-observation workflow; choosing an OCR
+target does not select its character/business, prefill an editor, save history,
+change pins or schedule an action.
+
+Local verification uses synthetic OCR through the real app and actual Linux
+offscreen Qt controls/cards, including selection changes during a blocked OCR
+call, Stop resets, stored-record independence and supported window sizes. It does
+not establish Windows capture, real game-screen detection or recognition accuracy.
+
 ### Manual Business Check-ins
 
 Open **Businesses → Manual check-ins…** to keep your own observations for a saved

@@ -17,9 +17,10 @@ from .detection.state_detector import StateDetector, StateDetectionResult
 from .detection.parsers.money_parser import MoneyParser, MoneyReading
 from .detection.parsers.timer_parser import TimerParser, TimerReading
 from .detection.parsers.mission_parser import MissionParser, MissionReading
-from .detection.parsers.business_parser import BusinessParser, BusinessReading
+from .detection.parsers.business_parser import BusinessParser, BusinessReading, BusinessType
 from .game.state_machine import GameStateMachine, GameState, StateTransition
 from .game.activities import Activity, ActivityType
+from .game.businesses import BUSINESSES
 from .tracking.session import SessionTracker
 from .tracking.session_goals import SessionGoalController
 from .tracking.goals import GoalType, SessionGoal
@@ -147,6 +148,9 @@ class GTABusinessManager:
         self._data = AppData()
         self._data_lock = threading.RLock()
         self._last_capture_result: Optional[CaptureResult] = None
+        # Live assignment is independent of saved businesses and manual history.
+        self._business_screen_target: Optional[str] = None
+        self._business_screen_generation = 0
 
         # Remember the target only; progress belongs to the current statistics
         # object and must never be restored into another capture run.
@@ -295,10 +299,14 @@ class GTABusinessManager:
     def stop(self) -> None:
         """Signal shutdown; a timed-out worker retains its resources until exit."""
         with self._lifecycle_lock:
+            with self._data_lock:
+                self._business_screen_target = None
+                # Stop also retires Automatic batches and stopped preselection.
+                self._business_screen_generation += 1
+                self._stop_event.set()
             if self._state == AppState.STOPPED:
                 return
             self._state = AppState.STOPPING
-            self._stop_event.set()
             worker = self._capture_thread
 
         # Never hold the lifecycle lock while joining: the worker's finally
@@ -811,6 +819,12 @@ class GTABusinessManager:
             return
 
         try:
+            with self._data_lock:
+                if self._stop_event.is_set():
+                    return
+                target = self._business_screen_target
+                generation = self._business_screen_generation
+
             # Get business regions
             regions = self._capture.regions.get_business_regions()
 
@@ -826,11 +840,17 @@ class GTABusinessManager:
             if not text_parts:
                 return
 
-            # Combine and parse
+            # OCR can be slow. Retire stale batches before parsing can update its
+            # last-reading cache, and keep both published caches in this section.
             combined_text = " ".join(text_parts)
-            reading = self._business_parser.parse(combined_text)
+            with self._data_lock:
+                if self._stop_event.is_set() or generation != self._business_screen_generation:
+                    return
+                hint = BusinessType[target.upper()] if target is not None else None
+                reading = self._business_parser.parse(combined_text, business_hint=hint)
 
-            if reading.has_data:
+                if not reading.has_data:
+                    return
                 # Convert business type to ID string
                 business_id = reading.business_type.name.lower()
 
@@ -839,12 +859,18 @@ class GTABusinessManager:
                 supply_pct = reading.supply_level or 0
                 value = reading.stock_value or 0
 
-                self.update_business_state(business_id, stock_pct, supply_pct, value)
-
-                logger.info(
-                    f"Business detected: {reading.business_type.name} - "
-                    f"Stock: {stock_pct}%, Supply: {supply_pct}%, Value: ${value:,}"
+                self.update_business_state(
+                    business_id, stock_pct, supply_pct, value,
+                    identity_source="selected_target" if target is not None else "ocr_text",
                 )
+
+            description = (
+                "Business assigned to selected target" if target is not None else "Business detected"
+            )
+            logger.info(
+                f"{description}: {reading.business_type.name} - "
+                f"Stock: {stock_pct}%, Supply: {supply_pct}%, Value: ${value:,}"
+            )
 
         except Exception as e:
             logger.error(f"Error processing business computer: {e}")
@@ -1144,6 +1170,26 @@ class GTABusinessManager:
 
         logger.info("Session reset")
 
+    @property
+    def business_screen_target(self) -> Optional[str]:
+        """Get the live screen assignment, or None for automatic text identity."""
+        with self._data_lock:
+            return self._business_screen_target
+
+    def set_business_screen_target(self, business_id: Optional[str]) -> None:
+        """Assign future labeled OCR readings to a catalog business, without saving."""
+        if business_id is not None and (
+            not isinstance(business_id, str)
+            or business_id not in BUSINESSES
+            or business_id.upper() not in BusinessType.__members__
+        ):
+            raise ValueError("Business screen target must be None or a supported business ID")
+        with self._data_lock:
+            if business_id == self._business_screen_target:
+                return
+            self._business_screen_target = business_id
+            self._business_screen_generation += 1
+
     def get_business_state(self, business_id: str) -> Optional[dict]:
         """Get tracked state for a business."""
         with self._data_lock:
@@ -1154,15 +1200,22 @@ class GTABusinessManager:
         business_id: str,
         stock_percent: int,
         supply_percent: int,
-        value: int = 0
+        value: int = 0,
+        *,
+        identity_source: Optional[str] = None,
     ) -> None:
         """Update business state (from OCR or manual input)."""
+        if identity_source not in (None, "ocr_text", "selected_target"):
+            raise ValueError("Unknown business identity source")
         with self._data_lock:
-            self._data.business_states[business_id] = {
+            state = {
                 "stock": stock_percent,
                 "supply": supply_percent,
                 "value": value,
                 "updated": datetime.now(),
             }
-        self._optimizer.update_business_state(business_id, stock_percent, supply_percent, value)
+            if identity_source is not None:
+                state["identity_source"] = identity_source
+            self._data.business_states[business_id] = state
+            self._optimizer.update_business_state(business_id, stock_percent, supply_percent, value)
         logger.debug(f"Business {business_id} updated: stock={stock_percent}%, supply={supply_percent}%")

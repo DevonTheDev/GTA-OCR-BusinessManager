@@ -223,6 +223,9 @@ class MainWindow(QMainWindow):
         if not self._app:
             return
 
+        # App-side Stop/reset changes should appear on the normal UI cadence.
+        self._business_panel._sync_business_screen_target()
+
         # Update status
         if self._app.is_running:
             self._status_dot.setStyleSheet("color: #4CAF50; font-size: 16px;")

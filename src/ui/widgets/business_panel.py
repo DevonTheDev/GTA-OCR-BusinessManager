@@ -1,7 +1,7 @@
 """Business status panel."""
 
 from datetime import datetime, timezone
-from typing import TYPE_CHECKING, Dict
+from typing import TYPE_CHECKING, Dict, Optional
 
 from PyQt6.QtWidgets import (
     QWidget,
@@ -13,8 +13,9 @@ from PyQt6.QtWidgets import (
     QProgressBar,
     QScrollArea,
     QPushButton,
+    QComboBox,
 )
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QSignalBlocker, QTimer, Qt
 
 from ...constants import UI, BUSINESS
 from ...game.businesses import BUSINESSES, Business
@@ -35,14 +36,15 @@ class BusinessCard(QFrame):
         self._business = business
 
         self.setFrameStyle(QFrame.Shape.StyledPanel)
+        self.setObjectName("businessCard")
         self.setStyleSheet("""
-            QFrame {
+            QFrame#businessCard {
                 background-color: #16213e;
                 border-radius: 8px;
                 padding: 12px;
             }
         """)
-        self.setFixedHeight(140)
+        self.setFixedHeight(160)
 
         layout = QVBoxLayout(self)
         layout.setSpacing(8)
@@ -50,6 +52,7 @@ class BusinessCard(QFrame):
         # Header
         header_layout = QHBoxLayout()
         name = QLabel(business.name)
+        name.setTextFormat(Qt.TextFormat.PlainText)
         name.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
         header_layout.addWidget(name)
         header_layout.addStretch()
@@ -118,10 +121,15 @@ class BusinessCard(QFrame):
 
         # Status/info
         self._status_label = QLabel("Not tracked")
+        self._status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._status_label.setWordWrap(True)
         self._status_label.setStyleSheet("color: #666; font-size: 10px;")
         layout.addWidget(self._status_label)
 
-    def update_data(self, stock: int, supply: int, value: int = 0, updated: str = "") -> None:
+    def update_data(
+        self, stock: int, supply: int, value: int = 0, updated: str = "",
+        identity_source: Optional[str] = None,
+    ) -> None:
         """Update business card data."""
         self._stock_bar.setValue(stock)
         self._supply_bar.setValue(supply)
@@ -184,9 +192,14 @@ class BusinessCard(QFrame):
         """)
 
         if updated:
-            self._status_label.setText(f"{status} (Updated: {updated})")
-        else:
-            self._status_label.setText(status)
+            status = f"{status} (Updated: {updated})"
+        source_label = {
+            "ocr_text": "OCR text match",
+            "selected_target": "Selected target",
+        }.get(identity_source)
+        if source_label:
+            status = f"{status}\n{source_label}"
+        self._status_label.setText(status)
 
     def set_not_tracked(self) -> None:
         """Mark business as not currently tracked."""
@@ -231,8 +244,38 @@ class BusinessPanel(QWidget):
         layout.addWidget(self._checkins_status_label)
 
         info = QLabel("Visit each business in-game to update stock and supply levels")
+        info.setTextFormat(Qt.TextFormat.PlainText)
         info.setStyleSheet("color: #666; font-size: 11px; margin-bottom: 10px;")
         layout.addWidget(info)
+
+        target_row = QHBoxLayout()
+        self._business_target_label = QLabel("Business screen target")
+        self._business_target_label.setTextFormat(Qt.TextFormat.PlainText)
+        target_row.addWidget(self._business_target_label)
+        self._business_target_combo = QComboBox()
+        self._business_target_combo.setAccessibleName("Business screen target")
+        self._business_target_combo.addItem("Automatic", None)
+        for business_id, business in BUSINESSES.items():
+            self._business_target_combo.addItem(business.name, business_id)
+        self._business_target_combo.setEnabled(
+            callable(getattr(self._app, "set_business_screen_target", None))
+        )
+        self._business_target_label.setBuddy(self._business_target_combo)
+        self._sync_business_screen_target()
+        self._business_target_combo.currentIndexChanged.connect(self._on_business_target_changed)
+        target_row.addWidget(self._business_target_combo, 1)
+        layout.addLayout(target_row)
+
+        self._business_target_help_label = QLabel(
+            "Assigns recognized readings to the selected business; it does not verify "
+            "the screen or OCR values. Automatic uses OCR text matches.\n"
+            "Readings still need recognizable labels or markers; bare numbers are not "
+            "supported. The selection lasts until Stop and is not saved."
+        )
+        self._business_target_help_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._business_target_help_label.setWordWrap(True)
+        self._business_target_help_label.setStyleSheet("color: #AAA; font-size: 11px;")
+        layout.addWidget(self._business_target_help_label)
 
         # Scroll area for businesses
         scroll = QScrollArea()
@@ -258,6 +301,21 @@ class BusinessPanel(QWidget):
         scroll_layout.setRowStretch(row + 1, 1)
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
+
+    def _on_business_target_changed(self, index: int) -> None:
+        """Assign future live readings without starting capture or editing cards."""
+        if not 0 <= index < self._business_target_combo.count():
+            return
+        setter = getattr(self._app, "set_business_screen_target", None)
+        if callable(setter):
+            setter(self._business_target_combo.itemData(index))
+
+    def _sync_business_screen_target(self) -> None:
+        """Reflect app-side target changes without writing them back to the app."""
+        target = getattr(self._app, "business_screen_target", None)
+        index = self._business_target_combo.findData(target)
+        with QSignalBlocker(self._business_target_combo):
+            self._business_target_combo.setCurrentIndex(max(0, index))
 
     def _open_manual_checkins(self):
         """Resolve stopped-safe storage only when the manual workflow is requested."""
@@ -305,6 +363,7 @@ class BusinessPanel(QWidget):
 
     def _update_display(self):
         """Update all business cards."""
+        self._sync_business_screen_target()
         if not self._app:
             return
 
@@ -313,13 +372,11 @@ class BusinessPanel(QWidget):
             if state:
                 updated_str = ""
                 if "updated" in state:
-                    now = datetime.now(timezone.utc)
                     updated_time = state["updated"]
-                    # Handle timezone-aware vs naive datetime comparison
-                    if now.tzinfo is not None and updated_time.tzinfo is None:
-                        now = now.replace(tzinfo=None)
-                    elif updated_time.tzinfo is not None and now.tzinfo is None:
-                        updated_time = updated_time.replace(tzinfo=None)
+                    # Naive app observations use local time; aware readings keep
+                    # their offset when compared with an aware UTC clock.
+                    now = (datetime.now() if updated_time.tzinfo is None
+                           else datetime.now(timezone.utc))
                     elapsed = (now - updated_time).total_seconds()
                     updated_str = format_time(elapsed) + " ago"
 
@@ -327,7 +384,8 @@ class BusinessPanel(QWidget):
                     stock=state.get("stock", 0),
                     supply=state.get("supply", 0),
                     value=state.get("value", 0),
-                    updated=updated_str
+                    updated=updated_str,
+                    identity_source=state.get("identity_source"),
                 )
             else:
                 card.set_not_tracked()
