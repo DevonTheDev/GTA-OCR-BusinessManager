@@ -459,6 +459,30 @@ offscreen Qt controls/cards, including selection changes during a blocked OCR
 call, Stop resets, stored-record independence and supported window sizes. It does
 not establish Windows capture, real game-screen detection or recognition accuracy.
 
+### Clear Live Business Readings
+
+Use **Businesses → Clear live readings** to forget mistaken or outdated live
+stock, supply and value observations for every business. The cards refresh
+immediately to **Not tracked**, and later recommendation refreshes use the
+cleared state. The selected **Business screen target** stays in place, so correct
+it separately if the previous assignment was wrong.
+
+Clearing is available while tracking, paused or stopped. It does not pause
+capture: a fresh OCR batch can fill the cards again. Any business OCR batch
+already in flight is retired, including when no previous readings are visible.
+The app, parser and optimizer forget their live observations together; a
+recommendation already returned to a caller is a snapshot and is not rewritten.
+
+This is an in-memory reset. It leaves saved manual check-ins, pins, business
+snapshots, settings, session statistics, goals, cooldowns and scheduled actions
+alone. **Reset Session** still resets session statistics rather than these live
+readings. General activity suggestions can remain after clearing; this control
+removes the business observations that drive stock/supply advice.
+
+Local tests exercise the real capture loop with synthetic OCR, blocked-batch
+and recommendation races, and actual Linux offscreen Qt controls over disposable
+SQLite records. Native Windows/game capture and OCR accuracy are unverified.
+
 ### Manual Business Check-ins
 
 Open **Businesses → Manual check-ins…** to keep your own observations for a saved

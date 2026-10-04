@@ -96,6 +96,10 @@ class Optimizer:
             estimated_value=estimated_value,
         )
 
+    def clear_business_states(self) -> None:
+        """Forget live observations while preserving cooldowns and scheduled actions."""
+        self._business_states.clear()
+
     def set_cooldown(self, activity: str, duration_minutes: int) -> None:
         """Set a cooldown for an activity.
 

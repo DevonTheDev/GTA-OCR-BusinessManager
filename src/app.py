@@ -1075,11 +1075,10 @@ class GTABusinessManager:
     @property
     def recommendations(self) -> List[Recommendation]:
         """Get current recommendations from optimizer and analytics."""
-        # Get optimizer recommendations (business-based)
-        optimizer_recs = self._optimizer.get_recommendations(5)
-
-        # Get a thread-safe copy of business states
+        # Observe both live caches before a concurrent update or clear can change
+        # either one. Activity-history recommendations use this captured view.
         with self._data_lock:
+            optimizer_recs = self._optimizer.get_recommendations(5)
             business_states_copy = dict(self._data.business_states)
 
         # Get analytics recommendations (activity-based insights)
@@ -1194,6 +1193,21 @@ class GTABusinessManager:
         """Get tracked state for a business."""
         with self._data_lock:
             return self._data.business_states.get(business_id)
+
+    def clear_business_readings(self) -> None:
+        """Forget live observations and pending OCR, retaining the target and saved data.
+
+        Capture is not paused: a batch started after this operation can publish a
+        fresh reading. Session statistics, reminders and saved check-ins remain
+        independent of these in-memory business observations.
+        """
+        with self._data_lock:
+            # Even an empty cache can have an OCR batch waiting to publish.
+            self._business_screen_generation += 1
+            self._data.business_states.clear()
+            self._business_parser.clear_readings()
+            self._optimizer.clear_business_states()
+        logger.info("Live business readings cleared")
 
     def update_business_state(
         self,

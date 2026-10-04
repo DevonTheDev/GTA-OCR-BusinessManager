@@ -232,6 +232,13 @@ class BusinessPanel(QWidget):
         header.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
         heading_row = QHBoxLayout()
         heading_row.addWidget(header, 1)
+        self._clear_readings_button = QPushButton("Clear live readings")
+        self._clear_readings_button.setAccessibleName("Clear live readings")
+        self._clear_readings_button.setEnabled(
+            callable(getattr(self._app, "clear_business_readings", None))
+        )
+        self._clear_readings_button.clicked.connect(self._clear_live_readings)
+        heading_row.addWidget(self._clear_readings_button)
         self._manual_checkins_button = QPushButton('Manual check-ins…')
         self._manual_checkins_button.setEnabled(self._app is not None)
         self._manual_checkins_button.clicked.connect(self._open_manual_checkins)
@@ -247,6 +254,23 @@ class BusinessPanel(QWidget):
         info.setTextFormat(Qt.TextFormat.PlainText)
         info.setStyleSheet("color: #666; font-size: 11px; margin-bottom: 10px;")
         layout.addWidget(info)
+
+        self._clear_readings_help_label = QLabel(
+            "Clears live stock, supply and value observations for all businesses. "
+            "Later OCR can refill the cards. Saved check-ins are kept."
+        )
+        self._clear_readings_help_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._clear_readings_help_label.setWordWrap(True)
+        self._clear_readings_help_label.setStyleSheet("color: #AAA; font-size: 11px;")
+        self._clear_readings_button.setAccessibleDescription(
+            self._clear_readings_help_label.text()
+        )
+        layout.addWidget(self._clear_readings_help_label)
+        self._clear_readings_status_label = QLabel()
+        self._clear_readings_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._clear_readings_status_label.setWordWrap(True)
+        self._clear_readings_status_label.hide()
+        layout.addWidget(self._clear_readings_status_label)
 
         target_row = QHBoxLayout()
         self._business_target_label = QLabel("Business screen target")
@@ -301,6 +325,33 @@ class BusinessPanel(QWidget):
         scroll_layout.setRowStretch(row + 1, 1)
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
+
+    def _clear_live_readings(self) -> None:
+        """Clear disposable observations without changing capture or saved history."""
+        clear = getattr(self._app, "clear_business_readings", None)
+        if not callable(clear):
+            self._clear_readings_button.setEnabled(False)
+            return
+        try:
+            clear()
+        except Exception as exc:
+            logger.warning('Could not clear live readings (%s)', type(exc).__name__)
+            self._clear_readings_status_label.setText(
+                "Live readings could not be cleared. Try again."
+            )
+        else:
+            try:
+                self._update_display()
+            except Exception as exc:
+                logger.warning('Could not refresh business cards (%s)', type(exc).__name__)
+                self._clear_readings_status_label.setText(
+                    "Live readings cleared, but the cards could not refresh. Try again."
+                )
+            else:
+                self._clear_readings_status_label.setText(
+                    "Live readings cleared. Later OCR can refill the cards."
+                )
+        self._clear_readings_status_label.show()
 
     def _on_business_target_changed(self, index: int) -> None:
         """Assign future live readings without starting capture or editing cards."""

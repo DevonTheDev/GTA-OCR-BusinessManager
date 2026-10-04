@@ -247,3 +247,7 @@ class BusinessParser:
     def get_all_last_readings(self) -> dict[BusinessType, BusinessReading]:
         """Get all stored last readings."""
         return self._last_readings.copy()
+
+    def clear_readings(self) -> None:
+        """Forget previously parsed observations without changing parsing rules."""
+        self._last_readings.clear()
