@@ -46,6 +46,14 @@ class EfficiencyMetrics:
     best_activity_rate: float = 0
 
 
+@dataclass(frozen=True)
+class RecommendationInsight:
+    """A personalized recommendation with an identity independent of its text."""
+
+    recommendation_id: str
+    text: str
+
+
 class Analytics:
     """Calculates analytics from activity data."""
 
@@ -176,6 +184,15 @@ class Analytics:
     def get_recommendations(
         self, activities: List[Activity], current_businesses: Dict
     ) -> List[str]:
+        """Return the first five personalized recommendations as display strings."""
+        return [
+            insight.text
+            for insight in self.get_recommendation_insights(activities, current_businesses)[:5]
+        ]
+
+    def get_recommendation_insights(
+        self, activities: list[Activity], current_businesses: dict
+    ) -> list[RecommendationInsight]:
         """Generate recommendations based on activity history.
 
         Args:
@@ -183,12 +200,17 @@ class Analytics:
             current_businesses: Current business states
 
         Returns:
-            List of recommendation strings
+            Complete list of identified recommendations, before display limits
         """
         recommendations = []
 
         if not activities:
-            recommendations.append("Start completing activities to get personalized recommendations!")
+            recommendations.append(
+                RecommendationInsight(
+                    recommendation_id="insight:start",
+                    text="Start completing activities to get personalized recommendations!",
+                )
+            )
             return recommendations
 
         # Calculate efficiency for different activity types
@@ -206,7 +228,10 @@ class Analytics:
         if type_rates:
             best = max(type_rates.items(), key=lambda x: x[1])
             recommendations.append(
-                f"Your most efficient activity is {best[0]} at ${best[1]:,.0f}/hour"
+                RecommendationInsight(
+                    recommendation_id=f"insight:best_activity:{best[0]}",
+                    text=f"Your most efficient activity is {best[0]} at ${best[1]:,.0f}/hour",
+                )
             )
 
         # Check for low success rate activities
@@ -217,7 +242,13 @@ class Analytics:
                 rate = successes / len(type_activities)
                 if rate < 0.5:
                     recommendations.append(
-                        f"Consider practicing {atype.name} - your success rate is only {rate:.0%}"
+                        RecommendationInsight(
+                            recommendation_id=f"insight:practice:{atype.name}",
+                            text=(
+                                f"Consider practicing {atype.name} - "
+                                f"your success rate is only {rate:.0%}"
+                            ),
+                        )
                     )
 
-        return recommendations[:5]  # Limit to 5 recommendations
+        return recommendations

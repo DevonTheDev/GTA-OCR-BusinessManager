@@ -72,6 +72,37 @@ A smart companion app that runs alongside GTA Online, tracking your money, activ
 - **Session Stats** - See how much you've earned this session
 - **Earnings Rate** - Calculates your $/hour based on actual gameplay
 
+### Temporarily Hide a Recommendation
+
+Open **Recommendations** and choose **Snooze 10 min** on a suggestion. It is
+hidden from this panel, the dashboard and the overlay while other suggestions
+move up. Use **Restore all** to bring back every snoozed suggestion immediately.
+The status distinguishes suggestions currently hidden from snoozes whose
+suggestion is temporarily unavailable. Button actions refresh this panel
+immediately; the dashboard, overlay and automatic expiry follow their normal
+display refresh timers.
+
+A snooze follows the same action even when its wording, value or urgency
+changes. Selling and resupplying a business remain separate choices, as do
+Headhunter and Sightseer. Snoozing a history insight follows its activity type;
+a different best-performing activity can still appear. Existing priority and
+score rules rank the complete candidate list before the display limit is applied.
+
+Snoozes use a ten-minute elapsed-time deadline. Choosing the same snooze again
+does not extend it. They are shared across this app's characters and retained
+through Pause, Stop, Start and Reset Session, but **closing the app clears them**.
+They do not mark an activity complete, alter a cooldown, update a business
+reading or change saved earnings. At most 128 snoozes can be active; Restore all
+or expiry makes room again.
+
+Local tests cover stable action identities, deadline boundaries, ranking and
+refill, session lifecycle and unchanged saved data. Opt-in Linux offscreen Qt
+tests exercise the actual controls, reused-card keyboard/mouse ownership and
+dashboard/overlay updates:
+`GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_recommendation_snoozes_qt.py`
+(set the variables separately on shells without inline assignments). Windows
+rendering, screen capture and in-game availability remain unverified.
+
 ### Live Session Goals
 
 Open **Session** and choose **Set Goal**. Pick a quick preset or enter a custom

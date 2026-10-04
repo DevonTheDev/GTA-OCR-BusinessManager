@@ -26,6 +26,7 @@ class Recommendation:
     business_type: Optional[str] = None
     activity_type: Optional[ActivityType] = None
     score: float = 0.0  # Raw priority score for sorting
+    recommendation_id: Optional[str] = None
 
 
 @dataclass
@@ -141,11 +142,11 @@ class Optimizer:
         remaining = self._cooldowns[activity] - datetime.now()
         return max(0, int(remaining.total_seconds() / 60))
 
-    def get_recommendations(self, limit: int = 5) -> List[Recommendation]:
+    def get_recommendations(self, limit: int | None = 5) -> List[Recommendation]:
         """Generate prioritized recommendations.
 
         Args:
-            limit: Maximum recommendations to return
+            limit: Maximum recommendations to return, or None for the complete pool
 
         Returns:
             List of recommendations, highest priority first
@@ -234,6 +235,7 @@ class Optimizer:
                             business_type=business_id,
                             activity_type=ActivityType.SELL_MISSION,
                             score=sell_score.total,
+                            recommendation_id=f"business:{business_id}:sell",
                         )
                     )
 
@@ -272,6 +274,7 @@ class Optimizer:
                         business_type=business_id,
                         activity_type=ActivityType.RESUPPLY_MISSION,
                         score=resupply_score.total,
+                        recommendation_id=f"business:{business_id}:resupply",
                     )
                 )
 
@@ -292,6 +295,7 @@ class Optimizer:
                     estimated_time_minutes=5,
                     activity_type=ActivityType.PAYPHONE_HIT,
                     score=0.85,
+                    recommendation_id="activity:payphone_hit",
                 )
             )
         else:
@@ -306,6 +310,7 @@ class Optimizer:
                         estimated_time_minutes=remaining + 5,
                         activity_type=ActivityType.PAYPHONE_HIT,
                         score=0.3,
+                        recommendation_id="activity:payphone_hit",
                     )
                 )
 
@@ -320,6 +325,7 @@ class Optimizer:
                     estimated_time_minutes=4,
                     activity_type=ActivityType.VIP_WORK,
                     score=0.6,
+                    recommendation_id="activity:headhunter",
                 )
             )
 
@@ -334,6 +340,7 @@ class Optimizer:
                     estimated_time_minutes=5,
                     activity_type=ActivityType.VIP_WORK,
                     score=0.55,
+                    recommendation_id="activity:sightseer",
                 )
             )
 
@@ -347,6 +354,7 @@ class Optimizer:
                 estimated_time_minutes=10,
                 activity_type=ActivityType.SECURITY_CONTRACT,
                 score=0.5,
+                recommendation_id="activity:security_contract",
             )
         )
 
@@ -360,6 +368,7 @@ class Optimizer:
                 estimated_time_minutes=15,
                 activity_type=ActivityType.AUTO_SHOP_DELIVERY,
                 score=0.65,
+                recommendation_id="activity:auto_shop_contract",
             )
         )
 
@@ -382,6 +391,7 @@ class Optimizer:
                         business_type=action.business_id,
                         activity_type=ActivityType.SELL_MISSION,
                         score=0.9,
+                        recommendation_id=f"business:{action.business_id}:sell",
                     )
                 )
             elif action.action_type == "resupply":
@@ -395,6 +405,7 @@ class Optimizer:
                         business_type=action.business_id,
                         activity_type=ActivityType.RESUPPLY_MISSION,
                         score=0.7,
+                        recommendation_id=f"business:{action.business_id}:resupply",
                     )
                 )
 

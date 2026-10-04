@@ -29,6 +29,7 @@ from .tracking.activity_tracker import ActivityTracker
 from .tracking.analytics import Analytics, EfficiencyMetrics, EarningsBreakdown
 from .tracking.cooldowns import CooldownTracker, ACTIVITY_COOLDOWNS
 from .optimization.optimizer import Optimizer, Recommendation
+from .optimization.recommendation_snoozes import RecommendationSnapshot, RecommendationSnoozes
 from .database.repository import Repository, get_repository
 from .utils.logging import setup_logging, get_logger
 from .utils.performance import PerformanceMonitor
@@ -98,11 +99,15 @@ class AppData:
 class GTABusinessManager:
     """Main application class that orchestrates all components."""
 
-    def __init__(self, settings: Optional[Settings] = None):
+    def __init__(
+        self, settings: Optional[Settings] = None, *,
+        recommendation_clock: Callable[[], float] = time.monotonic,
+    ):
         """Initialize the business manager.
 
         Args:
             settings: Settings instance. If None, uses global settings.
+            recommendation_clock: Monotonic clock for temporary recommendation snoozes.
         """
         self._settings = settings or get_settings()
         self._state = AppState.STOPPED
@@ -126,6 +131,9 @@ class GTABusinessManager:
         self._activity_tracker = ActivityTracker()
         self._optimizer = Optimizer(solo_mode=self._settings.get("optimization.solo_mode", True))
         self._analytics = Analytics()
+        # Presentation preferences belong to this manager, across capture runs
+        # and statistics resets, and never enter settings or stored history.
+        self._recommendation_snoozes = RecommendationSnoozes(clock=recommendation_clock)
         # Reminders belong to the app, including while capture is stopped.
         self._cooldown_tracker = CooldownTracker(
             data_path=self._settings.data_dir / "cooldowns.json"
@@ -1085,11 +1093,52 @@ class GTABusinessManager:
 
     @property
     def recommendations(self) -> List[Recommendation]:
-        """Get current recommendations from optimizer and analytics."""
+        """Get the visible recommendations shared by every app consumer."""
+        return list(self.recommendation_snapshot.visible)
+
+    @property
+    def recommendation_snapshot(self) -> RecommendationSnapshot:
+        """Filter a complete candidate view against one snooze-time sample.
+
+        Candidate collection and snooze sampling are separate snapshots, not a
+        transaction across gameplay and presentation state. No app data lock is
+        held while entering the snooze registry.
+        """
+        candidates = self._collect_recommendation_candidates()
+        snoozed = self._recommendation_snoozes.active_ids()
+        visible = [rec for rec in candidates if self._recommendation_id(rec) not in snoozed]
+        return RecommendationSnapshot(
+            visible=tuple(visible[:7]),
+            total_candidates=len(candidates),
+            hidden_count=len(candidates) - len(visible),
+            snoozed_count=len(snoozed),
+        )
+
+    def snooze_recommendation(self, recommendation_id: str) -> bool:
+        """Snooze a currently generated ID, including candidates below the display limit."""
+        if not isinstance(recommendation_id, str) or not recommendation_id.strip():
+            return False
+        candidates = self._collect_recommendation_candidates()
+        if not any(self._recommendation_id(rec) == recommendation_id for rec in candidates):
+            return False
+        return self._recommendation_snoozes.snooze(recommendation_id)
+
+    def restore_snoozed_recommendations(self) -> None:
+        """Clear all manager-owned snoozes without changing their source state."""
+        self._recommendation_snoozes.restore_all()
+
+    @staticmethod
+    def _recommendation_id(recommendation: Recommendation) -> Optional[str]:
+        """Legacy or malformed ID-less records remain visible and unsnoozable."""
+        identifier = getattr(recommendation, "recommendation_id", None)
+        return identifier if isinstance(identifier, str) and identifier.strip() else None
+
+    def _collect_recommendation_candidates(self) -> List[Recommendation]:
+        """Merge and rank every eligible candidate before deduplication and filtering."""
         # Observe both live caches before a concurrent update or clear can change
         # either one. Activity-history recommendations use this captured view.
         with self._data_lock:
-            optimizer_recs = self._optimizer.get_recommendations(5)
+            optimizer_recs = self._optimizer.get_recommendations(limit=None)
             business_states_copy = dict(self._data.business_states)
 
         # Get analytics recommendations (activity-based insights)
@@ -1097,29 +1146,35 @@ class GTABusinessManager:
         try:
             activities = self._activity_tracker.get_recent_activities(100)
             if activities:
-                analytics_texts = self._analytics.get_recommendations(
+                analytics_insights = self._analytics.get_recommendation_insights(
                     activities, business_states_copy
                 )
-                # Convert analytics text recommendations to Recommendation objects
-                for i, text in enumerate(analytics_texts):
+                for i, insight in enumerate(analytics_insights):
                     analytics_recs.append(
                         Recommendation(
                             priority=4,  # Lower priority - informational
-                            action=text,
+                            action=insight.text,
                             reason="Based on your activity history",
                             score=0.4 - (i * 0.05),
+                            recommendation_id=insight.recommendation_id,
                         )
                     )
         except Exception as e:
             logger.debug(f"Failed to get analytics recommendations: {e}")
 
-        # Merge and deduplicate
+        # Rank first so each identity retains its highest-priority representation.
         all_recs = optimizer_recs + analytics_recs
-
-        # Sort by priority, then by score
         all_recs.sort(key=lambda r: (r.priority, -r.score))
-
-        return all_recs[:7]  # Return top 7 combined recommendations
+        seen_ids = set()
+        candidates = []
+        for recommendation in all_recs:
+            identifier = self._recommendation_id(recommendation)
+            if identifier is not None:
+                if identifier in seen_ids:
+                    continue
+                seen_ids.add(identifier)
+            candidates.append(recommendation)
+        return candidates
 
     @property
     def data(self) -> AppData:
