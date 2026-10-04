@@ -108,7 +108,27 @@ class OCREngine:
         """
         import winocr
 
-        # winocr expects the image in a specific format
+        # Query the actual Windows runtime rather than assume a fixed cap.
+        # Missing/invalid metadata follows recognize()'s existing failure path.
+        max_dimension = winocr.OcrEngine.max_image_dimension
+        if type(max_dimension) is not int or max_dimension <= 0:
+            raise ValueError("Windows OCR max_image_dimension must be a positive integer")
+
+        original_width, original_height = image.size
+        longest_dimension = max(image.size)
+        resized = longest_dimension > max_dimension
+        if resized:
+            image = image.resize(
+                (
+                    max(1, original_width * max_dimension // longest_dimension),
+                    max(1, original_height * max_dimension // longest_dimension),
+                ),
+                Image.Resampling.LANCZOS,
+            )
+            # Integer rounding can give each axis a slightly different ratio.
+            x_ratio = original_width / image.width
+            y_ratio = original_height / image.height
+
         result = await winocr.recognize_pil(image, self._language)
 
         # winocr exposes the WinRT objects through lowercase Python properties.
@@ -132,6 +152,11 @@ class OCREngine:
                         "height": bounds.height,
                     },
                 }
+                if resized:
+                    word_info["bounds"]["x"] *= x_ratio
+                    word_info["bounds"]["width"] *= x_ratio
+                    word_info["bounds"]["y"] *= y_ratio
+                    word_info["bounds"]["height"] *= y_ratio
                 words.append(word_info)
 
         return OCRResult(
@@ -147,7 +172,7 @@ class OCREngine:
             image: Image as numpy array (BGR) or PIL Image
 
         Returns:
-            OCRResult with detected text
+            OCRResult with text and word bounds relative to the input image
         """
         # Convert numpy array to PIL Image if needed
         if isinstance(image, np.ndarray):
@@ -263,7 +288,7 @@ class OCREngine:
             scale: Scale factor
 
         Returns:
-            OCRResult with detected text
+            OCRResult with text and word bounds in preprocessed image coordinates
         """
         processed = self.preprocess_for_ocr(
             image,

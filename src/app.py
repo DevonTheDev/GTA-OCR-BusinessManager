@@ -72,6 +72,7 @@ class CaptureResult:
     activity_name: str = ""
     activity_type: Optional[ActivityType] = None
     activity_identity_status: str = "unknown"
+    banner_text: str = ""
 
 
 @dataclass
@@ -439,7 +440,7 @@ class GTABusinessManager:
         with self._perf_monitor.time_operation("total"):
             # Capture multiple regions
             with self._perf_monitor.time_operation("capture"):
-                # These images belong to one detection cycle, not five separate
+                # These images belong to one detection cycle, not six separate
                 # rate-limited cycles. Reuse the existing batch capture API.
                 regions = self._capture.regions
                 images = self._capture.capture_multiple_regions([
@@ -448,9 +449,10 @@ class GTABusinessManager:
                     regions.mission_text,
                     regions.center_prompt,
                     regions.timer_bottom_right,
+                    regions.mission_banner,
                 ])
-                full_screen, money_img, mission_img, center_img, timer_img = (
-                    images[index] for index in range(5)
+                full_screen, money_img, mission_img, center_img, timer_img, banner_img = (
+                    images[index] for index in range(6)
                 )
 
             self._data.total_captures += 1
@@ -463,12 +465,14 @@ class GTABusinessManager:
                 full_screen,
                 mission_text_image=mission_img,
                 center_text_image=center_img,
+                mission_banner_image=banner_img,
             )
 
             result.game_state = state_result.state
             result.state_confidence = state_result.confidence
             result.mission_text = state_result.mission_text
             result.objective_text = state_result.objective_text
+            result.banner_text = getattr(state_result, "banner_text", "")
             result.mission = getattr(state_result, "mission", None)
 
             # Update state machine
@@ -763,7 +767,8 @@ class GTABusinessManager:
         reading = getattr(state_result, "mission", None)
         if reading is None:
             reading = self._mission_parser.parse("\n".join(
-                text for text in (state_result.mission_text, state_result.objective_text) if text
+                text for text in (state_result.mission_text, state_result.objective_text,
+                                  getattr(state_result, "banner_text", "")) if text
             ))
         return reading
 
@@ -772,6 +777,7 @@ class GTABusinessManager:
         if reading.identity_status == "known_name":
             return reading.mission_name
         return (state_result.mission_text or state_result.objective_text
+                or getattr(state_result, "banner_text", "")
                 or ("Sell Mission" if state_result.state == GameState.SELLING else "Unknown Mission"))
 
     @staticmethod
@@ -885,7 +891,8 @@ class GTABusinessManager:
             return ActivityType.SELL_MISSION
         # Preserve the established generic delivery category as unresolved. A
         # later specific name can improve it; ordinary 'deliver' is insufficient.
-        text = " ".join((state_result.mission_text + " " + state_result.objective_text).casefold().split())
+        text = " ".join(" ".join((state_result.mission_text, state_result.objective_text,
+                                  getattr(state_result, "banner_text", ""))).casefold().split())
         if re.search(r"(?<!\w)deliver (?:the )?(?:goods|product)(?!\w)", text):
             return ActivityType.SELL_MISSION
         return ActivityType.UNKNOWN

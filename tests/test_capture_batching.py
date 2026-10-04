@@ -42,7 +42,7 @@ def test_regular_detection_cycle_rate_limits_once_for_all_hud_regions(tmp_path, 
     result = app._do_capture_cycle()
 
     assert len(waits) == 1
-    assert len(grabs) == 5
+    assert len(grabs) == 6
     regions = capture.regions
     expected = [
         regions.full_screen,
@@ -50,6 +50,7 @@ def test_regular_detection_cycle_rate_limits_once_for_all_hud_regions(tmp_path, 
         regions.mission_text,
         regions.center_prompt,
         regions.timer_bottom_right,
+        regions.mission_banner,
     ]
     assert grabs == [region.to_mss_monitor(200, 100, 10, 20) for region in expected]
     assert result.game_state == GameState.UNKNOWN

@@ -498,8 +498,9 @@ native file choosers are substituted, and Windows/game capture is unverified.
 
 ### Activity Detection
 
-The capture pipeline now shares one mission-identity result from both existing
-OCR crops through tracking, dashboard/overlay labels, completed history and
+The capture pipeline now shares one mission-identity result from the existing
+mission-text, center-prompt and mission-banner OCR crops through tracking,
+dashboard/overlay labels, completed history and
 cooldown selection. For example, **Hostile Takeover**, **Asset Recovery** and
 **Executive Search** retain their VIP category; a center-only **Headhunter**
 retains its name; **Customer vehicle** identifies Auto Shop delivery instead of
@@ -541,6 +542,18 @@ bonus/reward text, **Objective complete**, **SUCCESS**, **COMPLETED** and **Well
 done** do not end the whole tracked mission. These are heuristic recognition
 rules, not calibrated confidence scores or proof of actual gameplay state.
 
+The normal capture batch now includes the already-defined mission banner.
+Previously its upper title rows were outside both consumed OCR crops, so a
+readable name there could never reach automatic selection. Banner text now
+participates in the same identity, phase and result checks, while original text
+from all three regions remains separate in capture metadata. For example, a
+generic **VIP Work** header plus **Hostile Takeover** in the banner can establish
+the named activity; contradictory names in different crops remain ambiguous.
+An accepted banner result can finish an existing activity, but does not create
+a new one by itself. Coordinates are unchanged. The batch still waits once for
+its rate limit, with six region grabs and one additional OCR input per cycle;
+this is not a native latency or FPS benchmark.
+
 The Windows adapter now follows [WinOCR's lowercase Python API](https://github.com/GitHub30/winocr#information-that-can-be-obtained)
 and preserves backend line text, punctuation and word bounds. Windows
 [OcrWord exposes no confidence score](https://learn.microsoft.com/en-us/uwp/api/windows.media.ocr.ocrword),
@@ -548,6 +561,18 @@ so successful native results/words report confidence as `None`, rather than an
 invented certainty. Empty/error results retain the existing empty-text/0.0
 failure convention. The package requirement now agrees with the existing
 requirements file and the published `winocr>=0.0.15` API.
+
+Before native recognition, the adapter reads Windows OCR's runtime
+[maximum image dimension](https://learn.microsoft.com/en-us/uwp/api/windows.media.ocr.ocrengine.maximagedimension).
+Only oversized images are reduced to fit that actual limit, preserving their
+aspect ratio within integer pixel rounding and keeping the full image. This
+prevents enlarged high-resolution crops from being submitted above the engine's
+size contract; it does not assume a fixed Windows limit or establish recognition
+accuracy. Successful word bounds are mapped back to the image supplied to
+`recognize()`; for preprocessed calls this remains the preprocessed coordinate
+system. An unavailable/invalid runtime limit or resizing/backend error retains
+the existing empty-result failure behavior. In-limit images and native line
+text remain unchanged.
 
 Local verification covers faithful Windows API-shaped responses, source-derived
 OCR text through the real capture/classifier/tracker/SQLite path, result and
@@ -562,6 +587,12 @@ GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py
 That optional diagnostic requires Tesseract with English data, DejaVuSans.ttf,
 Pillow, NumPy and OpenCV; it installs/downloads nothing. `GTA_OCR_TEST_FONT` may
 point to a local copy of that font. It adds no production Tesseract fallback.
+Banner cases place known titles wholly in the previously unread part of the
+configured region, and cover competing crop evidence, late refinement, explicit
+heist phases and single completion/cooldown records. Separate native-shaped
+backend tests enforce a deliberately synthetic size cap across ordinary and
+high-resolution inputs and verify bounds mapping; they do not execute Windows
+OCR or claim that the test cap is the native maximum.
 The test images are synthetic, not game screenshots. This repository ships
 no representative gameplay screenshot corpus or template images; default startup
 also does not automatically load a template folder. This pass does not change

@@ -49,6 +49,15 @@ def native_engine(monkeypatch):
     def make(response, *, language="en", error=None):
         calls = []
 
+        class NativeEngineMeta(type):
+            @property
+            def max_image_dimension(cls):
+                # Synthetic cap, not a claim about the native Windows limit.
+                return 2400
+
+        class NativeEngine(metaclass=NativeEngineMeta):
+            pass
+
         async def recognize_pil(image, lang):
             # Yield once to ensure the production adapter awaits the backend.
             await asyncio.sleep(0)
@@ -57,7 +66,9 @@ def native_engine(monkeypatch):
                 raise error
             return response
 
-        monkeypatch.setitem(sys.modules, "winocr", SimpleNamespace(recognize_pil=recognize_pil))
+        monkeypatch.setitem(sys.modules, "winocr", SimpleNamespace(
+            recognize_pil=recognize_pil, OcrEngine=NativeEngine,
+        ))
         return OCREngine(language=language), calls
 
     yield make

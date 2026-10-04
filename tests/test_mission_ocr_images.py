@@ -116,14 +116,15 @@ class TesseractDiagnostic(OCREngine):
         return result
 
 
-def synthetic_frame(resolution, mission_text="", center_text=""):
+def synthetic_frame(resolution, mission_text="", center_text="", banner_text=""):
     """Put controlled text inside current production crop bounds, not a real HUD."""
     width, height = resolution
     frame = Image.new("RGB", resolution, (70, 70, 70))
     draw = ImageDraw.Draw(frame)
     scale = height / 1080
     font = ImageFont.truetype(str(FONT_PATH), round(24 * scale))
-    for region, text in ((REGIONS.mission_text, mission_text), (REGIONS.center_prompt, center_text)):
+    for region, text in ((REGIONS.mission_text, mission_text), (REGIONS.center_prompt, center_text),
+                         (REGIONS.mission_banner, banner_text)):
         if not text:
             continue
         left, top, right, bottom = region.to_absolute(width, height)
@@ -131,6 +132,9 @@ def synthetic_frame(resolution, mission_text="", center_text=""):
         bounds = draw.multiline_textbbox(position, text, font=font, spacing=round(7 * scale))
         assert left <= bounds[0] < bounds[2] <= right
         assert top <= bounds[1] < bounds[3] <= bottom
+        if region == REGIONS.mission_banner:
+            # Isolate the existing banner's missed title rows, above center OCR.
+            assert bounds[3] <= REGIONS.center_prompt.to_absolute(width, height)[1]
         draw.multiline_text(position, text, font=font, fill="white", spacing=round(7 * scale))
     return np.asarray(frame)[:, :, ::-1].copy()
 
@@ -193,7 +197,7 @@ def run_frames(app, monkeypatch, frames):
     assert app._data.total_captures == len(frames)
     assert capture.requested_regions == [(
         REGIONS.full_screen, REGIONS.money_display, REGIONS.mission_text,
-        REGIONS.center_prompt, REGIONS.timer_bottom_right,
+        REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner,
     )] * len(frames)
     return checkpoints, backend
 
@@ -255,7 +259,18 @@ def test_rendered_mission_identity_reaches_capture_and_tracker(app, monkeypatch,
     assert observed.mission.identity_status == case.status
     assert observed.mission.candidates == case.candidates
     assert observed.mission.mission_type == case.mission_type
-    assert observed.mission.raw_text == "\n".join(filter(None, (case.mission_text, case.center_text)))
+    assert observed.banner_text == backend.results[2].text
+    if "\n" in case.center_text:
+        # The existing crops overlap, but the banner cuts through the second
+        # line's lower edge. Its OCR can differ (for example g versus q). Keep
+        # that actual output separate; it must not overwrite the complete
+        # center objective or change the recognized name above.
+        assert observed.banner_text.splitlines()[0] == case.center_text.splitlines()[0]
+    else:
+        assert observed.banner_text == case.center_text
+    assert observed.mission.raw_text == "\n".join(filter(None, (
+        case.mission_text, case.center_text, backend.results[2].text,
+    )))
     assert observed.activity_type == case.activity_type
     assert observed.activity_name == case.activity_name
     assert observed.activity_identity_status == case.status
@@ -339,3 +354,94 @@ def test_rendered_explicit_pass_completes_once_in_sqlite_and_starts_cooldown(app
     assert app._activity_tracker.current_activity is None
     assert app._data.mission_start_time is None
     assert app.session_stats.activities_completed == 1
+
+
+@pytest.mark.parametrize("resolution", RESOLUTIONS, ids=("720p", "1080p", "1440p"))
+@pytest.mark.parametrize("header,title,expected", [
+    ("", "Hostile Takeover", ActivityType.VIP_WORK),
+    ("VIP Work", "Hostile Takeover", ActivityType.VIP_WORK),
+    ("Deliver the goods", "Headhunter", ActivityType.VIP_WORK),
+    ("", "Executive Search", ActivityType.VIP_WORK),
+    ("", "Pier Pressure", ActivityType.CONTACT_MISSION),
+    ("Deliver the goods", "Recover Valuables", ActivityType.SECURITY_CONTRACT),
+])
+def test_rendered_banner_title_fills_previously_unread_image_rows(
+        app, monkeypatch, resolution, header, title, expected):
+    checkpoints, _ = run_frames(app, monkeypatch, [
+        synthetic_frame(resolution, mission_text=header, banner_text=title),
+    ])
+    observed, rows, cooldown = checkpoints[0]
+    assert observed.mission_text == header
+    assert observed.objective_text == ""
+    assert observed.banner_text == title
+    assert observed.mission.raw_text == "\n".join(filter(None, (header, title)))
+    assert observed.mission.identity_status == "known_name"
+    assert observed.activity_identity_status == "known_name"
+    assert observed.activity_name == title
+    assert observed.activity_type == expected
+    assert observed.game_state == GameState.MISSION_ACTIVE
+    assert rows == [] and cooldown is None
+
+
+@pytest.mark.parametrize("resolution", RESOLUTIONS, ids=("720p", "1080p", "1440p"))
+def test_rendered_conflicting_banner_does_not_choose_between_names(app, monkeypatch, resolution):
+    checkpoints, _ = run_frames(app, monkeypatch, [
+        synthetic_frame(resolution, mission_text="Sightseer", banner_text="Headhunter"),
+    ])
+    observed, rows, cooldown = checkpoints[0]
+    assert observed.mission_text == "Sightseer" and observed.banner_text == "Headhunter"
+    assert observed.mission.identity_status == "ambiguous"
+    assert set(observed.mission.candidates) == {"Headhunter", "Sightseer"}
+    assert observed.game_state == GameState.UNKNOWN
+    assert observed.activity_type is None and app._activity_tracker.current_activity is None
+    assert rows == [] and cooldown is None
+
+
+@pytest.mark.parametrize("resolution", RESOLUTIONS, ids=("720p", "1080p", "1440p"))
+def test_rendered_banner_refinement_then_outcome_records_exactly_one_activity(app, monkeypatch, resolution):
+    checkpoints, _ = run_frames(app, monkeypatch, [
+        synthetic_frame(resolution, mission_text="VIP Work"),
+        synthetic_frame(resolution, banner_text="Hostile Takeover"),
+        synthetic_frame(resolution, banner_text="MISSION PASSED"),
+        synthetic_frame(resolution, banner_text="MISSION PASSED"),
+    ])
+    generic, named, complete, repeated = checkpoints
+    assert generic[0].activity_identity_status == "type_only"
+    assert named[0].activity_identity_status == "known_name"
+    assert named[0].activity_name == "Hostile Takeover"
+    assert generic[1] == named[1] == []
+    assert complete[0].banner_text == repeated[0].banner_text == "MISSION PASSED"
+    assert complete[1] == repeated[1] and len(complete[1]) == 1
+    assert complete[1][0]["name"] == "Hostile Takeover"
+    assert complete[1][0]["type"] == "VIP_WORK" and complete[1][0]["success"] is True
+    assert complete[1][0]["earnings"] == 0
+    assert complete[2].started_at == repeated[2].started_at
+    assert complete[2].activity_name == "hostile_takeover"
+    assert app.session_stats.activities_completed == 1
+
+
+@pytest.mark.parametrize("resolution", RESOLUTIONS, ids=("720p", "1080p", "1440p"))
+def test_rendered_banner_and_header_share_heist_name_and_explicit_phase(app, monkeypatch, resolution):
+    checkpoints, _ = run_frames(app, monkeypatch, [
+        synthetic_frame(resolution, mission_text="Casino Heist\nFinale", banner_text="The Big Con"),
+    ])
+    observed, rows, cooldown = checkpoints[0]
+    assert observed.banner_text == "The Big Con"
+    assert observed.mission.heist_phase == MissionType.HEIST_FINALE
+    assert observed.activity_name == "The Big Con"
+    assert observed.activity_type == ActivityType.HEIST_FINALE
+    assert observed.game_state == GameState.HEIST_FINALE
+    assert rows == [] and cooldown is None
+
+
+@pytest.mark.parametrize("resolution", RESOLUTIONS, ids=("720p", "1080p", "1440p"))
+def test_rendered_banner_result_without_activity_never_creates_one(app, monkeypatch, resolution):
+    checkpoints, _ = run_frames(app, monkeypatch, [
+        synthetic_frame(resolution, banner_text="MISSION PASSED"),
+    ])
+    observed, rows, cooldown = checkpoints[0]
+    assert observed.banner_text == "MISSION PASSED"
+    assert observed.game_state == GameState.MISSION_COMPLETE
+    assert observed.activity_type is None and app._activity_tracker.current_activity is None
+    assert rows == [] and cooldown is None
+    assert app.session_stats.activities_completed == 0

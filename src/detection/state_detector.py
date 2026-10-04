@@ -30,6 +30,7 @@ class StateDetectionResult:
     timer_visible: bool = False
     hud_visible: bool = True
     mission: Optional[MissionReading] = None
+    banner_text: str = ""
 
 
 @dataclass
@@ -138,6 +139,7 @@ class StateDetector:
         image: np.ndarray,
         mission_text_image: Optional[np.ndarray] = None,
         center_text_image: Optional[np.ndarray] = None,
+        mission_banner_image: Optional[np.ndarray] = None,
     ) -> StateDetectionResult:
         """Detect current game state from screen capture.
 
@@ -145,6 +147,7 @@ class StateDetector:
             image: Full screen capture (BGR)
             mission_text_image: Optional cropped mission text region
             center_text_image: Optional cropped center screen region
+            mission_banner_image: Optional cropped mission name/result banner
 
         Returns:
             StateDetectionResult with detected state
@@ -156,8 +159,8 @@ class StateDetector:
 
         # Layer 2: OCR-based detection if we have the regions
         ocr_result = None
-        if mission_text_image is not None or center_text_image is not None:
-            ocr_result = self._ocr_state_check(mission_text_image, center_text_image)
+        if any(region is not None for region in (mission_text_image, center_text_image, mission_banner_image)):
+            ocr_result = self._ocr_state_check(mission_text_image, center_text_image, mission_banner_image)
 
         # Layer 3: Template matching
         template_result = self._check_templates(image)
@@ -293,15 +296,17 @@ class StateDetector:
         self,
         mission_text_image: Optional[np.ndarray],
         center_text_image: Optional[np.ndarray],
+        mission_banner_image: Optional[np.ndarray] = None,
     ) -> Optional[StateDetectionResult]:
         """Check state using OCR on text regions."""
         if not self._ocr.is_available:
             return None
 
-        # Keep both original crops; identity and objectives must survive whichever
+        # Keep all original crops; identity and objectives must survive whichever
         # state classifier wins. Windows OCR does not report a confidence score.
         mission_text = ""
         center_text = ""
+        banner_text = ""
         if mission_text_image is not None:
             mission_text = self._ocr.recognize_preprocessed(
                 mission_text_image, invert=True, scale=2.0,
@@ -310,7 +315,11 @@ class StateDetector:
             center_text = self._ocr.recognize_preprocessed(
                 center_text_image, invert=True, scale=2.0,
             ).text
-        combined_text = "\n".join(text for text in (mission_text, center_text) if text)
+        if mission_banner_image is not None:
+            banner_text = self._ocr.recognize_preprocessed(
+                mission_banner_image, invert=True, scale=2.0,
+            ).text
+        combined_text = "\n".join(text for text in (mission_text, center_text, banner_text) if text)
         if not combined_text.strip():
             return None
         reading = self._mission_parser.parse(combined_text)
@@ -319,6 +328,7 @@ class StateDetector:
             return StateDetectionResult(
                 state=state, confidence=confidence, reason=reason,
                 mission_text=mission_text, objective_text=center_text, mission=reading,
+                banner_text=banner_text,
             )
 
         # Explicit status text can finish an activity; bonus/reward/objective
@@ -448,12 +458,14 @@ class StateDetector:
                     mission_text=ocr.mission_text if ocr is not None else best.mission_text,
                     objective_text=ocr.objective_text if ocr is not None else best.objective_text,
                     mission=ocr.mission if ocr is not None else best.mission,
+                    banner_text=ocr.banner_text if ocr is not None else best.banner_text,
                     hud_visible=best.hud_visible,
                 )
 
         if ocr is not None:
             best = replace(best, mission_text=ocr.mission_text,
-                           objective_text=ocr.objective_text, mission=ocr.mission)
+                           objective_text=ocr.objective_text, mission=ocr.mission,
+                           banner_text=ocr.banner_text)
         return best
 
     def _update_context(self, result: StateDetectionResult) -> None:

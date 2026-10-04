@@ -91,9 +91,10 @@ def test_actual_capture_cycles_keep_one_transition_and_original_active_mission(a
     app._perf_monitor = PerformanceMonitor()
     app._capture = SimpleNamespace(
         regions=SimpleNamespace(
-            full_screen=0, money_display=1, mission_text=2, center_prompt=3, timer_bottom_right=4
+            full_screen=0, money_display=1, mission_text=2, center_prompt=3, timer_bottom_right=4,
+            mission_banner=5,
         ),
-        capture_multiple_regions=lambda regions: [object(), None, None, None, None],
+        capture_multiple_regions=lambda regions: [object(), None, None, None, None, None],
     )
     app._ocr = SimpleNamespace(is_available=False)
     app._state_detector = SimpleNamespace(
