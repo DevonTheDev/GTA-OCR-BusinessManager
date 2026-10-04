@@ -48,10 +48,15 @@ atexit.register(_cleanup_ocr_loop)
 
 @dataclass
 class OCRResult:
-    """Result from OCR operation."""
+    """Result from OCR operation.
+
+    Windows OCR does not expose confidence scores, so successful native results
+    and their words use None. Unavailable/failed recognition retains the empty
+    result with a 0.0 confidence sentinel.
+    """
 
     text: str
-    confidence: float
+    confidence: Optional[float]
     words: list[dict]  # List of {text, confidence, bounds}
 
     @property
@@ -67,7 +72,7 @@ class OCRResult:
 class OCREngine:
     """OCR engine using Windows OCR API via winocr.
 
-    Falls back to a simpler approach if winocr is not available.
+    Returns an empty result if winocr is not available.
     """
 
     def __init__(self, language: str = "en"):
@@ -106,38 +111,32 @@ class OCREngine:
         # winocr expects the image in a specific format
         result = await winocr.recognize_pil(image, self._language)
 
-        # Parse winocr result (result is a Windows.Media.Ocr.OcrResult object)
+        # winocr exposes the WinRT objects through lowercase Python properties.
+        # Keep native line text and ordering rather than rebuilding from words.
         words = []
         all_text = []
-        total_confidence = 0.0
 
-        # Access the Lines property of the OcrResult object
-        for line in result.Lines:
-            line_text = line.Text  # Get the text from the line
-            all_text.append(line_text)
+        for line in result.lines:
+            all_text.append(line.text)
 
-            # Access the Words property of each OcrLine object
-            for word in line.Words:
-                # Get bounding rectangle
-                bounds = word.BoundingRect
+            for word in line.words:
+                bounds = word.bounding_rect
                 word_info = {
-                    "text": word.Text,
-                    "confidence": float(word.Confidence),
+                    "text": word.text,
+                    # Windows.Media.Ocr.OcrWord has no confidence property.
+                    "confidence": None,
                     "bounds": {
-                        "x": bounds.X,
-                        "y": bounds.Y,
-                        "width": bounds.Width,
-                        "height": bounds.Height,
+                        "x": bounds.x,
+                        "y": bounds.y,
+                        "width": bounds.width,
+                        "height": bounds.height,
                     },
                 }
                 words.append(word_info)
-                total_confidence += float(word.Confidence)
-
-        avg_confidence = total_confidence / len(words) if words else 0.0
 
         return OCRResult(
             text="\n".join(all_text),
-            confidence=avg_confidence,
+            confidence=None,
             words=words,
         )
 

@@ -79,6 +79,7 @@ class ActivityCard(QFrame):
         layout.addWidget(header)
 
         self._activity_label = QLabel("Idle")
+        self._activity_label.setTextFormat(Qt.TextFormat.PlainText)
         self._activity_label.setStyleSheet("color: white; font-size: 18px; font-weight: bold;")
         layout.addWidget(self._activity_label)
 
@@ -87,6 +88,7 @@ class ActivityCard(QFrame):
         layout.addWidget(self._timer_label)
 
         self._objective_label = QLabel("")
+        self._objective_label.setTextFormat(Qt.TextFormat.PlainText)
         self._objective_label.setStyleSheet("color: #AAA; font-size: 12px;")
         self._objective_label.setWordWrap(True)
         layout.addWidget(self._objective_label)
@@ -209,6 +211,7 @@ class DashboardWidget(QWidget):
         # Placeholder items
         for i in range(5):
             item = QLabel("--")
+            item.setTextFormat(Qt.TextFormat.PlainText)
             item.setStyleSheet("color: #666; font-size: 12px; padding: 4px 0;")
             self._recent_list.addWidget(item)
 
@@ -255,15 +258,33 @@ class DashboardWidget(QWidget):
         last_capture = self._app.last_capture
         if last_capture:
             state = last_capture.game_state.name.replace("_", " ").title()
+            activity_name = state
+            capture_state = getattr(getattr(self._app, "state", None), "name", "")
+            if capture_state not in {"STOPPED", "STOPPING"} and last_capture.game_state.name in {
+                "MISSION_ACTIVE", "SELLING", "HEIST_PREP", "HEIST_FINALE",
+            }:
+                identity_status = getattr(last_capture, "activity_identity_status", "unknown")
+                resolved_name = getattr(last_capture, "activity_name", "")
+                activity_type = getattr(getattr(last_capture, "activity_type", None), "name", "")
+                if identity_status == "known_name" and resolved_name:
+                    activity_name = resolved_name
+                elif identity_status == "type_only" and activity_type not in {"", "UNKNOWN"}:
+                    activity_name = " ".join(
+                        word if word in {"VIP", "MC"} else word.title()
+                        for word in activity_type.split("_")
+                    )
             timer = ""
             if last_capture.timer and last_capture.timer.has_value:
                 timer = last_capture.timer.formatted
 
+            objective = getattr(getattr(last_capture, "mission", None), "objective", "")
             self._activity_card.set_activity(
-                state,
+                activity_name,
                 timer=timer,
-                objective=last_capture.objective_text
+                objective=objective or getattr(last_capture, "objective_text", ""),
             )
+        else:
+            self._activity_card.set_activity("Idle")
 
         # Update recommendation
         recommendations = self._app.recommendations

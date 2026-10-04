@@ -2,6 +2,7 @@
 
 import copy
 import math
+import re
 import time
 import threading
 from typing import Optional, Callable, List
@@ -16,7 +17,7 @@ from .detection.ocr_engine import OCREngine
 from .detection.state_detector import StateDetector, StateDetectionResult
 from .detection.parsers.money_parser import MoneyParser, MoneyReading
 from .detection.parsers.timer_parser import TimerParser, TimerReading
-from .detection.parsers.mission_parser import MissionParser, MissionReading
+from .detection.parsers.mission_parser import MissionParser, MissionReading, MissionType
 from .detection.parsers.business_parser import BusinessParser, BusinessReading, BusinessType
 from .game.state_machine import GameStateMachine, GameState, StateTransition
 from .game.activities import Activity, ActivityType
@@ -67,6 +68,10 @@ class CaptureResult:
     capture_time_ms: float = 0
     ocr_time_ms: float = 0
     total_time_ms: float = 0
+    mission: Optional[MissionReading] = None
+    activity_name: str = ""
+    activity_type: Optional[ActivityType] = None
+    activity_identity_status: str = "unknown"
 
 
 @dataclass
@@ -84,6 +89,9 @@ class AppData:
     current_mission: Optional[str] = None
     mission_start_time: Optional[datetime] = None
     mission_start_money: Optional[int] = None
+    mission_identity_status: str = "unknown"
+    mission_identity_type: MissionType = MissionType.UNKNOWN
+    mission_heist_phase: MissionType = MissionType.UNKNOWN
 
     # Business states
     business_states: dict = field(default_factory=dict)
@@ -461,9 +469,10 @@ class GTABusinessManager:
             result.state_confidence = state_result.confidence
             result.mission_text = state_result.mission_text
             result.objective_text = state_result.objective_text
+            result.mission = getattr(state_result, "mission", None)
 
             # Update state machine
-            if state_result.confidence > 0.6:
+            if self._confident_detection(state_result):
                 self._state_machine.transition_to(
                     state_result.state,
                     trigger=state_result.reason
@@ -492,6 +501,11 @@ class GTABusinessManager:
 
             # Handle state-specific processing
             self._process_state(state_result, result)
+            current_activity = self._activity_tracker.current_activity
+            if current_activity is not None:
+                result.activity_name = current_activity.name
+                result.activity_type = current_activity.activity_type
+                result.activity_identity_status = self._data.mission_identity_status
 
         # Record timing
         metrics = self._perf_monitor.get_metrics()
@@ -622,38 +636,44 @@ class GTABusinessManager:
     def _process_state(self, state_result: StateDetectionResult, capture_result: CaptureResult) -> None:
         """Process state-specific logic."""
         state = state_result.state
+        if (state in (GameState.MISSION_ACTIVE, GameState.HEIST_PREP, GameState.HEIST_FINALE,
+                      GameState.SELLING, GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
+                and not self._confident_detection(state_result)):
+            return
+        if state in (GameState.MISSION_COMPLETE, GameState.MISSION_FAILED):
+            reading = self._mission_reading(state_result)
+            capture_result.mission = reading
+            expected = "complete" if state == GameState.MISSION_COMPLETE else "failed"
+            if reading.outcome not in (None, expected):
+                return
+            if self._data.mission_start_time is not None:
+                # A result banner can be the first readable title. Refine an
+                # existing compatible activity before recording its result,
+                # without creating a new activity from the banner itself.
+                self._refine_mission_identity(state_result, reading, allow_result=True)
 
-        # Mission started
-        if (state in (GameState.MISSION_ACTIVE, GameState.HEIST_PREP, GameState.HEIST_FINALE)
-                and self._data.mission_start_time is None):
-            self._data.mission_start_time = datetime.now()
-            self._data.mission_start_money = self._data.current_money
-            self._data.current_mission = state_result.mission_text or "Unknown Mission"
-
-            # Explicit heist states already distinguish prep from finale; keep
-            # generic mission inference for MISSION_ACTIVE only.
-            if state == GameState.HEIST_PREP:
-                activity_type = ActivityType.HEIST_PREP
-            elif state == GameState.HEIST_FINALE:
-                activity_type = ActivityType.HEIST_FINALE
+        # A weak visual-only frame is not enough to start or refine an activity.
+        # Use the same strict threshold as the game-state transition above.
+        if state in (GameState.MISSION_ACTIVE, GameState.HEIST_PREP,
+                     GameState.HEIST_FINALE, GameState.SELLING):
+            reading = self._mission_reading(state_result)
+            capture_result.mission = reading
+            if reading.outcome is not None:
+                return
+            if self._data.mission_start_time is None:
+                self._data.mission_start_time = datetime.now()
+                self._data.mission_start_money = self._data.current_money
+                activity_type = self._infer_activity_type(state_result, reading)
+                self._data.current_mission = self._mission_display_name(state_result, reading)
+                self._data.mission_identity_status = self._identity_status(state_result, reading)
+                self._data.mission_identity_type = self._identity_family(reading)
+                self._data.mission_heist_phase = self._identity_phase(state_result, reading)
+                self._activity_tracker.start_activity(
+                    activity_type=activity_type, name=self._data.current_mission,
+                )
+                logger.info("Mission started: %s", self._data.current_mission)
             else:
-                activity_type = self._infer_activity_type(state_result)
-            self._activity_tracker.start_activity(
-                activity_type=activity_type,
-                name=self._data.current_mission,
-            )
-            logger.info(f"Mission started: {self._data.current_mission}")
-
-        # Sell mission started
-        elif state == GameState.SELLING and self._data.mission_start_time is None:
-            self._data.mission_start_time = datetime.now()
-            self._data.mission_start_money = self._data.current_money
-
-            self._activity_tracker.start_activity(
-                activity_type=ActivityType.SELL_MISSION,
-                name="Sell Mission",
-            )
-            logger.info("Sell mission started")
+                self._refine_mission_identity(state_result, reading)
 
         # Mission complete
         elif state == GameState.MISSION_COMPLETE and self._data.mission_start_time is not None:
@@ -733,24 +753,142 @@ class GTABusinessManager:
         elif state == GameState.BUSINESS_COMPUTER:
             self._process_business_computer()
 
-    def _infer_activity_type(self, state_result: StateDetectionResult) -> ActivityType:
-        """Infer activity type from state detection result."""
-        text = (state_result.mission_text + " " + state_result.objective_text).lower()
+    @staticmethod
+    def _confident_detection(state_result: StateDetectionResult) -> bool:
+        confidence = state_result.confidence
+        return (isinstance(confidence, (int, float)) and not isinstance(confidence, bool)
+                and math.isfinite(confidence) and confidence > 0.6)
 
-        if any(kw in text for kw in ["headhunter", "sightseer", "vip work", "vip challenge"]):
-            return ActivityType.VIP_WORK
-        elif any(kw in text for kw in ["deliver", "sell", "drop off"]):
-            return ActivityType.SELL_MISSION
-        elif any(kw in text for kw in ["heist", "finale"]):
-            return ActivityType.HEIST_FINALE
-        elif any(kw in text for kw in ["prep", "setup"]):
+    def _mission_reading(self, state_result: StateDetectionResult) -> MissionReading:
+        reading = getattr(state_result, "mission", None)
+        if reading is None:
+            reading = self._mission_parser.parse("\n".join(
+                text for text in (state_result.mission_text, state_result.objective_text) if text
+            ))
+        return reading
+
+    @staticmethod
+    def _mission_display_name(state_result, reading):
+        if reading.identity_status == "known_name":
+            return reading.mission_name
+        return (state_result.mission_text or state_result.objective_text
+                or ("Sell Mission" if state_result.state == GameState.SELLING else "Unknown Mission"))
+
+    @staticmethod
+    def _identity_status(state_result, reading):
+        if reading.identity_status in ("known_name", "type_only", "ambiguous"):
+            return reading.identity_status
+        if state_result.state in (GameState.HEIST_PREP, GameState.HEIST_FINALE):
+            return "type_only"
+        return "unknown"
+
+    @staticmethod
+    def _identity_family(reading):
+        if (reading.identity_status not in ("known_name", "type_only")
+                or reading.mission_type in (MissionType.HEIST_PREP, MissionType.HEIST_FINALE)):
+            return MissionType.UNKNOWN
+        return reading.mission_type
+
+    @staticmethod
+    def _identity_phase(state_result, reading):
+        if state_result.state == GameState.HEIST_PREP:
+            return MissionType.HEIST_PREP
+        if state_result.state == GameState.HEIST_FINALE:
+            return MissionType.HEIST_FINALE
+        return reading.heist_phase
+
+    def _refine_mission_identity(self, state_result, reading, *, allow_result=False):
+        """Fill unresolved identity axes without restarting time, money or activity."""
+        current = self._activity_tracker.current_activity
+        status = self._data.mission_identity_status
+        expected_result = {
+            GameState.MISSION_COMPLETE: "complete", GameState.MISSION_FAILED: "failed",
+        }.get(state_result.state)
+        outcome_allowed = reading.outcome is None or (
+            allow_result and expected_result is not None and reading.outcome == expected_result
+        )
+        if (current is None or reading.identity_status not in ("known_name", "type_only")
+                or not outcome_allowed):
+            return
+        family, phase = self._data.mission_identity_type, self._data.mission_heist_phase
+        new_family = self._identity_family(reading)
+        new_phase = self._identity_phase(state_result, reading)
+        unknown = MissionType.UNKNOWN
+        if family != unknown and new_family != unknown and family != new_family:
+            return
+        if phase != unknown and new_phase != unknown and phase != new_phase:
+            return
+        resolved_family = new_family if family == unknown else family
+        resolved_phase = new_phase if phase == unknown else phase
+        heist_families = (MissionType.CAYO_PERICO, MissionType.CASINO_HEIST, MissionType.DOOMSDAY)
+        if resolved_phase != unknown and resolved_family not in (*heist_families, unknown):
+            return
+        if (status == "known_name" and reading.identity_status == "known_name"
+                and reading.mission_name != current.name):
+            return
+        improves_family = family == unknown and new_family != unknown
+        improves_phase = phase == unknown and new_phase != unknown
+        improves_name = status != "known_name" and reading.identity_status == "known_name"
+        if not (improves_family or improves_phase or improves_name):
+            return
+        kind = self._activity_kind(resolved_family, resolved_phase)
+        if kind == ActivityType.UNKNOWN:
+            return
+        if improves_name:
+            current.name = reading.mission_name
+        elif status != "known_name" and (improves_family or status in ("unknown", "ambiguous")):
+            current.name = self._mission_display_name(state_result, reading)
+        current.activity_type = kind
+        self._data.current_mission = current.name
+        self._data.mission_identity_type = resolved_family
+        self._data.mission_heist_phase = resolved_phase
+        self._data.mission_identity_status = "known_name" if status == "known_name" or improves_name else "type_only"
+        logger.info("Mission identity resolved: %s (%s)", current.name, kind.name)
+
+    @staticmethod
+    def _activity_kind(mission_type, phase=MissionType.UNKNOWN):
+        if phase == MissionType.HEIST_PREP:
             return ActivityType.HEIST_PREP
-        elif any(kw in text for kw in ["payphone", "assassination"]):
-            return ActivityType.PAYPHONE_HIT
-        elif any(kw in text for kw in ["security contract"]):
-            return ActivityType.SECURITY_CONTRACT
+        if phase == MissionType.HEIST_FINALE:
+            return ActivityType.HEIST_FINALE
+        types = {
+            MissionType.CONTACT_MISSION: ActivityType.CONTACT_MISSION,
+            MissionType.VIP_WORK: ActivityType.VIP_WORK,
+            MissionType.MC_CONTRACT: ActivityType.MC_CONTRACT,
+            MissionType.SELL_MISSION: ActivityType.SELL_MISSION,
+            MissionType.RESUPPLY: ActivityType.RESUPPLY_MISSION,
+            MissionType.HEIST_PREP: ActivityType.HEIST_PREP,
+            MissionType.HEIST_FINALE: ActivityType.HEIST_FINALE,
+            MissionType.SECURITY_CONTRACT: ActivityType.SECURITY_CONTRACT,
+            MissionType.PAYPHONE_HIT: ActivityType.PAYPHONE_HIT,
+            MissionType.AUTO_SHOP_DELIVERY: ActivityType.AUTO_SHOP_DELIVERY,
+            MissionType.CAYO_PERICO: ActivityType.CAYO_PERICO,
+            MissionType.CASINO_HEIST: ActivityType.CASINO_HEIST,
+            MissionType.DOOMSDAY: ActivityType.DOOMSDAY_HEIST,
+            MissionType.FREEMODE_EVENT: ActivityType.FREEMODE_EVENT,
+            MissionType.NIGHTCLUB_PROMOTION: ActivityType.NIGHTCLUB_PROMOTION,
+        }
+        return types.get(mission_type, ActivityType.UNKNOWN)
 
-        return ActivityType.CONTACT_MISSION
+    def _infer_activity_type(self, state_result: StateDetectionResult,
+                             reading: Optional[MissionReading] = None) -> ActivityType:
+        """Resolve shared evidence instead of selecting the first matching word."""
+        reading = reading if reading is not None else self._mission_reading(state_result)
+        if reading.identity_status == "ambiguous":
+            return ActivityType.UNKNOWN
+        phase = self._identity_phase(state_result, reading)
+        if phase != MissionType.UNKNOWN:
+            return self._activity_kind(reading.mission_type, phase)
+        if reading.identity_status in ("known_name", "type_only"):
+            return self._activity_kind(reading.mission_type)
+        if state_result.state == GameState.SELLING:
+            return ActivityType.SELL_MISSION
+        # Preserve the established generic delivery category as unresolved. A
+        # later specific name can improve it; ordinary 'deliver' is insufficient.
+        text = " ".join((state_result.mission_text + " " + state_result.objective_text).casefold().split())
+        if re.search(r"(?<!\w)deliver (?:the )?(?:goods|product)(?!\w)", text):
+            return ActivityType.SELL_MISSION
+        return ActivityType.UNKNOWN
 
     def _start_activity_cooldown(self, activity: Activity) -> None:
         """Start cooldown timer for a completed activity.
@@ -824,6 +962,9 @@ class GTABusinessManager:
         self._data.mission_start_time = None
         self._data.mission_start_money = None
         self._data.current_mission = None
+        self._data.mission_identity_status = "unknown"
+        self._data.mission_identity_type = MissionType.UNKNOWN
+        self._data.mission_heist_phase = MissionType.UNKNOWN
 
     def _process_business_computer(self) -> None:
         """Process business computer screen to extract stock/supply info."""

@@ -162,6 +162,7 @@ class OverlayWindow(QWidget):
 
         # Current activity
         self._activity_label = QLabel("Idle")
+        self._activity_label.setTextFormat(Qt.TextFormat.PlainText)
         self._activity_label.setStyleSheet("color: white; font-size: 12px;")
         container_layout.addWidget(self._activity_label)
 
@@ -317,12 +318,26 @@ class OverlayWindow(QWidget):
 
         # Update activity
         last = self._app.last_capture
+        activity_name = state_text
+        capture_state = getattr(getattr(self._app, "state", None), "name", "")
+        if last and capture_state not in {"STOPPED", "STOPPING"} and state.name in {
+            "MISSION_ACTIVE", "SELLING", "HEIST_PREP", "HEIST_FINALE",
+        }:
+            identity_status = getattr(last, "activity_identity_status", "unknown")
+            resolved_name = getattr(last, "activity_name", "")
+            activity_type = getattr(getattr(last, "activity_type", None), "name", "")
+            if identity_status == "known_name" and resolved_name:
+                activity_name = resolved_name
+            elif identity_status == "type_only" and activity_type not in {"", "UNKNOWN"}:
+                activity_name = " ".join(
+                    word if word in {"VIP", "MC"} else word.title()
+                    for word in activity_type.split("_")
+                )
+        self._activity_label.setText(activity_name)
         if last and last.timer and last.timer.has_value:
-            self._activity_label.setText(f"{state_text}")
             self._timer_label.setText(f"Timer: {last.timer.formatted}")
             self._timer_label.show()
         else:
-            self._activity_label.setText(state_text)
             self._timer_label.setText("")
             self._timer_label.hide()
 

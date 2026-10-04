@@ -1,8 +1,9 @@
 """Game state detection from screen captures."""
 
 from typing import Optional, Tuple, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime
+import re
 
 import numpy as np
 import cv2
@@ -11,6 +12,7 @@ from ..game.state_machine import GameState
 from ..utils.logging import get_logger
 from .template_matcher import TemplateMatcher
 from .ocr_engine import OCREngine
+from .parsers.mission_parser import MissionParser, MissionReading, MissionType, classify_mission_outcome
 
 
 logger = get_logger("detection.state")
@@ -27,6 +29,7 @@ class StateDetectionResult:
     objective_text: str = ""
     timer_visible: bool = False
     hud_visible: bool = True
+    mission: Optional[MissionReading] = None
 
 
 @dataclass
@@ -128,6 +131,7 @@ class StateDetector:
         self._templates = template_matcher or TemplateMatcher()
         self._ocr = ocr_engine or OCREngine()
         self._context = DetectionContext()
+        self._mission_parser = MissionParser()
 
     def detect(
         self,
@@ -294,124 +298,69 @@ class StateDetector:
         if not self._ocr.is_available:
             return None
 
-        combined_text = ""
+        # Keep both original crops; identity and objectives must survive whichever
+        # state classifier wins. Windows OCR does not report a confidence score.
         mission_text = ""
         center_text = ""
-
-        # OCR the mission text region
         if mission_text_image is not None:
-            result = self._ocr.recognize_preprocessed(mission_text_image, invert=True, scale=2.0)
-            mission_text = result.text.lower()
-            combined_text += mission_text + " "
-
-        # OCR the center region
+            mission_text = self._ocr.recognize_preprocessed(
+                mission_text_image, invert=True, scale=2.0,
+            ).text
         if center_text_image is not None:
-            result = self._ocr.recognize_preprocessed(center_text_image, invert=True, scale=2.0)
-            center_text = result.text.lower()
-            combined_text += center_text
-
+            center_text = self._ocr.recognize_preprocessed(
+                center_text_image, invert=True, scale=2.0,
+            ).text
+        combined_text = "\n".join(text for text in (mission_text, center_text) if text)
         if not combined_text.strip():
             return None
+        reading = self._mission_parser.parse(combined_text)
 
-        # Check for mission complete
-        if any(kw in combined_text for kw in self.MISSION_COMPLETE_KEYWORDS):
+        def detected(state, confidence, reason):
             return StateDetectionResult(
-                state=GameState.MISSION_COMPLETE,
-                confidence=0.85,
-                reason="Mission complete text detected",
-                mission_text=mission_text,
+                state=state, confidence=confidence, reason=reason,
+                mission_text=mission_text, objective_text=center_text, mission=reading,
             )
 
-        # Check for mission failed
-        if any(kw in combined_text for kw in self.MISSION_FAILED_KEYWORDS):
-            return StateDetectionResult(
-                state=GameState.MISSION_FAILED,
-                confidence=0.85,
-                reason="Mission failed text detected",
-                mission_text=mission_text,
+        # Explicit status text can finish an activity; bonus/reward/objective
+        # vocabulary alone cannot. These remain heuristic state scores, not OCR
+        # confidence or calibrated gameplay accuracy.
+        outcome = classify_mission_outcome(combined_text)
+        if outcome is not None:
+            return detected(
+                GameState.MISSION_COMPLETE if outcome == "complete" else GameState.MISSION_FAILED,
+                0.85, "Explicit mission result text detected",
             )
-
-        # Check for sell mission
-        if any(kw in combined_text for kw in self.SELL_MISSION_KEYWORDS):
-            return StateDetectionResult(
-                state=GameState.SELLING,
-                confidence=0.8,
-                reason="Sell mission text detected",
-                mission_text=mission_text,
-                objective_text=center_text,
-            )
-
-        # Check for VIP work
-        if any(kw in combined_text for kw in self.VIP_WORK_KEYWORDS):
-            return StateDetectionResult(
-                state=GameState.MISSION_ACTIVE,
-                confidence=0.8,
-                reason="VIP work text detected",
-                mission_text=mission_text,
-            )
-
-        # Check for heist
-        if any(kw in combined_text for kw in self.HEIST_KEYWORDS):
-            # Determine if it's a prep or finale
-            if any(kw in combined_text for kw in ["finale", "take", "cut"]):
-                return StateDetectionResult(
-                    state=GameState.HEIST_FINALE,
-                    confidence=0.8,
-                    reason="Heist finale text detected",
-                    mission_text=mission_text,
-                )
-            elif any(kw in combined_text for kw in ["prep", "setup", "scope"]):
-                return StateDetectionResult(
-                    state=GameState.HEIST_PREP,
-                    confidence=0.8,
-                    reason="Heist prep text detected",
-                    mission_text=mission_text,
-                )
+        if reading.outcome == "conflicting":
+            return detected(GameState.UNKNOWN, 0.0, "Conflicting mission result text")
+        if reading.identity_status == "ambiguous":
+            return detected(GameState.UNKNOWN, 0.0, "Conflicting mission identity text")
+        if reading.identity_status in ("known_name", "type_only"):
+            if reading.heist_phase == MissionType.HEIST_PREP or reading.mission_type == MissionType.HEIST_PREP:
+                state = GameState.HEIST_PREP
+            elif reading.heist_phase == MissionType.HEIST_FINALE or reading.mission_type == MissionType.HEIST_FINALE:
+                state = GameState.HEIST_FINALE
+            elif reading.mission_type == MissionType.SELL_MISSION:
+                state = GameState.SELLING
             else:
-                return StateDetectionResult(
-                    state=GameState.MISSION_ACTIVE,
-                    confidence=0.75,
-                    reason="Heist-related text detected",
-                    mission_text=mission_text,
-                )
+                state = GameState.MISSION_ACTIVE
+            return detected(state, 0.8, "Specific mission identity text detected")
 
-        # Check for agency work
-        if any(kw in combined_text for kw in self.AGENCY_KEYWORDS):
-            return StateDetectionResult(
-                state=GameState.MISSION_ACTIVE,
-                confidence=0.8,
-                reason="Agency contract text detected",
-                mission_text=mission_text,
-            )
+        def contains(keywords):
+            return any(re.search(r"(?<!\w)" + re.escape(keyword).replace(r"\ ", r"\s+")
+                                 + r"(?!\w)", combined_text, re.IGNORECASE)
+                       for keyword in keywords)
 
-        # Check for auto shop
-        if any(kw in combined_text for kw in self.AUTO_SHOP_KEYWORDS):
-            return StateDetectionResult(
-                state=GameState.MISSION_ACTIVE,
-                confidence=0.75,
-                reason="Auto shop contract text detected",
-                mission_text=mission_text,
-            )
-
-        # Check for business computer
-        if any(kw in combined_text for kw in self.BUSINESS_KEYWORDS):
-            return StateDetectionResult(
-                state=GameState.BUSINESS_COMPUTER,
-                confidence=0.75,
-                reason="Business UI text detected",
-            )
-
-        # Check for active mission
-        if any(kw in combined_text for kw in self.MISSION_ACTIVE_KEYWORDS):
-            return StateDetectionResult(
-                state=GameState.MISSION_ACTIVE,
-                confidence=0.7,
-                reason="Mission objective text detected",
-                mission_text=mission_text,
-                objective_text=center_text,
-            )
-
-        return None
+        # A generic objective may establish activity without establishing its
+        # identity. Do not confuse 'customer vehicle' with selling, or substrings
+        # such as 'cut' in 'executive' with a heist finale.
+        if contains(("deliver the product", "deliver the goods", "sell mission",
+                     "remaining deliveries", "deliveries remaining")):
+            return detected(GameState.SELLING, 0.75, "Delivery objective text detected")
+        if contains(self.MISSION_ACTIVE_KEYWORDS):
+            return detected(GameState.MISSION_ACTIVE, 0.7, "Mission objective text detected; identity unresolved")
+        if contains(self.BUSINESS_KEYWORDS):
+            return detected(GameState.BUSINESS_COMPUTER, 0.75, "Business UI text detected")
+        return detected(GameState.UNKNOWN, 0.0, "No specific mission text evidence")
 
     def _check_templates(self, image: np.ndarray) -> Optional[StateDetectionResult]:
         """Check for known UI templates."""
@@ -453,6 +402,22 @@ class StateDetector:
         template: Optional[StateDetectionResult],
     ) -> StateDetectionResult:
         """Combine detection results from multiple sources."""
+        outcomes = (GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
+        if ocr is not None and ocr.mission is not None:
+            if ocr.mission.outcome == "conflicting":
+                return ocr
+            if ocr.mission.outcome in ("complete", "failed"):
+                if template is not None and template.state in outcomes and template.state != ocr.state:
+                    return replace(ocr, state=GameState.UNKNOWN, confidence=0.0,
+                                   reason="Text and template mission results disagree")
+                # A generic mission-banner template cannot turn a result screen
+                # into a fresh active mission. Explicit result text wins here.
+                return ocr
+        if quick.state in outcomes:
+            # Yellow/red scenery is only a visual cue, not proof of a result.
+            # OCR or an actual result-template match must corroborate it.
+            quick = replace(quick, state=GameState.UNKNOWN, confidence=0.0,
+                            reason="Visual result cue lacks text/template confirmation")
         candidates = [quick]
         if ocr:
             candidates.append(ocr)
@@ -480,10 +445,15 @@ class StateDetector:
                     state=GameState.MISSION_ACTIVE,
                     confidence=0.6,
                     reason="Maintaining mission state",
-                    mission_text=best.mission_text,
+                    mission_text=ocr.mission_text if ocr is not None else best.mission_text,
+                    objective_text=ocr.objective_text if ocr is not None else best.objective_text,
+                    mission=ocr.mission if ocr is not None else best.mission,
                     hud_visible=best.hud_visible,
                 )
 
+        if ocr is not None:
+            best = replace(best, mission_text=ocr.mission_text,
+                           objective_text=ocr.objective_text, mission=ocr.mission)
         return best
 
     def _update_context(self, result: StateDetectionResult) -> None:

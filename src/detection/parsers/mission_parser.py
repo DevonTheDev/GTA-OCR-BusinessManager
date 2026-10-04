@@ -1,14 +1,15 @@
-"""Parser for extracting mission information from OCR text."""
+"""Conservative, shared mission identity and result parsing for OCR text.
+
+Names and explicit category labels are evidence; ordinary objective vocabulary
+is not. These rules use the repository's catalog, without guessing OCR typos.
+"""
 
 import re
-from typing import Optional
 from dataclasses import dataclass, field
 from enum import Enum, auto
+from typing import Literal, Optional
 
-from ...utils.logging import get_logger
-
-
-logger = get_logger("parser.mission")
+from ...game.missions import CONTACT_MISSIONS, SECURITY_CONTRACTS, VIP_WORK
 
 
 class MissionType(Enum):
@@ -34,7 +35,12 @@ class MissionType(Enum):
 
 @dataclass
 class MissionReading:
-    """Parsed mission information from screen."""
+    """Identity evidence from one screen, without filling gaps from history.
+
+    Candidates are canonical names or enum names for category-only evidence.
+    Ambiguous readings retain all competing labels in deterministic order.
+    A heist family belongs in mission_type; its explicit phase is independent.
+    """
 
     mission_type: MissionType = MissionType.UNKNOWN
     mission_name: str = ""
@@ -42,247 +48,246 @@ class MissionReading:
     is_active: bool = False
     keywords_found: list[str] = field(default_factory=list)
     raw_text: str = ""
+    identity_status: Literal["known_name", "type_only", "ambiguous", "unknown"] = "unknown"
+    candidates: tuple[str, ...] = ()
+    heist_phase: MissionType = MissionType.UNKNOWN
+    outcome: Optional[Literal["complete", "failed", "conflicting"]] = None
 
     @property
     def has_mission(self) -> bool:
-        """Check if a mission was detected."""
+        """Whether this reading selects an unambiguous mission identity."""
         return self.mission_type != MissionType.UNKNOWN or bool(self.mission_name)
 
 
+def _normalize(text: str) -> str:
+    return " ".join(text.casefold().split())
+
+
+def _contains(text: str, phrase: str) -> bool:
+    """Match complete words in normalized text, never substrings of words."""
+    return re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text) is not None
+
+
+# Status banners may wrap across OCR lines. A phrase must start a line or a
+# punctuation-delimited segment and finish at its boundary or a payout suffix.
+# This avoids treating explanatory text such as "if the mission failed" as a result.
+_OUTCOME_PHRASES = {
+    "complete": (
+        "mission passed", "job complete", "contract complete", "passed",
+    ),
+    "failed": (
+        "mission failed", "failed", "wasted", "busted", "time ran out",
+        "left the area", "abandoned", "product lost", "associate died", "target escaped",
+    ),
+}
+
+
+def _outcome_evidence(text: str) -> set[str]:
+    evidence = set()
+    for outcome, phrases in _OUTCOME_PHRASES.items():
+        for phrase in phrases:
+            words = r"\s+".join(re.escape(word) for word in phrase.split())
+            pattern = (
+                rf"(?:^|[|/:.!])[ \t]*{words}(?!\w)"
+                rf"(?=[ \t]*(?:$|[\r\n|/!.:+$\d-]))"
+            )
+            if " " not in phrase:
+                # A bare status must be an entire label, never the beginning
+                # of an objective such as "SUCCESS: Collect the bonus".
+                pattern = (
+                    rf"(?:^|[|/:.!])[ \t]*{words}[ \t]*[!.]?[ \t]*"
+                    rf"(?=$|[\r\n|/])"
+                )
+            if re.search(pattern, text, re.IGNORECASE | re.MULTILINE):
+                evidence.add(outcome)
+                break
+    # OCR can collapse adjacent banners onto one line without punctuation.
+    # Preserve contradictory explicit mission results even when neither
+    # satisfies the stricter rules required to assert a single result.
+    normalized = _normalize(text)
+    if _contains(normalized, "mission failed") and any(
+        _contains(normalized, phrase)
+        for phrase in ("mission passed", "job complete", "contract complete")
+    ):
+        evidence.update(("complete", "failed"))
+    return evidence
+
+
+def classify_mission_outcome(text: str) -> Optional[Literal["complete", "failed"]]:
+    """Return an explicit result banner, or None for absent/conflicting evidence.
+
+    Rewards, generic congratulations and sub-objective completion are not a
+    result for the whole mission. Objective verbs never establish an outcome.
+    Both the detector and the parser use this same result policy.
+    """
+    evidence = _outcome_evidence(text)
+    if evidence == {"complete"}:
+        return "complete"
+    if evidence == {"failed"}:
+        return "failed"
+    return None
+
+
 class MissionParser:
-    """Parser for GTA mission text."""
+    """Identify supported names and explicit categories without forced guesses."""
 
-    # Keywords that indicate specific mission types
-    MISSION_KEYWORDS = {
-        MissionType.VIP_WORK: [
-            "vip work", "vip challenge", "headhunter", "sightseer",
-            "hostile takeover", "asset recovery", "executive search",
-        ],
-        MissionType.MC_CONTRACT: [
-            "mc contract", "clubhouse contract", "jailbreak", "torched",
-            "fragile goods", "outrider", "gun running",
-        ],
-        MissionType.SELL_MISSION: [
-            "deliver", "sell", "drop off", "drop-off", "delivery",
-            "product", "goods", "stock", "merchandise",
-        ],
-        MissionType.RESUPPLY: [
-            "resupply", "supplies", "steal supplies", "supply run",
-            "source", "acquire",
-        ],
-        MissionType.HEIST_PREP: [
-            "prep", "setup", "preparation", "acquire", "steal",
-            "scope out", "gather intel",
-        ],
-        MissionType.HEIST_FINALE: [
-            "finale", "the big con", "silent & sneaky", "aggressive",
-            "heist", "take", "score",
-        ],
-        MissionType.SECURITY_CONTRACT: [
-            "security contract", "recover valuables", "gang termination",
-            "asset protection", "rescue operation", "vehicle recovery",
-        ],
-        MissionType.PAYPHONE_HIT: [
-            "payphone hit", "payphone", "assassination", "eliminate",
-            "the popstar", "the tech entrepreneur", "the cofounder",
-        ],
-        MissionType.AUTO_SHOP_DELIVERY: [
-            "auto shop", "service vehicle", "customer vehicle",
-            "deliver the vehicle", "exotic exports",
-        ],
-        MissionType.NIGHTCLUB_PROMOTION: [
-            "nightclub", "popularity", "promote", "promotion",
-            "club promotion",
-        ],
-        MissionType.CAYO_PERICO: [
-            "cayo perico", "el rubio", "compound", "drainage tunnel",
-            "kosatka", "primary target", "secondary target",
-        ],
-        MissionType.CASINO_HEIST: [
-            "casino heist", "vault", "diamond casino", "casino",
-            "big con", "silent", "aggressive approach",
-        ],
-        MissionType.DOOMSDAY: [
-            "doomsday", "act 1", "act 2", "act 3", "data breaches",
-            "bogdan", "avenger", "facility",
-        ],
-        MissionType.FREEMODE_EVENT: [
-            "freemode event", "business battle", "checkpoints",
-            "king of the castle", "hunt the beast",
-        ],
+    # Canonical catalog names are authoritative; supplemental names below were
+    # specific named entries in this parser's original MISSION_KEYWORDS.
+    MISSION_NAMES = {
+        info.name: kind
+        for catalog, kind in (
+            (CONTACT_MISSIONS, MissionType.CONTACT_MISSION),
+            (VIP_WORK, MissionType.VIP_WORK),
+            (SECURITY_CONTRACTS, MissionType.SECURITY_CONTRACT),
+        )
+        for info in catalog.values()
     }
+    MISSION_NAMES.update({
+        "Asset Recovery": MissionType.VIP_WORK,
+        "Executive Search": MissionType.VIP_WORK,
+        "Jailbreak": MissionType.MC_CONTRACT,
+        "Torched": MissionType.MC_CONTRACT,
+        "Fragile Goods": MissionType.MC_CONTRACT,
+        "Outrider": MissionType.MC_CONTRACT,
+        "Gun Running": MissionType.MC_CONTRACT,
+        "Asset Protection": MissionType.SECURITY_CONTRACT,
+        "Vehicle Recovery": MissionType.SECURITY_CONTRACT,
+        "The Popstar": MissionType.PAYPHONE_HIT,
+        "The Tech Entrepreneur": MissionType.PAYPHONE_HIT,
+        "The Cofounder": MissionType.PAYPHONE_HIT,
+        "Business Battle": MissionType.FREEMODE_EVENT,
+        "King of the Castle": MissionType.FREEMODE_EVENT,
+        "Hunt the Beast": MissionType.FREEMODE_EVENT,
+        "The Big Con": MissionType.CASINO_HEIST,
+        "Silent & Sneaky": MissionType.CASINO_HEIST,
+        "Data Breaches": MissionType.DOOMSDAY,
+    })
 
-    # Common objective verbs
-    OBJECTIVE_VERBS = [
+    # Only explicit category markers. Generic verbs and shared nouns from the
+    # former keyword scores cannot compete against names or assert a category.
+    MISSION_KEYWORDS = {
+        MissionType.CONTACT_MISSION: ("contact mission",),
+        MissionType.VIP_WORK: ("vip work", "vip challenge"),
+        MissionType.MC_CONTRACT: ("mc contract", "clubhouse contract"),
+        MissionType.SELL_MISSION: ("sell mission",),
+        MissionType.RESUPPLY: ("resupply", "supply run"),
+        MissionType.SECURITY_CONTRACT: ("security contract",),
+        MissionType.PAYPHONE_HIT: ("payphone hit",),
+        MissionType.AUTO_SHOP_DELIVERY: (
+            "auto shop", "service vehicle", "customer vehicle", "exotic exports",
+        ),
+        MissionType.NIGHTCLUB_PROMOTION: ("club promotion", "nightclub promotion"),
+        MissionType.CAYO_PERICO: ("cayo perico",),
+        MissionType.CASINO_HEIST: ("casino heist",),
+        MissionType.DOOMSDAY: ("doomsday",),
+        MissionType.FREEMODE_EVENT: ("freemode event",),
+    }
+    HEIST_FAMILIES = {MissionType.CAYO_PERICO, MissionType.CASINO_HEIST, MissionType.DOOMSDAY}
+    PHASE_KEYWORDS = {
+        MissionType.HEIST_PREP: ("prep", "setup", "preparation"),
+        MissionType.HEIST_FINALE: ("finale",),
+    }
+    OBJECTIVE_VERBS = (
         "go to", "get to", "reach", "find", "locate",
         "steal", "take", "acquire", "collect", "pick up",
-        "deliver", "drop off", "bring",
-        "destroy", "eliminate", "kill", "take out",
-        "protect", "defend", "escort",
-        "wait", "survive", "escape", "lose",
+        "deliver", "drop off", "bring", "destroy", "eliminate", "kill", "take out",
+        "protect", "defend", "escort", "wait", "survive", "escape", "lose",
         "hack", "access", "breach",
-    ]
+    )
 
     def __init__(self):
-        """Initialize mission parser."""
         self._last_reading: Optional[MissionReading] = None
 
     def parse(self, text: str) -> MissionReading:
-        """Parse mission information from OCR text.
+        """Parse this text only; preserve raw text and the original-case objective."""
+        reading = MissionReading(raw_text=text, objective=self._extract_objective(text))
+        outcomes = _outcome_evidence(text)
+        if len(outcomes) > 1:
+            reading.outcome = "conflicting"
+        elif "complete" in outcomes:
+            reading.outcome = "complete"
+        elif "failed" in outcomes:
+            reading.outcome = "failed"
+        normalized = _normalize(text)
+        names = {
+            name: kind for name, kind in self.MISSION_NAMES.items()
+            if self._contains_name(text, normalized, name)
+        }
+        categories = set()
+        keywords = {_normalize(name) for name in names}
+        for kind, phrases in self.MISSION_KEYWORDS.items():
+            for phrase in phrases:
+                if _contains(normalized, phrase):
+                    categories.add(kind)
+                    keywords.add(phrase)
 
-        Args:
-            text: Raw OCR text from mission text region
+        kinds = categories | set(names.values())
+        phases = set()
+        for phase, phrases in self.PHASE_KEYWORDS.items():
+            for phrase in phrases:
+                # In a named heist, phase words add phase only, never replace
+                # the family. A standalone label or explicit "heist prep"
+                # also identifies phase; "setup your business" does not.
+                label = rf"^{phrase}\s*(?:$|[:\-])"
+                if (
+                    (kinds & self.HEIST_FAMILIES and _contains(normalized, phrase))
+                    or _contains(normalized, f"heist {phrase}")
+                    or any(re.search(label, _normalize(line)) for line in text.splitlines())
+                ):
+                    phases.add(phase)
+                    keywords.add(phrase)
 
-        Returns:
-            MissionReading with parsed information
-        """
-        if not text or not text.strip():
-            return MissionReading(raw_text=text)
+        incompatible_phase = bool(phases and kinds and not kinds <= self.HEIST_FAMILIES)
+        ambiguous = len(names) > 1 or len(kinds) > 1 or len(phases) > 1 or incompatible_phase
+        labels = set(names) | {kind.name for kind in categories - set(names.values())}
+        if ambiguous:
+            labels.update(phase.name for phase in phases)
+            reading.identity_status = "ambiguous"
+            reading.candidates = tuple(sorted(labels))
+        elif kinds or phases:
+            reading.mission_type = next(iter(kinds or phases))
+            reading.heist_phase = next(iter(phases), MissionType.UNKNOWN)
+            if names:
+                reading.identity_status = "known_name"
+                reading.mission_name = next(iter(names))
+                reading.candidates = (reading.mission_name,)
+            else:
+                reading.identity_status = "type_only"
+                reading.candidates = (reading.mission_type.name,)
+            reading.is_active = reading.outcome is None
 
-        text_lower = text.lower()
-        reading = MissionReading(raw_text=text, is_active=True)
-
-        # Identify mission type from keywords
-        reading.mission_type, reading.keywords_found = self._identify_mission_type(text_lower)
-
-        # Extract mission name (usually in quotes or after specific patterns)
-        reading.mission_name = self._extract_mission_name(text)
-
-        # Extract objective
-        reading.objective = self._extract_objective(text)
-
-        if reading.has_mission:
+        reading.keywords_found = sorted(keywords)
+        if reading.has_mission and reading.is_active:
             self._last_reading = reading
-
         return reading
 
-    def _identify_mission_type(self, text_lower: str) -> tuple[MissionType, list[str]]:
-        """Identify mission type from keywords.
-
-        Args:
-            text_lower: Lowercase text to search
-
-        Returns:
-            Tuple of (MissionType, list of keywords found)
-        """
-        found_keywords = []
-        best_match = MissionType.UNKNOWN
-        best_score = 0
-
-        for mission_type, keywords in self.MISSION_KEYWORDS.items():
-            score = 0
-            type_keywords = []
-
-            for keyword in keywords:
-                if keyword in text_lower:
-                    score += len(keyword)  # Longer matches = higher score
-                    type_keywords.append(keyword)
-
-            if score > best_score:
-                best_score = score
-                best_match = mission_type
-                found_keywords = type_keywords
-
-        return best_match, found_keywords
-
-    def _extract_mission_name(self, text: str) -> str:
-        """Extract mission name from text.
-
-        Args:
-            text: Text to parse
-
-        Returns:
-            Extracted mission name or empty string
-        """
-        # Look for text in quotes
-        quote_match = re.search(r'["\']([^"\']+)["\']', text)
-        if quote_match:
-            return quote_match.group(1).strip()
-
-        # Look for text after common prefixes
-        prefix_patterns = [
-            r"mission[:\s]+(.+?)(?:\n|$)",
-            r"job[:\s]+(.+?)(?:\n|$)",
-            r"contract[:\s]+(.+?)(?:\n|$)",
-        ]
-
-        for pattern in prefix_patterns:
-            match = re.search(pattern, text, re.IGNORECASE)
-            if match:
-                name = match.group(1).strip()
-                # Clean up - take first line only
-                name = name.split("\n")[0].strip()
-                if name and len(name) < 50:  # Reasonable length
-                    return name
-
-        return ""
+    @staticmethod
+    def _contains_name(text: str, normalized: str, name: str) -> bool:
+        if not _contains(normalized, _normalize(name)):
+            return False
+        if name == "Blow Up":
+            # This catalog title is also an ordinary imperative. Require its
+            # end to look like a title, not "blow up the delivery vehicle".
+            return re.search(
+                r"(?<!\w)blow\s+up(?=[ \t]*(?:$|[\r\n\"'.:!\-]))", text, re.IGNORECASE
+            ) is not None
+        return True
 
     def _extract_objective(self, text: str) -> str:
-        """Extract objective text.
-
-        Args:
-            text: Text to parse
-
-        Returns:
-            Extracted objective or empty string
-        """
-        text_lower = text.lower()
-
-        # Find sentences starting with objective verbs
-        for verb in self.OBJECTIVE_VERBS:
-            pattern = rf"({verb}\s+.+?)(?:[.\n]|$)"
-            match = re.search(pattern, text_lower)
-            if match:
-                objective = match.group(1).strip()
-                # Capitalize first letter
-                return objective[0].upper() + objective[1:] if objective else ""
-
-        # Fall back to first line if it looks like an objective
-        lines = [l.strip() for l in text.split("\n") if l.strip()]
-        if lines:
-            first_line = lines[0]
-            # Check if it starts with a verb-like word
-            if len(first_line) > 5 and len(first_line) < 100:
-                return first_line
-
-        return ""
+        """Find an imperative while retaining case and joining wrapped lines."""
+        normalized_case = " ".join(text.split())
+        verbs = "|".join(re.escape(verb) for verb in sorted(self.OBJECTIVE_VERBS, key=len, reverse=True))
+        match = re.search(
+            rf"(?<!\w)(?:{verbs})\s+[^.!?]+", normalized_case, re.IGNORECASE
+        )
+        return match.group().strip() if match else ""
 
     def is_mission_complete(self, text: str) -> bool:
-        """Check if text indicates mission completion.
-
-        Args:
-            text: Text to check
-
-        Returns:
-            True if mission appears complete
-        """
-        completion_keywords = [
-            "mission passed", "job complete", "passed",
-            "success", "completed", "delivered",
-            "rp", "cash", "reward", "+$",
-        ]
-
-        text_lower = text.lower()
-        matches = sum(1 for kw in completion_keywords if kw in text_lower)
-        return matches >= 2  # Need multiple indicators
+        return classify_mission_outcome(text) == "complete"
 
     def is_mission_failed(self, text: str) -> bool:
-        """Check if text indicates mission failure.
-
-        Args:
-            text: Text to check
-
-        Returns:
-            True if mission appears failed
-        """
-        failure_keywords = [
-            "mission failed", "failed", "wasted",
-            "busted", "destroyed", "lost",
-        ]
-
-        text_lower = text.lower()
-        return any(kw in text_lower for kw in failure_keywords)
+        return classify_mission_outcome(text) == "failed"
 
     def get_last_reading(self) -> Optional[MissionReading]:
-        """Get the last parsed mission reading."""
+        """Get the last unambiguous active identity, excluding result banners."""
         return self._last_reading

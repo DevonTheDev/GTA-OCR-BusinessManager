@@ -41,6 +41,7 @@ class ActivityType(Enum):
     ADVERSARY_MODE = auto()
     SURVIVAL = auto()
     FREEMODE_EVENT = auto()
+    NIGHTCLUB_PROMOTION = auto()
 
 
 @dataclass

@@ -497,13 +497,78 @@ Ordinary pytest skips these opt-in UI cases. Linux offscreen rendering is tested
 native file choosers are substituted, and Windows/game capture is unverified.
 
 ### Activity Detection
-- Automatically detects when you're doing:
-  - Contact Missions
-  - CEO/VIP Work
-  - MC Contracts
-  - Sell Missions
-  - Heists
-  - And more...
+
+The capture pipeline now shares one mission-identity result from both existing
+OCR crops through tracking, dashboard/overlay labels, completed history and
+cooldown selection. For example, **Hostile Takeover**, **Asset Recovery** and
+**Executive Search** retain their VIP category; a center-only **Headhunter**
+retains its name; **Customer vehicle** identifies Auto Shop delivery instead of
+winning a generic sell-keyword match. Recognized catalog names appear in the
+dashboard and overlay, while the state badge and timer remain separate.
+
+Recognition uses canonical names already in the repository's contact, VIP,
+security-contract and other named-activity lists, plus explicit category labels.
+It normalizes case and whitespace, including wrapped names such as
+`Executive\nSearch`, and requires word boundaries. Generic objectives cannot
+outscore a specific name: **Headhunter** with **Deliver the goods** remains VIP
+work. Explicit nightclub-promotion labels have their own activity category.
+There is no fuzzy spelling correction, model inference, new payout estimate or
+guarantee that every GTA mission is supported.
+
+Conflicting names/categories remain ambiguous. Unknown objectives no longer
+default to a contact mission; a generic delivery classification remains
+unresolved until stronger identity evidence arrives. A visual-only result at
+the unaccepted confidence threshold cannot start tracking. A later clear name
+can improve an unresolved activity without resetting its time or money baseline,
+adding another activity, or counting income twice. Once established, a name or
+category is not replaced by incompatible later text.
+If the first clear title appears on an accepted result banner, it can refine an
+existing compatible activity before that activity is recorded. A result banner
+alone never creates a new activity.
+
+Heist family, specific name and explicit prep/finale phase are kept separately.
+A previously missing compatible phase can be filled in: **Casino Heist**, then
+**The Big Con / Finale**, can become a named finale while retaining the same
+activity baseline. A confirmed prep/finale is not switched to the other phase
+without the existing mission-result lifecycle. Approach names, `take`, `cut`,
+locations and vehicle names do not by themselves establish a finale.
+
+Mission results require explicit accepted result text or a result-template
+match. Yellow/red pixels alone cannot finish an activity. A generic mission
+banner cannot override explicit **MISSION PASSED/FAILED**, and contradictory
+result text or a text/template result disagreement remains unconfirmed. Generic
+bonus/reward text, **Objective complete**, **SUCCESS**, **COMPLETED** and **Well
+done** do not end the whole tracked mission. These are heuristic recognition
+rules, not calibrated confidence scores or proof of actual gameplay state.
+
+The Windows adapter now follows [WinOCR's lowercase Python API](https://github.com/GitHub30/winocr#information-that-can-be-obtained)
+and preserves backend line text, punctuation and word bounds. Windows
+[OcrWord exposes no confidence score](https://learn.microsoft.com/en-us/uwp/api/windows.media.ocr.ocrword),
+so successful native results/words report confidence as `None`, rather than an
+invented certainty. Empty/error results retain the existing empty-text/0.0
+failure convention. The package requirement now agrees with the existing
+requirements file and the published `winocr>=0.0.15` API.
+
+Local verification covers faithful Windows API-shaped responses, source-derived
+OCR text through the real capture/classifier/tracker/SQLite path, result and
+identity ownership, and actual offscreen Qt labels. An additional opt-in suite
+renders controlled text at 720p/1080p/1440p and runs production crop/preprocessing
+code through an already installed Tesseract CLI and the real capture pipeline:
+
+```bash
+GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py
+```
+
+That optional diagnostic requires Tesseract with English data, DejaVuSans.ttf,
+Pillow, NumPy and OpenCV; it installs/downloads nothing. `GTA_OCR_TEST_FONT` may
+point to a local copy of that font. It adds no production Tesseract fallback.
+The test images are synthetic, not game screenshots. This repository ships
+no representative gameplay screenshot corpus or template images; default startup
+also does not automatically load a template folder. This pass does not change
+crop placement. Actual Windows OCR execution, real
+HUD/font/layout variations, motion, lighting and gameplay false-positive rates
+remain unverified. A catalog label visible in a menu is still a possible
+recognition cue; the tests do not prove that the player has started that mission.
 
 ### Business Management
 - Track stock and supply levels for all businesses:
