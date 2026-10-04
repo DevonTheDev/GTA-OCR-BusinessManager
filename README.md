@@ -443,6 +443,9 @@ character and business even if you change the board or Settings while it is open
 - Select a business to browse earlier check-ins, 25 at a time, and inspect the
   full selected note. Refresh reads current saved data; closing and reopening the
   board retains the records
+- Choose **Pin selected business** to keep frequently used businesses first for
+  this saved character. Choose **Unpin selected business** to remove that
+  preference. Pins survive closing the board and restarting the app
 - Export the displayed latest board or history page as JSON. These are separate
   accepted observations; an export retains the chosen snapshot even if data or
   selection changes while the file chooser is open
@@ -465,8 +468,9 @@ Creation adds an inactive saved character and selects its exact committed ID in
 this board. It does not change active-character flags, Settings, a running
 session, live business observations or the character used for the next tracking
 Start. That tracking name remains configured separately in Settings. Opening the
-board alone creates nothing. When no current or unique active character can be
-selected unambiguously, choose one explicitly; duplicate names show their IDs.
+board alone creates no character, pin preference or check-in. When no current or
+unique active character can be selected unambiguously, choose one explicitly;
+duplicate names show their IDs.
 
 The character editor is modeless, retains an invalid or failed-save draft, and
 asks before discarding it. An already-open check-in editor keeps its original
@@ -475,12 +479,40 @@ creation is acknowledged before the board refreshes; a failed refresh cannot
 turn it into a second creation. Refresh retries the exact saved ID, while choosing
 another character explicitly replaces that pending selection.
 
+Pins make an everyday manual shortlist without hiding other businesses or saved
+history. Pinned catalog businesses appear first in catalog order, followed by
+pinned historical IDs and then the remaining businesses. A star marks a pinned
+row, and the selected business stays selected when its position changes. With no
+pins, the normal catalog order is retained. Personal pins do not declare game
+ownership, change Settings or active-character flags, or drive live OCR,
+production estimates or recommendations. An open check-in draft keeps its
+original character/business while you change the board or its pins.
+
+The additive `manual_business_pins` table stores each character/business pair
+once. Each explicit action sets one desired preference, so concurrent changes to
+different businesses are retained; repeated Pin or Unpin is idempotent. Opposite
+actions on the same business follow transaction order. Removing a pin removes
+only that preference, and the business can be pinned again. Saved observations,
+their history and existing JSON export contents are unchanged. Exports retain
+all accepted observations, including unpinned businesses; pins affect display
+order, not the exported data selection.
+
+Pin reads and writes are bounded to 256 preferences per character and require an
+existing saved owner. New pins use the current catalog. Valid historical pin IDs
+remain visible and can be unpinned even when no longer in the catalog; they do
+not become recordable businesses. If pin data cannot be read, the board still
+shows valid observations/history in default order and disables pin changes until
+a successful Refresh. A failed write preserves the previous preferences. A
+committed change remains acknowledged even if its following display refresh
+fails. These are local personal preferences, with no claim of protection against
+arbitrary external database modification or character-ID reuse.
+
 The manual creator and the existing tracking creator acquire SQLite's writer
 lock before checking a name. This serializes these two app creation paths, at the
 cost of briefly locking even an existing-name lookup. It does not add a database
 unique constraint, repair old duplicate rows, or coordinate arbitrary external
-database writers. Failed saves roll back; the workflow provides no rename,
-delete or merge operation. Linux offscreen tests exercise the actual MainWindow,
+database writers. Failed saves roll back; the creator provides no character
+rename, deletion or merging. Linux offscreen tests exercise the actual MainWindow,
 dialogs, persistence and export; native Windows, gameplay and OCR remain untested.
 
 These are your saved observations, with the recorded time showing when Save ran.

@@ -58,6 +58,12 @@ from .character_profiles import (
     MAX_CHARACTER_NAME_BYTES, SavedCharacterResult,
     normalize_character_name, saved_character_from_storage,
 )
+from .business_pins import (
+    BusinessPinDataError, BusinessPinLimitError, BusinessPinUnavailable, ManualBusinessPins,
+    MAX_BUSINESS_PINS, MAX_PIN_BUSINESS_ID_BYTES, MAX_PIN_CHARACTER_NAME_BYTES,
+    manual_business_pins_from_storage, validate_pin_business_id, validate_pin_character_id,
+    validate_pin_desired_state,
+)
 from ..utils.logging import get_logger
 
 
@@ -87,6 +93,21 @@ _CHECKIN_ROW_COLUMNS = ", ".join([
     _checkin_text_column("m", "recorded_at", 64),
     _checkin_text_column("m", "note", MAX_CHECKIN_NOTE_BYTES),
 ])
+
+_BUSINESS_PIN_QUERY = text(
+    "WITH owners AS ("
+    "SELECT CASE WHEN typeof(c.id) = 'integer' THEN c.id END AS context_character_id, "
+    "typeof(c.id) AS context_character_id_type, "
+    + _checkin_text_column("c", "name", MAX_PIN_CHARACTER_NAME_BYTES, "character_name")
+    + " FROM characters c WHERE c.id = :character_id LIMIT 2), "
+    "pins AS (SELECT 1 AS row_present, "
+    "CASE WHEN typeof(p.character_id) = 'integer' THEN p.character_id END AS pin_character_id, "
+    "typeof(p.character_id) AS pin_character_id_type, "
+    + _checkin_text_column("p", "business_id", MAX_PIN_BUSINESS_ID_BYTES)
+    + " FROM manual_business_pins p WHERE p.character_id = :character_id LIMIT :maximum) "
+    "SELECT owners.*, (SELECT count(*) FROM owners) AS owner_count, pins.* "
+    "FROM owners LEFT JOIN pins ON 1 = 1 LIMIT :maximum"
+)
 
 
 class DatabaseError(Exception):
@@ -348,6 +369,69 @@ class Repository:
             page = BusinessCheckInPage(character.id, character.name, business_id, captured_at,
                                        rows, offset, limit, raw[0]["total"])
         return page
+
+    @contextmanager
+    def _business_pin_scope(self):
+        """Use a fresh scoped session and expose only safe storage failures."""
+        try:
+            with self._session_scope() as db_session:
+                yield db_session
+        except (DatabaseError, SQLAlchemyError, UnicodeError, OverflowError, OSError):
+            raise BusinessPinUnavailable() from None
+
+    @staticmethod
+    def _read_manual_business_pins(db_session, character_id: int) -> ManualBusinessPins:
+        """One bounded statement captures both the owner and current pin set."""
+        captured_at = utc_now()
+        records = db_session.execute(_BUSINESS_PIN_QUERY, {
+            "character_id": character_id, "maximum": MAX_BUSINESS_PINS + 1,
+        }).mappings().all()
+        return manual_business_pins_from_storage(records, character_id, captured_at)
+
+    def get_manual_business_pins(self, character_id: int) -> ManualBusinessPins:
+        """Read detached preferences without creating rows or changing the owner."""
+        validate_pin_character_id(character_id)
+        with self._business_pin_scope() as db_session:
+            snapshot = self._read_manual_business_pins(db_session, character_id)
+        return snapshot
+
+    def set_manual_business_pin(
+        self, character_id: int, business_id: str, pinned: bool,
+    ) -> ManualBusinessPins:
+        """Commit one desired state against the freshly locked set, never replace it.
+
+        The writer lock precedes owner/set reads. Distinct concurrent changes
+        merge; repeated desired states are no-ops; opposite changes follow
+        SQLite's transaction order. Legacy connections need not enforce FKs.
+        """
+        validate_pin_character_id(character_id)
+        validate_pin_desired_state(pinned)
+        validate_pin_business_id(business_id, for_pin=pinned)
+        with self._business_pin_scope() as db_session:
+            db_session.execute(text("BEGIN IMMEDIATE"))
+            snapshot = self._read_manual_business_pins(db_session, character_id)
+            ids = set(snapshot.business_ids)
+            if pinned != (business_id in ids):
+                if pinned:
+                    if len(ids) >= MAX_BUSINESS_PINS:
+                        raise BusinessPinLimitError()
+                    result = db_session.execute(text(
+                        "INSERT INTO manual_business_pins (character_id,business_id) "
+                        "VALUES (:character_id,:business_id)"
+                    ), {"character_id": character_id, "business_id": business_id})
+                    ids.add(business_id)
+                else:
+                    result = db_session.execute(text(
+                        "DELETE FROM manual_business_pins "
+                        "WHERE character_id = :character_id AND business_id = :business_id"
+                    ), {"character_id": character_id, "business_id": business_id})
+                    ids.remove(business_id)
+                if result.rowcount != 1:
+                    raise BusinessPinDataError()
+                snapshot = self._read_manual_business_pins(db_session, character_id)
+                if set(snapshot.business_ids) != ids:
+                    raise BusinessPinDataError()
+        return snapshot
 
     # Character operations
 

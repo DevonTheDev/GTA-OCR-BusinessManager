@@ -11,6 +11,7 @@ from PyQt6.QtWidgets import (
 )
 
 from ...database.business_checkins import BUSINESS_LABELS, business_label
+from ...database.business_pins import BusinessPinLimitError
 from ...utils.exporter import DataExporter
 from ...utils.logging import get_logger
 
@@ -39,6 +40,7 @@ class BusinessCheckInsDialog(QDialog):
         self._repository = repository
         self._exporter = DataExporter(repository)
         self._board = None
+        self._pins = None
         self._page = None
         self._editor = None
         self._opening_editor = False
@@ -99,6 +101,21 @@ class BusinessCheckInsDialog(QDialog):
         controls.addWidget(self._add_character_button)
         controls.addWidget(self._record_button)
         layout.addLayout(controls)
+        pin_controls = QHBoxLayout()
+        self._pin_button = QPushButton('Pin selected business')
+        self._pin_scope_label = self._label(
+            'Personal pins put businesses first on this manual board only. '
+            'All businesses and saved check-ins stay visible.'
+        )
+        pin_label_policy = QSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+        pin_label_policy.setHeightForWidth(True)
+        self._pin_scope_label.setSizePolicy(pin_label_policy)
+        pin_controls.addWidget(self._pin_button)
+        pin_controls.addWidget(self._pin_scope_label, 1)
+        layout.addLayout(pin_controls)
+        self._pin_status_label = self._label()
+        self._pin_status_label.setSizePolicy(pin_label_policy)
+        layout.addWidget(self._pin_status_label)
         self._context_label = self._label()
         self._context_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         layout.addWidget(self._context_label)
@@ -146,6 +163,10 @@ class BusinessCheckInsDialog(QDialog):
         self._character_saved_notice_label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         self._character_saved_notice_label.hide()
         layout.addWidget(self._character_saved_notice_label)
+        self._pin_saved_notice_label = self._label()
+        self._pin_saved_notice_label.setSizePolicy(pin_label_policy)
+        self._pin_saved_notice_label.hide()
+        layout.addWidget(self._pin_saved_notice_label)
         self._status_label = self._label()
         layout.addWidget(self._status_label)
         actions = QHBoxLayout()
@@ -164,6 +185,7 @@ class BusinessCheckInsDialog(QDialog):
         self._refresh_button.clicked.connect(self.refresh)
         self._add_character_button.clicked.connect(self._open_creator)
         self._record_button.clicked.connect(self._open_editor)
+        self._pin_button.clicked.connect(self._set_selected_business_pin)
         self._previous_button.clicked.connect(self._previous_page)
         self._next_button.clicked.connect(self._next_page)
         self._export_board_button.clicked.connect(self._export_board)
@@ -176,6 +198,15 @@ class BusinessCheckInsDialog(QDialog):
         self._refresh_button.setEnabled(available)
         self._add_character_button.setEnabled(available and not self._exporting and not self._opening_creator)
         self._record_button.setEnabled(available and self._board is not None and self._selected_business_id() in BUSINESS_LABELS)
+        business = self._selected_business_id()
+        pins_current = (self._board is not None and self._pins is not None
+                        and self._pins.character_id == self._board.character_id
+                        and self._character_combo.currentData() == self._board.character_id)
+        pinned = pins_current and business in self._pins.business_ids
+        self._pin_button.setText('Unpin selected business' if pinned else 'Pin selected business')
+        self._pin_button.setEnabled(
+            available and not self._exporting and pins_current and (pinned or business in BUSINESS_LABELS)
+        )
         self._previous_button.setEnabled(available and self._page is not None and self._page.offset > 0)
         self._next_button.setEnabled(available and self._page is not None and self._page.has_more)
         self._export_board_button.setEnabled(available and not self._exporting and self._board is not None)
@@ -199,6 +230,8 @@ class BusinessCheckInsDialog(QDialog):
 
     def _retire_board(self):
         self._board = None
+        self._pins = None
+        self._pin_status_label.clear()
         with QSignalBlocker(self._businesses_table):
             self._businesses_table.clearSelection()
             self._businesses_table.setRowCount(0)
@@ -263,18 +296,41 @@ class BusinessCheckInsDialog(QDialog):
             self._finish_read()
 
     def _load_board(self, owner, business, offset, generation):
-        board = self._repository.get_business_checkin_board(owner)
-        if self._closed or generation != self._generation:
+        repository = self._repository
+        board = repository.get_business_checkin_board(owner)
+        if (self._closed or generation != self._generation or repository is not self._repository
+                or self._character_combo.currentData() != owner):
+            return
+        # Preferences are independent of observations. An unreadable preference
+        # set must not retire a valid board, history, or export snapshot.
+        pins = None
+        try:
+            pins = repository.get_manual_business_pins(owner)
+        except Exception as exc:
+            logger.warning('Could not load manual business pins (%s)', type(exc).__name__)
+        if (self._closed or generation != self._generation or repository is not self._repository
+                or self._character_combo.currentData() != owner):
             return
         self._board = board
+        self._pins = pins
+        self._pin_status_label.setText(
+            f'{len(pins.business_ids)} pinned for this saved character.' if pins is not None else
+            'Personal pins could not be loaded. Showing the usual business order; '
+            'pin changes are unavailable until Refresh succeeds.'
+        )
         rows = {row.business_id: row for row in board.rows}
-        businesses = list(BUSINESS_LABELS) + sorted(set(rows) - set(BUSINESS_LABELS))
+        pinned = set(pins.business_ids) if pins is not None else set()
+        businesses = ([key for key in BUSINESS_LABELS if key in pinned]
+                      + sorted(pinned - set(BUSINESS_LABELS))
+                      + [key for key in BUSINESS_LABELS if key not in pinned]
+                      + sorted(set(rows) - set(BUSINESS_LABELS) - pinned))
         selected_index = 0
         with QSignalBlocker(self._businesses_table):
             self._businesses_table.setRowCount(len(businesses))
             for index, business_id in enumerate(businesses):
                 row = rows.get(business_id)
-                values = [business_label(business_id), _text(row.stock_percent) if row else '--',
+                label = ('★ ' if business_id in pinned else '') + business_label(business_id)
+                values = [label, _text(row.stock_percent) if row else '--',
                           _text(row.supply_percent) if row else '--', _text(row.stock_value) if row else '--',
                           _timestamp(row.recorded_at) if row else '--', row.note if row else '--']
                 for column, value in enumerate(values):
@@ -301,6 +357,53 @@ class BusinessCheckInsDialog(QDialog):
                 'Latest entries use save order. Export saves the displayed snapshot. '
                 'Manual observations do not verify sales, production or profit.'
             )
+
+    def _set_selected_business_pin(self):
+        if self._closed or self._closing or self._busy or self._exporting:
+            return
+        repository = self._repository
+        board = self._board
+        pins = self._pins
+        business = self._selected_business_id()
+        if (board is None or pins is None or pins.character_id != board.character_id
+                or self._character_combo.currentData() != board.character_id):
+            return
+        desired = business not in pins.business_ids
+        if business is None or (desired and business not in BUSINESS_LABELS):
+            return
+        owner = board.character_id
+        generation = self._generation
+        self._busy = True
+        self._update_actions()
+        committed = False
+        try:
+            saved = repository.set_manual_business_pin(owner, business, desired)
+            committed = True
+            # Acknowledgment describes the committed target even if a callback
+            # has changed the selector. Subsequent reads cannot undo this truth.
+            self._pin_saved_notice_label.setText(
+                f'Saved personal pin preference for character #{owner} · '
+                f'{business_label(business)}: {"pinned" if desired else "unpinned"}.'
+            )
+            self._pin_saved_notice_label.show()
+            if generation == self._generation and self._board is board and repository is self._repository:
+                self._pins = saved
+        except Exception as exc:
+            logger.warning('Could not save manual business pin (%s)', type(exc).__name__)
+            if generation == self._generation and self._board is board:
+                self._pin_status_label.setText(
+                    'Personal pin preference was not saved. Unpin a business before adding another.'
+                    if isinstance(exc, BusinessPinLimitError) else
+                    'Personal pin preference was not saved. Refresh and try again.'
+                )
+        finally:
+            self._finish_read()
+        # A business selection may have changed reentrantly. A fresh read keeps
+        # that new selection while observing this commit; a changed owner has
+        # retired the board and must never receive the old owner's pins.
+        if (committed and self._board is board and self._character_combo.currentData() == owner
+                and repository is self._repository and not self._closed and not self._closing):
+            self.refresh()
 
     def _character_changed(self, *_):
         self._pending_character_id = None

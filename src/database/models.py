@@ -145,6 +145,15 @@ class ManualBusinessCheckInRecord(Base):
     note = Column(Text, nullable=False, default="")
 
 
+class ManualBusinessPinRecord(Base):
+    """One manual board preference, separate from observations and live state."""
+
+    __tablename__ = "manual_business_pins"
+
+    character_id = Column(Integer, ForeignKey("characters.id"), primary_key=True)
+    business_id = Column(String(50), primary_key=True)
+
+
 class Earnings(Base):
     """Individual earning events."""
 
