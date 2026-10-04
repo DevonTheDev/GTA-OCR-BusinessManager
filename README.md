@@ -853,6 +853,70 @@ The MainWindow record → page/filter → compare → export path is exercised w
 Linux offscreen Qt, including literal notes and small-window controls. Native
 file choosers are substituted; Windows, OCR and live gameplay remain unverified.
 
+#### View recorded history trend
+
+In **Businesses → Manual check-ins…**, choose a saved character and business,
+apply any history note/UTC-date filters, then choose **View history trend…**.
+The modeless view captures **all matching saved check-ins**, including records
+outside the displayed 25-row page. It does not require a selected history row
+or comparison baseline. Pending filter edits must be applied first.
+
+The view contains:
+
+- Recorded stock and supply percentages, plus a separate observed-value chart
+- Known/unknown counts for each measurement and the first/last selected values
+- Exact last-minus-first changes when there are at least two records and both
+  endpoint fields are known; stock/supply changes are percentage points
+- A complete table with sequence number, exact check-in ID, full recorded UTC
+  time and measurements, plus the selected record's complete personal note
+
+The horizontal chart axis is **selected check-in sequence, oldest save first**.
+It counts the selected observations from 1, rather than using elapsed time or
+raw database IDs. Insertion IDs determine order even if recorded clocks are
+identical or move backward. The table retains each actual UTC timestamp,
+including subseconds. These are save times, not gameplay timestamps.
+
+Every selected row retains its place. Unknown measurements create chart gaps;
+lines only join adjacent known observations and isolated known points remain
+visible. Zero remains a known zero. Endpoint summaries use the first and last
+selected records even when their fields are unknown: they do not search inward
+for another measurement. A single record has no change, and note-only records
+still count. No value is carried forward, smoothed, extrapolated or converted
+into a production rate, sale proceeds or profit.
+
+Observed values and their changes stay exact Python integers in the table,
+summary and JSON. If any known value cannot be represented exactly by the
+chart's floating-point coordinates, the entire value chart is unavailable with
+an explanation; its exact observations remain available. Unsafe points are not
+silently rounded or dropped. Stock/supply charts remain available independently.
+If the plotting dependency is unavailable, the summary, table, full notes and
+export still work.
+
+The snapshot is limited to **1,000 matching records**. A larger selection is
+refused with a request to narrow the applied filters; it does not show a partial
+trend or a partial summary. An empty selection is a valid empty view. The
+existing literal-note matching, inclusive UTC-date rules and corrupt-data
+refusals apply. Historical valid business identifiers remain inspectable.
+
+An open view keeps its captured character, business, filters and records through
+later saves, parent navigation or database changes. Repeated opens raise that
+same view. Close and reopen it to capture another selection. **Export trend as
+JSON…** saves this exact snapshot without rereading storage: all selected rows,
+raw integers/nulls/full notes, coverage, endpoint changes, plot availability,
+filter policies, cap and capture time. The format is version 1,
+`manual_business_checkin_trend`; it is separate from a paginated history export.
+The existing 8 MiB UTF-8 export limit and per-file atomic replacement apply;
+an oversized export is refused rather than truncated. A completed export does
+not promise crash durability or a transaction with other files.
+
+This is read-only inspection of saved manual observations. It does not start
+capture, consult live OCR readings, change the saved character, modify pins,
+update recommendations or write accounting/check-in records. Local validation
+uses temporary SQLite databases, real Linux offscreen Qt/pyqtgraph paths and the
+actual MainWindow workflow, including filtered selections larger than one page,
+clock rollback, gaps, integer precision, fixed exports and small-window layouts.
+Native Windows, gameplay/OCR and native file-chooser behavior remain unverified.
+
 ### Smart Recommendations
 - Get suggestions like:
   - "Your bunker is ready to sell"

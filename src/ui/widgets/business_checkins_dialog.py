@@ -59,6 +59,8 @@ class BusinessCheckInsDialog(QDialog):
         self._comparison_dialog = None
         self._opening_comparison = False
         self._comparison_generation = 0
+        self._trend_dialog = None
+        self._opening_trend = False
         self._saved_character_result = None
         self._pending_character_id = None
         self._busy = False
@@ -251,8 +253,11 @@ class BusinessCheckInsDialog(QDialog):
         actions = QHBoxLayout()
         self._export_board_button = QPushButton('Export displayed board…')
         self._export_history_button = QPushButton('Export displayed history page…')
+        self._trend_button = QPushButton('View history trend…')
+        self._trend_button.setAutoDefault(False)
         actions.addWidget(self._export_board_button)
         actions.addWidget(self._export_history_button)
+        actions.addWidget(self._trend_button)
         actions.addStretch()
         buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Close)
         buttons.rejected.connect(self.reject)
@@ -269,6 +274,7 @@ class BusinessCheckInsDialog(QDialog):
         self._next_button.clicked.connect(self._next_page)
         self._export_board_button.clicked.connect(self._export_board)
         self._export_history_button.clicked.connect(self._export_history)
+        self._trend_button.clicked.connect(self._open_trend)
         self._history_note_filter.textChanged.connect(self._history_filter_edited)
         self._history_from_enabled.toggled.connect(self._history_filter_edited)
         self._history_until_enabled.toggled.connect(self._history_filter_edited)
@@ -291,6 +297,8 @@ class BusinessCheckInsDialog(QDialog):
         return super().eventFilter(watched, event)
 
     def _update_actions(self):
+        if self._trend_dialog is not None:
+            self._trend_dialog._update_actions()
         if self._batch_editor is not None:
             self._batch_editor._update_actions()
         available = not (self._busy or self._closed or self._closing)
@@ -316,6 +324,10 @@ class BusinessCheckInsDialog(QDialog):
         self._next_button.setEnabled(available and self._page is not None and self._page.has_more)
         self._export_board_button.setEnabled(available and not self._exporting and self._board is not None)
         self._export_history_button.setEnabled(available and not self._exporting and self._page is not None)
+        self._trend_button.setEnabled(
+            available and not self._exporting and not self._opening_trend
+            and (self._trend_dialog is not None or self._trend_context_available())
+        )
         can_filter = (available and self._board is not None and business is not None
                       and self._character_combo.currentData() == self._board.character_id)
         self._history_note_filter.setEnabled(can_filter)
@@ -860,6 +872,71 @@ class BusinessCheckInsDialog(QDialog):
         dialog.deleteLater()
         self._update_actions()
 
+    def _trend_context_available(self):
+        page, board = self._page, self._board
+        return (not self._history_dirty and page is not None and board is not None
+                and self._character_combo.currentData() == board.character_id == page.character_id
+                and self._selected_business_id() == page.business_id
+                and self._history_context == (self._repository, page.character_id, page.business_id)
+                and page.filters == self._history_filters)
+
+    def _open_trend(self):
+        if self._busy or self._closed or self._closing or self._exporting or self._opening_trend:
+            return
+        if self._trend_dialog is not None:
+            self._trend_dialog.show()
+            self._trend_dialog.raise_()
+            self._trend_dialog.activateWindow()
+            self._status_label.setText('The open history trend keeps its captured snapshot. Close it to capture another trend.')
+            return
+        if not self._trend_context_available():
+            self._update_actions()
+            return
+        repository, owner, business = self._history_context
+        board, page, filters = self._board, self._page, self._history_filters
+        generation = (self._generation, self._history_generation)
+        exporter = self._exporter
+
+        def current():
+            return (not (self._closed or self._closing) and repository is self._repository
+                    and generation == (self._generation, self._history_generation)
+                    and self._board is board and self._page is page and self._history_filters is filters
+                    and self._trend_dialog is None and self._trend_context_available())
+
+        from ...database.business_checkin_trend import BusinessCheckInTrendLimitError
+        from .business_checkin_trend_dialog import BusinessCheckInTrendDialog
+        self._opening_trend = True
+        self._busy = True
+        self._update_actions()
+        try:
+            trend = repository.get_business_checkin_trend(owner, business, filters=filters)
+            if not current():
+                return
+            dialog = BusinessCheckInTrendDialog(trend, exporter=exporter, parent=self)
+            if not current():
+                dialog.deleteLater()
+                return
+            self._trend_dialog = dialog
+            dialog.finished.connect(lambda result, closed=dialog: self._trend_finished(closed))
+            dialog.show()
+        except BusinessCheckInTrendLimitError:
+            if current():
+                self._status_label.setText('History trend exceeds 1000 matching check-ins. Narrow and Apply the history filters, then try again.')
+        except Exception as exc:
+            logger.warning('Could not load manual check-in history trend (%s)', type(exc).__name__)
+            if current():
+                self._status_label.setText('History trend could not be loaded. The displayed history is retained; try again or Refresh.')
+        finally:
+            self._opening_trend = False
+            self._finish_read()
+
+    def _trend_finished(self, dialog):
+        if self._trend_dialog is not dialog:
+            return
+        self._trend_dialog = None
+        dialog.deleteLater()
+        self._update_actions()
+
     def _change_page(self, offset):
         if self._closed or self._closing or self._busy or self._page is None or self._history_dirty:
             return
@@ -1108,10 +1185,11 @@ class BusinessCheckInsDialog(QDialog):
 
     def _prepare_close(self):
         if (self._closed or self._closing or self._busy or self._opening_editor
-                or self._opening_creator or self._opening_comparison or self._opening_batch_editor or self._exporting):
+                or self._opening_creator or self._opening_comparison or self._opening_trend
+                or self._opening_batch_editor or self._exporting):
             return False
-        comparison = self._comparison_dialog
-        if comparison is not None and comparison._exporting:
+        snapshots = tuple((name, getattr(self, name)) for name in ('_comparison_dialog', '_trend_dialog'))
+        if any(child is not None and child._exporting for _, child in snapshots):
             return False
         children = tuple((name, getattr(self, name)) for name in ('_editor', '_batch_editor', '_creator'))
         if any(child is not None and (child._busy or child._confirming_discard) for _, child in children):
@@ -1124,9 +1202,12 @@ class BusinessCheckInsDialog(QDialog):
                 # may finish and be deleted while that prompt is still open.
                 if child is not None and getattr(self, name) is child and not child.close():
                     return False
-            if (comparison is not None and self._comparison_dialog is comparison
-                    and not comparison.close()):
-                return False
+            for name, child in snapshots:
+                current = getattr(self, name)
+                if current is not None and current is not child:
+                    return False
+                if current is child and child is not None and (child._exporting or not child.close()):
+                    return False
             self._closed = True
             self._clear_baseline()
             self._retire_board()

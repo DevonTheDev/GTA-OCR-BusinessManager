@@ -59,6 +59,9 @@ from .business_checkins import (
 from .business_checkin_comparison import (
     BusinessCheckInComparison, BusinessCheckInComparisonUnavailable,
 )
+from .business_checkin_trend import (
+    BusinessCheckInTrend, BusinessCheckInTrendLimitError, MAX_CHECKIN_TREND_ROWS,
+)
 from .business_checkin_batches import (
     BusinessCheckInBatchUncertain, BusinessCheckInDraft, normalize_business_checkin_drafts,
 )
@@ -102,6 +105,36 @@ _CHECKIN_ROW_COLUMNS = ", ".join([
     _checkin_text_column("m", "recorded_at", 64),
     _checkin_text_column("m", "note", MAX_CHECKIN_NOTE_BYTES),
 ])
+
+
+def _checkin_history_filter_sql(filters):
+    """Share exact bounded predicate/count clauses across history and trend reads."""
+    # Only active predicate fields cross into Python, always as bounded bytes
+    # plus SQLite's storage type. Other payload is validated only when selected.
+    if filters is not None:
+        note_args = (f"coalesce(substr(CAST(m.note AS BLOB), 1, {MAX_CHECKIN_NOTE_BYTES + 1}), x''), "
+                     "typeof(m.note)" if filters.note_query is not None else "NULL, NULL")
+        date_args = ("coalesce(substr(CAST(m.recorded_at AS BLOB), 1, 65), x''), typeof(m.recorded_at)"
+                     if filters.recorded_from is not None or filters.recorded_until is not None
+                     else "NULL, NULL")
+        prefix = (
+            "WITH evaluated AS (SELECT m.id, "
+            f"checkin_history_match({note_args}, {date_args}) AS match_status "
+            "FROM manual_business_checkins m "
+            "WHERE m.character_id = :character_id AND m.business_id = :business_id), "
+            "counted AS (SELECT COUNT(CASE WHEN match_status = 1 THEN 1 END) AS total, "
+            "coalesce(MAX(CASE WHEN match_status = -1 THEN 1 ELSE 0 END), 0) AS invalid "
+            "FROM evaluated), "
+        )
+        selection = "JOIN evaluated ON evaluated.id = m.id WHERE evaluated.match_status = 1 "
+    else:
+        prefix = (
+            "WITH counted AS (SELECT COUNT(*) AS total, 0 AS invalid FROM manual_business_checkins "
+            "WHERE character_id = :character_id AND business_id = :business_id), "
+        )
+        selection = "WHERE m.character_id = :character_id AND m.business_id = :business_id "
+    return prefix, selection
+
 
 _BUSINESS_PIN_QUERY = text(
     "WITH owners AS ("
@@ -416,32 +449,9 @@ class Repository:
         validate_checkin_business_id(business_id)
         validate_checkin_page(offset, limit)
         filters = validate_business_checkin_history_filters(filters)
-        # Only active predicate fields cross into Python, always as bounded
-        # bytes plus SQLite's actual storage type. Other payload stays page-only.
-        if filters is not None:
-            note_args = (f"coalesce(substr(CAST(m.note AS BLOB), 1, {MAX_CHECKIN_NOTE_BYTES + 1}), x''), "
-                         "typeof(m.note)" if filters.note_query is not None else "NULL, NULL")
-            date_args = ("coalesce(substr(CAST(m.recorded_at AS BLOB), 1, 65), x''), typeof(m.recorded_at)"
-                         if filters.recorded_from is not None or filters.recorded_until is not None
-                         else "NULL, NULL")
-            prefix = (
-                "WITH evaluated AS (SELECT m.id, "
-                f"checkin_history_match({note_args}, {date_args}) AS match_status "
-                "FROM manual_business_checkins m "
-                "WHERE m.character_id = :character_id AND m.business_id = :business_id), "
-                "counted AS (SELECT COUNT(CASE WHEN match_status = 1 THEN 1 END) AS total, "
-                "coalesce(MAX(CASE WHEN match_status = -1 THEN 1 ELSE 0 END), 0) AS invalid "
-                "FROM evaluated), page AS ("
-            )
-            selection = "JOIN evaluated ON evaluated.id = m.id WHERE evaluated.match_status = 1 "
-        else:
-            prefix = (
-                "WITH counted AS (SELECT COUNT(*) AS total, 0 AS invalid FROM manual_business_checkins "
-                "WHERE character_id = :character_id AND business_id = :business_id), page AS ("
-            )
-            selection = "WHERE m.character_id = :character_id AND m.business_id = :business_id "
+        prefix, selection = _checkin_history_filter_sql(filters)
         statement = text(
-            prefix +
+            prefix + "page AS (" +
             f"SELECT {_CHECKIN_ROW_COLUMNS} FROM manual_business_checkins m "
             + selection +
             "ORDER BY m.id DESC LIMIT :limit OFFSET :offset"
@@ -466,6 +476,54 @@ class Repository:
             page = BusinessCheckInPage(character.id, character.name, business_id, captured_at,
                                        rows, offset, limit, raw[0]["total"], filters)
         return page
+
+    def get_business_checkin_trend(
+        self, character_id: int, business_id: str,
+        *, filters: BusinessCheckInHistoryFilters | None = None,
+    ) -> BusinessCheckInTrend:
+        """Capture owner, count and all qualifying rows together, up to a fixed cap."""
+        validate_checkin_id(character_id)
+        validate_checkin_business_id(business_id)
+        filters = validate_business_checkin_history_filters(filters)
+        prefix, selection = _checkin_history_filter_sql(filters)
+        statement = text(
+            prefix + "selected AS (" +
+            f"SELECT {_CHECKIN_ROW_COLUMNS} FROM manual_business_checkins m "
+            + selection +
+            "ORDER BY m.id ASC LIMIT :maximum"
+            ") "
+            f"SELECT {_CHECKIN_CHARACTER_COLUMNS}, counted.total, counted.invalid, selected.* FROM characters c "
+            "CROSS JOIN counted LEFT JOIN selected ON 1 = 1 WHERE c.id = :character_id "
+            "ORDER BY selected.id ASC LIMIT :maximum"
+        )
+        with self._business_checkin_scope() as db_session:
+            captured_at = utc_now()
+            with self._business_checkin_history_predicate(db_session, filters):
+                raw = db_session.execute(statement, {
+                    "character_id": character_id, "business_id": business_id,
+                    "maximum": MAX_CHECKIN_TREND_ROWS + 1,
+                }).mappings().all()
+            if not raw:
+                raise BusinessCheckInUnavailable()
+            if raw[0]["invalid"]:
+                raise BusinessCheckInDataError()
+            character = checkin_character_from_storage(raw[0])
+            total = raw[0]["total"]
+            if type(total) is not int or total < 0:
+                raise BusinessCheckInDataError()
+            if total > MAX_CHECKIN_TREND_ROWS:
+                raise BusinessCheckInTrendLimitError()
+            if (len(raw) != max(1, total)
+                    or any(record["total"] != total or record["invalid"] for record in raw)):
+                raise BusinessCheckInDataError()
+            rows = tuple(checkin_from_storage(record) for record in raw if record["row_present"])
+            if len(rows) != total:
+                raise BusinessCheckInDataError()
+            try:
+                trend = BusinessCheckInTrend(character.id, character.name, business_id, captured_at, rows, filters)
+            except BusinessCheckInValidationError:
+                raise BusinessCheckInDataError() from None
+        return trend
 
     def get_business_checkin_comparison(
         self, character_id: int, business_id: str, baseline_id: int, comparison_id: int,

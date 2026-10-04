@@ -17,6 +17,7 @@ if TYPE_CHECKING:
     from ..database.session_comparison import SessionComparison
     from ..database.business_checkins import BusinessCheckInBoard, BusinessCheckInPage
     from ..database.business_checkin_comparison import BusinessCheckInComparison
+    from ..database.business_checkin_trend import BusinessCheckInTrend
 
 logger = get_logger("utils.exporter")
 MAX_ACTIVITY_LEDGER_EXPORT_BYTES = 8 * 1024 * 1024
@@ -391,10 +392,10 @@ class DataExporter:
 
     def export_business_checkins_snapshot(
         self,
-        snapshot: "BusinessCheckInBoard | BusinessCheckInPage",
+        snapshot: "BusinessCheckInBoard | BusinessCheckInPage | BusinessCheckInTrend",
         output_file: Path,
     ) -> ExportResult:
-        """Export an accepted manual observation board/page without rereading it."""
+        """Export an accepted manual observation board/page/trend without rereading it."""
         try:
             payload = json.dumps(
                 snapshot.to_report(), ensure_ascii=False, indent=2, allow_nan=False,
