@@ -49,11 +49,15 @@ from .session_comparison import (
 from .business_checkins import (
     BusinessCheckIn, BusinessCheckInBoard, BusinessCheckInHistoryFilters, BusinessCheckInPage,
     BusinessCheckInDataError, BusinessCheckInLimitError, BusinessCheckInUnavailable,
+    BusinessCheckInValidationError,
     CheckInCharacter, MAX_CHECKIN_BUSINESSES, MAX_CHECKIN_CHARACTERS,
     MAX_CHECKIN_CHARACTER_NAME_BYTES, MAX_CHECKIN_NOTE_BYTES,
     checkin_character_from_storage, checkin_from_storage, normalize_business_checkin,
     checkin_history_match_from_storage, validate_business_checkin_history_filters,
     validate_checkin_business_id, validate_checkin_id, validate_checkin_page,
+)
+from .business_checkin_comparison import (
+    BusinessCheckInComparison, BusinessCheckInComparisonUnavailable,
 )
 from .character_profiles import (
     CharacterProfileAmbiguous, CharacterProfileLimitError, CharacterProfileUnavailable,
@@ -397,6 +401,46 @@ class Repository:
             page = BusinessCheckInPage(character.id, character.name, business_id, captured_at,
                                        rows, offset, limit, raw[0]["total"], filters)
         return page
+
+    def get_business_checkin_comparison(
+        self, character_id: int, business_id: str, baseline_id: int, comparison_id: int,
+    ) -> BusinessCheckInComparison:
+        """Read just the selected same-owner/business pair and context in one bounded observation."""
+        validate_checkin_id(character_id)
+        validate_checkin_business_id(business_id)
+        validate_checkin_id(baseline_id)
+        validate_checkin_id(comparison_id)
+        if baseline_id == comparison_id:
+            raise BusinessCheckInValidationError("Choose two different manual check-ins to compare.")
+        requested_ids = (baseline_id, comparison_id)
+        statement = text(
+            f"SELECT {_CHECKIN_CHARACTER_COLUMNS}, {_CHECKIN_ROW_COLUMNS} FROM characters c "
+            "LEFT JOIN manual_business_checkins m ON m.character_id = c.id "
+            "AND m.business_id = :business_id AND m.id IN (:baseline_id, :comparison_id) "
+            "WHERE c.id = :character_id LIMIT 2"
+        )
+        with self._business_checkin_scope() as db_session:
+            captured_at = utc_now()
+            raw = db_session.execute(statement, {
+                "character_id": character_id, "business_id": business_id,
+                "baseline_id": baseline_id, "comparison_id": comparison_id,
+            }).mappings().all()
+            if not raw:
+                raise BusinessCheckInComparisonUnavailable(requested_ids)
+            character = checkin_character_from_storage(raw[0])
+            rows = tuple(checkin_from_storage(row) for row in raw if row["row_present"])
+            if any(row.character_id != character.id or row.business_id != business_id
+                   or row.id not in requested_ids for row in rows):
+                raise BusinessCheckInDataError()
+            by_id = {row.id: row for row in rows}
+            unavailable_ids = tuple(checkin_id for checkin_id in requested_ids if checkin_id not in by_id)
+            if unavailable_ids:
+                raise BusinessCheckInComparisonUnavailable(unavailable_ids)
+            comparison = BusinessCheckInComparison(
+                character.id, character.name, business_id,
+                by_id[baseline_id], by_id[comparison_id], captured_at,
+            )
+        return comparison
 
     @staticmethod
     @contextmanager

@@ -49,6 +49,11 @@ class BusinessCheckInsDialog(QDialog):
         self._opening_editor = False
         self._creator = None
         self._opening_creator = False
+        self._baseline_id = None
+        self._baseline_context = None
+        self._comparison_dialog = None
+        self._opening_comparison = False
+        self._comparison_generation = 0
         self._saved_character_result = None
         self._pending_character_id = None
         self._busy = False
@@ -177,7 +182,24 @@ class BusinessCheckInsDialog(QDialog):
         self._history_filter_status.setSizePolicy(pin_label_policy)
         history_layout.addWidget(self._history_filter_status)
         self._update_history_filter_status()
+        comparison_controls = QHBoxLayout()
+        self._baseline_button = QPushButton('Use as baseline')
+        self._clear_baseline_button = QPushButton('Clear baseline')
+        self._compare_button = QPushButton('Compare with baseline')
+        for button in (self._baseline_button, self._clear_baseline_button, self._compare_button):
+            comparison_controls.addWidget(button)
+        self._baseline_label = self._label()
+        self._baseline_label.setSizePolicy(pin_label_policy)
+        self._baseline_label.setToolTip(
+            'Baseline A may be outside this page or filter. Compare rereads both selected records.'
+        )
+        self._compare_button.setToolTip(self._baseline_label.toolTip())
+        comparison_controls.addWidget(self._baseline_label, 1)
+        history_layout.addLayout(comparison_controls)
         self._history_table = self._table(['Check-in', 'Recorded (UTC)', 'Stock %', 'Supplies %', 'Stock value ($)'])
+        # Keep two ordinary data rows available beneath the header and scroll
+        # bar when the board is resized to 1000 × 700.
+        self._history_table.setMinimumHeight(112)
         for column, width in enumerate((95, 180, 95, 100, 170)):
             self._history_table.setColumnWidth(column, width)
         history_layout.addWidget(self._history_table)
@@ -240,6 +262,9 @@ class BusinessCheckInsDialog(QDialog):
         self._history_until_date.dateChanged.connect(self._history_filter_edited)
         self._history_apply_button.clicked.connect(self._apply_history_filters)
         self._history_clear_button.clicked.connect(self._clear_history_filters)
+        self._baseline_button.clicked.connect(self._use_as_baseline)
+        self._clear_baseline_button.clicked.connect(self._clear_baseline)
+        self._compare_button.clicked.connect(self._open_comparison)
         self._update_actions()
 
     def eventFilter(self, watched, event):
@@ -279,6 +304,19 @@ class BusinessCheckInsDialog(QDialog):
         self._history_until_date.setEnabled(can_filter and self._history_until_enabled.isChecked())
         self._history_apply_button.setEnabled(can_filter)
         self._history_clear_button.setEnabled(can_filter)
+        self._sync_baseline_repository()
+        selected = self._selected_checkin()
+        comparison_available = available and not self._opening_comparison
+        self._baseline_button.setEnabled(comparison_available and selected is not None)
+        self._clear_baseline_button.setEnabled(comparison_available and self._baseline_id is not None)
+        self._compare_button.setEnabled(
+            comparison_available and selected is not None and self._baseline_id is not None
+            and selected.id != self._baseline_id and self._baseline_context == self._history_context
+        )
+        self._baseline_label.setText(
+            f'Baseline A: check-in #{self._baseline_id}. Select B to compare.' if self._baseline_id is not None else
+            'Choose baseline A, then select comparison B.'
+        )
 
     def _update_history_filter_status(self, message=None):
         if message is None:
@@ -303,6 +341,10 @@ class BusinessCheckInsDialog(QDialog):
         )
 
     def _reset_history_filters(self, context=None):
+        if context != self._baseline_context:
+            self._baseline_id = None
+            self._baseline_context = None
+            self._comparison_generation += 1
         self._history_generation += 1
         self._history_context = context
         self._history_filters = None
@@ -426,6 +468,12 @@ class BusinessCheckInsDialog(QDialog):
         pending = self._pending_character_id
         selected = pending if pending is not None else (character_id if initial else self._character_combo.currentData())
         business = self._selected_business_id()
+        if (business is None and self._baseline_context is not None
+                and self._baseline_context[0] is self._repository
+                and self._baseline_context[1] == selected):
+            # A failed board read retires its table, not the chosen comparison
+            # context. Restore that business on retry before choosing a default.
+            business = self._baseline_context[2]
         offset = self._history_offset
         self._generation += 1
         generation = self._generation
@@ -436,6 +484,8 @@ class BusinessCheckInsDialog(QDialog):
             # or sole-character fallback even if the row disappears afterwards.
             characters = self._reload_characters(selected, initial and pending is None)
             owner = self._character_combo.currentData()
+            if self._baseline_context is not None and self._baseline_context[1] != owner:
+                self._clear_baseline()
             if pending is not None and owner is None:
                 self._status_label.setText(
                     f'Saved character #{pending} is currently unavailable. '
@@ -674,12 +724,120 @@ class BusinessCheckInsDialog(QDialog):
         self._history_changed()
 
     def _history_changed(self):
+        self._comparison_generation += 1
         self._note_edit.clear()
-        if self._page is None:
+        selected = self._selected_checkin()
+        if selected is not None:
+            self._note_edit.setPlainText(selected.note)
+        self._update_actions()
+
+    def _sync_baseline_repository(self):
+        if self._baseline_context is not None and self._baseline_context[0] is not self._repository:
+            self._baseline_id = None
+            self._baseline_context = None
+            self._comparison_generation += 1
+
+    def _selected_checkin(self):
+        page = self._page
+        if (page is None or self._history_dirty or self._board is None
+                or self._character_combo.currentData() != page.character_id
+                or self._board.character_id != page.character_id
+                or self._selected_business_id() != page.business_id
+                or self._history_context != (self._repository, page.character_id, page.business_id)):
+            return None
+        rows = self._history_table.selectionModel().selectedRows()
+        if len(rows) != 1:
+            return None
+        index = rows[0].row()
+        if not 0 <= index < len(page.rows):
+            return None
+        row = page.rows[index]
+        cell = self._history_table.item(index, 0)
+        return row if cell is not None and cell.data(Qt.ItemDataRole.UserRole) == row.id else None
+
+    def _use_as_baseline(self):
+        if self._busy or self._closed or self._closing or self._opening_comparison:
             return
-        index = self._history_table.currentRow()
-        if 0 <= index < len(self._page.rows):
-            self._note_edit.setPlainText(self._page.rows[index].note)
+        selected = self._selected_checkin()
+        if selected is None:
+            return
+        self._baseline_id = selected.id
+        self._baseline_context = (self._repository, selected.character_id, selected.business_id)
+        self._comparison_generation += 1
+        self._update_actions()
+
+    def _clear_baseline(self):
+        self._baseline_id = None
+        self._baseline_context = None
+        self._comparison_generation += 1
+        self._update_actions()
+
+    def _open_comparison(self):
+        if self._busy or self._closed or self._closing or self._opening_comparison:
+            return
+        if self._comparison_dialog is not None:
+            self._comparison_dialog.show()
+            self._comparison_dialog.raise_()
+            self._comparison_dialog.activateWindow()
+            self._status_label.setText('The open comparison keeps its captured pair. Close it to compare another pair.')
+            return
+        self._sync_baseline_repository()
+        selected = self._selected_checkin()
+        baseline_id = self._baseline_id
+        context = self._baseline_context
+        if (selected is None or baseline_id is None or selected.id == baseline_id
+                or context != self._history_context):
+            self._update_actions()
+            return
+        repository, owner, business = context
+        comparison_id = selected.id
+        generation = (self._generation, self._history_generation, self._comparison_generation)
+        page = self._page
+
+        def current():
+            row = self._selected_checkin()
+            return (not (self._closed or self._closing) and repository is self._repository
+                    and generation == (self._generation, self._history_generation, self._comparison_generation)
+                    and self._page is page and self._baseline_id == baseline_id
+                    and self._baseline_context == context and row is not None and row.id == comparison_id)
+
+        from ...database.business_checkin_comparison import BusinessCheckInComparisonUnavailable
+        from .business_checkin_comparison_dialog import BusinessCheckInComparisonDialog
+        self._opening_comparison = True
+        self._busy = True
+        self._update_actions()
+        try:
+            comparison = repository.get_business_checkin_comparison(owner, business, baseline_id, comparison_id)
+            if not current():
+                return
+            dialog = BusinessCheckInComparisonDialog(comparison, exporter=self._exporter, parent=self)
+            if not current():
+                dialog.deleteLater()
+                return
+            self._comparison_dialog = dialog
+            dialog.finished.connect(lambda result, closed=dialog: self._comparison_finished(closed))
+            dialog.show()
+        except BusinessCheckInComparisonUnavailable as exc:
+            if current():
+                if baseline_id in exc.checkin_ids:
+                    self._clear_baseline()
+                self._status_label.setText(
+                    'A selected check-in is unavailable. Refresh history and choose the missing selection again.'
+                )
+        except Exception as exc:
+            logger.warning('Could not compare manual check-ins (%s)', type(exc).__name__)
+            if current():
+                self._status_label.setText('Comparison could not be loaded. The selections are retained; try again or Refresh.')
+        finally:
+            self._opening_comparison = False
+            self._finish_read()
+
+    def _comparison_finished(self, dialog):
+        if self._comparison_dialog is not dialog:
+            return
+        self._comparison_dialog = None
+        dialog.deleteLater()
+        self._update_actions()
 
     def _change_page(self, offset):
         if self._closed or self._closing or self._busy or self._page is None or self._history_dirty:
@@ -845,7 +1003,10 @@ class BusinessCheckInsDialog(QDialog):
 
     def _prepare_close(self):
         if (self._closed or self._closing or self._busy or self._opening_editor
-                or self._opening_creator or self._exporting):
+                or self._opening_creator or self._opening_comparison or self._exporting):
+            return False
+        comparison = self._comparison_dialog
+        if comparison is not None and comparison._exporting:
             return False
         children = (self._editor, self._creator)
         if any(child is not None and (child._busy or child._confirming_discard) for child in children):
@@ -856,7 +1017,10 @@ class BusinessCheckInsDialog(QDialog):
             for child in children:
                 if child is not None and not child.close():
                     return False
+            if comparison is not None and not comparison.close():
+                return False
             self._closed = True
+            self._clear_baseline()
             self._retire_board()
             return True
         finally:

@@ -593,6 +593,51 @@ cleans up its own widgets. Native Linux offscreen rendering is
 tested with substituted file choosers and synthetic capture boundaries; Windows,
 OCR accuracy and live game behavior remain unverified. No hosted tests are used.
 
+#### Compare two recorded check-ins
+
+In **Businesses → Manual check-ins…**, select a history row and choose
+**Use as baseline**. Locate another saved observation for the same character and
+business, then choose **Compare with baseline**. The read-only comparison shows
+both recorded UTC times, full personal notes, and stock, supply and observed-value
+differences. It works with capture stopped.
+
+Baseline A stays selected across history pages, filter edits, Apply, Clear and
+Refresh for the same character/business. It may therefore be outside the displayed
+page or filter. Changing character or business, choosing **Clear baseline**, or
+closing the board clears it. Unapplied filters have no current comparison row;
+Apply before comparing again. The same check-in cannot occupy both roles.
+
+**Compare** freshly reads both selected records and their character together.
+The dialog then keeps that detached pair: later saves, navigation or database
+changes do not rewrite it. Close the comparison and choose another pair to read
+again. If a selected record is missing or no longer belongs to that character
+and business, comparison is unavailable; a missing baseline must be selected
+again. A storage failure leaves the selection available for retry.
+
+Every difference is **comparison B minus baseline A**, preserving your chosen
+order even when B has an earlier save ID or recorded time. Stock and supplies
+use **percentage points**: 30% minus 10% is +20 points. A missing measurement on
+either side leaves its difference unavailable; recorded zero remains zero.
+Dollar values and their signed differences retain exact whole integers. These
+are changes between your observations, not production, elapsed gameplay, sale
+proceeds, profit, rates or evidence that one result is better. The recorded time
+shows when Save ran and may move backward with the clock.
+
+**Export comparison as JSON…** saves that displayed pair, character context,
+full notes, units and differences without rereading storage. It has its own
+versioned report kind; existing board/page exports keep their format. Output is
+limited to 256 KiB UTF-8 and uses atomic per-file replacement. Cancel writes
+nothing; a failed write keeps an earlier file and can be retried. This does not
+provide multi-file transactions, concurrent-writer coordination or power-loss
+durability. A file chooser keeps its original comparison, and the board cannot
+close while that export is active.
+
+Local tests cover actual SQLite ownership, null/zero and maximum integer values,
+clock ordering, corrupt selected data, concurrent writes and captured exports.
+The MainWindow record → page/filter → compare → export path is exercised with
+Linux offscreen Qt, including literal notes and small-window controls. Native
+file choosers are substituted; Windows, OCR and live gameplay remain unverified.
+
 ### Smart Recommendations
 - Get suggestions like:
   - "Your bunker is ready to sell"

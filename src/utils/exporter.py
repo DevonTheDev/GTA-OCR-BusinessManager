@@ -16,11 +16,13 @@ if TYPE_CHECKING:
     from ..database.activity_insights import ActivityInsights
     from ..database.session_comparison import SessionComparison
     from ..database.business_checkins import BusinessCheckInBoard, BusinessCheckInPage
+    from ..database.business_checkin_comparison import BusinessCheckInComparison
 
 logger = get_logger("utils.exporter")
 MAX_ACTIVITY_LEDGER_EXPORT_BYTES = 8 * 1024 * 1024
 MAX_ACTIVITY_INSIGHTS_EXPORT_BYTES = 8 * 1024 * 1024
 MAX_BUSINESS_CHECKINS_EXPORT_BYTES = 8 * 1024 * 1024
+MAX_BUSINESS_CHECKIN_COMPARISON_EXPORT_BYTES = 256 * 1024
 
 
 @dataclass
@@ -406,6 +408,26 @@ class DataExporter:
             return ExportResult(success=True, file_path=output_file, rows_exported=rows_exported)
         except Exception as exc:
             logger.error("Failed to export manual business check-ins: %s", exc)
+            return ExportResult(success=False, error_message=str(exc))
+
+    def export_business_checkin_comparison(
+        self,
+        comparison: "BusinessCheckInComparison",
+        output_file: Path,
+    ) -> ExportResult:
+        """Save this exact accepted pair without rereading either observation."""
+        try:
+            payload = json.dumps(
+                comparison.to_report(), ensure_ascii=False, indent=2, allow_nan=False,
+            )
+            if len(payload.encode("utf-8")) > MAX_BUSINESS_CHECKIN_COMPARISON_EXPORT_BYTES:
+                raise ValueError("The check-in comparison exceeds the 256 KiB UTF-8 export limit")
+            with atomic_text_writer(output_file) as stream:
+                stream.write(payload)
+            logger.info("Exported manual check-in comparison to JSON: %s", output_file)
+            return ExportResult(success=True, file_path=output_file, rows_exported=2)
+        except Exception as exc:
+            logger.error("Failed to export manual check-in comparison: %s", exc)
             return ExportResult(success=False, error_message=str(exc))
 
     def export_earnings_breakdown(
