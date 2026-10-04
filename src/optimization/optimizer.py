@@ -96,9 +96,6 @@ class Optimizer:
             estimated_value=estimated_value,
         )
 
-        # Update scheduler with business state
-        self._scheduler.update_business_stock(business_id, stock_percent)
-
     def set_cooldown(self, activity: str, duration_minutes: int) -> None:
         """Set a cooldown for an activity.
 

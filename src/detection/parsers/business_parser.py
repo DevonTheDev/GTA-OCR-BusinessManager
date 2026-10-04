@@ -76,16 +76,17 @@ class BusinessParser:
 
     # Patterns for extracting values
     STOCK_PATTERNS = [
-        re.compile(r"stock[:\s]*(\d+)\s*[/%]", re.IGNORECASE),
-        re.compile(r"stock[:\s]*(\d+)\s*/\s*(\d+)", re.IGNORECASE),
+        re.compile(r"stock[:\s]*(\d+)\s*%", re.IGNORECASE),
+        # Do not accept a partial denominator from decimals, exponents or extra ratios.
+        re.compile(r"stock[:\s]*(\d+)\s*/\s*(\d+)(?![\deE]|[.,]\d|\s*/)", re.IGNORECASE),
         re.compile(r"product[:\s]*(\d+)", re.IGNORECASE),
-        re.compile(r"(\d+)\s*[/%]\s*(?:full|stock)", re.IGNORECASE),
+        re.compile(r"(\d+)\s*%\s*(?:full|stock)", re.IGNORECASE),
     ]
 
     SUPPLY_PATTERNS = [
-        re.compile(r"suppl(?:y|ies)[:\s]*(\d+)\s*[/%]", re.IGNORECASE),
-        re.compile(r"suppl(?:y|ies)[:\s]*(\d+)\s*/\s*(\d+)", re.IGNORECASE),
-        re.compile(r"(\d+)\s*[/%]\s*suppl", re.IGNORECASE),
+        re.compile(r"suppl(?:y|ies)[:\s]*(\d+)\s*%", re.IGNORECASE),
+        re.compile(r"suppl(?:y|ies)[:\s]*(\d+)\s*/\s*(\d+)(?![\deE]|[.,]\d|\s*/)", re.IGNORECASE),
+        re.compile(r"(\d+)\s*%\s*suppl", re.IGNORECASE),
     ]
 
     VALUE_PATTERNS = [
@@ -176,8 +177,9 @@ class BusinessParser:
                     # Check for X/Y format
                     if match.lastindex >= 2:
                         max_val = int(match.group(2))
-                        if max_val > 0:
-                            value = int((value / max_val) * 100)
+                        if max_val <= 0 or value > max_val:
+                            continue
+                        value = (value * 100) // max_val
                     # Ensure it's a percentage
                     if 0 <= value <= 100:
                         return value
@@ -194,8 +196,9 @@ class BusinessParser:
                     value = int(match.group(1))
                     if match.lastindex >= 2:
                         max_val = int(match.group(2))
-                        if max_val > 0:
-                            value = int((value / max_val) * 100)
+                        if max_val <= 0 or value > max_val:
+                            continue
+                        value = (value * 100) // max_val
                     if 0 <= value <= 100:
                         return value
                 except ValueError:

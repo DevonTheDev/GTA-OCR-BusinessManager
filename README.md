@@ -1028,6 +1028,21 @@ therefore need a restart or future threshold-policy adjustment. Tests use synthe
 OCR text through the actual capture/accounting path and disposable SQLite, without
 Windows OCR, screenshots, live gameplay or an accuracy benchmark.
 
+### Live business stock and supply ratios
+
+Business OCR treats `Stock: 5/10` as 50% and `Supplies: 3/4` as 75%.
+Integer ratios require a positive denominator and a numerator between zero and
+that denominator; fractional percentages round down (`1/3` becomes 33%). A slash
+alone is not a percent sign. Ordinary text such as `Stock: 50%` still works.
+The resulting live values reach the optimizer and the Businesses tab without
+calling an unsupported stock-update method on the explicit-action scheduler.
+
+Tests exercise the real capture loop with synthetic OCR and the actual business
+cards in Linux offscreen Qt. The live observations leave recorded manual check-ins
+and database history untouched. Business-name recognition, absent-field defaults
+and value estimates retain their existing behavior. Windows OCR, real screenshots
+and in-game recognition accuracy remain separate validation work.
+
 ### Activity export periods and row counts
 
 Activity-history and earnings-breakdown exports now use the activity's completion
