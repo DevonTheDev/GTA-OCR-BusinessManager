@@ -21,6 +21,7 @@ from .detection.parsers.business_parser import BusinessParser, BusinessReading, 
 from .game.state_machine import GameStateMachine, GameState, StateTransition
 from .game.activities import Activity, ActivityType
 from .game.businesses import BUSINESSES
+from .game.business_readings import normalize_live_business_reading
 from .tracking.session import SessionTracker
 from .tracking.session_goals import SessionGoalController
 from .tracking.goals import GoalType, SessionGoal
@@ -853,11 +854,18 @@ class GTABusinessManager:
                     return
                 # Convert business type to ID string
                 business_id = reading.business_type.name.lower()
+                if business_id not in BUSINESSES:
+                    return
 
-                # Update business state
-                stock_pct = reading.stock_level or 0
-                supply_pct = reading.supply_level or 0
-                value = reading.stock_value or 0
+                # Missing fields remain unknown. A supply-only screen may have
+                # no applicable observations for a business without supplies.
+                try:
+                    stock_pct, supply_pct, value = normalize_live_business_reading(
+                        business_id, reading.stock_level, reading.supply_level,
+                        reading.stock_value,
+                    )
+                except ValueError:
+                    return
 
                 self.update_business_state(
                     business_id, stock_pct, supply_pct, value,
@@ -867,9 +875,12 @@ class GTABusinessManager:
             description = (
                 "Business assigned to selected target" if target is not None else "Business detected"
             )
+            stock_text = f"{stock_pct}%" if stock_pct is not None else "unknown"
+            supply_text = f"{supply_pct}%" if supply_pct is not None else "unknown"
+            value_text = f"${value:,}" if value is not None else "unknown"
             logger.info(
                 f"{description}: {reading.business_type.name} - "
-                f"Stock: {stock_pct}%, Supply: {supply_pct}%, Value: ${value:,}"
+                f"Stock: {stock_text}, Supply: {supply_text}, Value: {value_text}"
             )
 
         except Exception as e:
@@ -1209,18 +1220,54 @@ class GTABusinessManager:
             self._optimizer.clear_business_states()
         logger.info("Live business readings cleared")
 
+    def set_manual_business_reading(
+        self,
+        business_id: str,
+        stock_percent: Optional[int] = None,
+        supply_percent: Optional[int] = None,
+        value: Optional[int] = None,
+    ) -> None:
+        """Replace one live reading, preserving unknown fields and retiring old OCR.
+
+        This observation is independent of the screen target and saved history.
+        Capture remains available to replace it with a newly started OCR batch.
+        Invalid input or an optimizer preparation failure changes no live state.
+        """
+        stock_percent, supply_percent, value = normalize_live_business_reading(
+            business_id, stock_percent, supply_percent, value, manual=True,
+        )
+        business_type = BusinessType[business_id.upper()]
+        with self._data_lock:
+            state = {
+                "stock": stock_percent,
+                "supply": supply_percent,
+                "value": value,
+                "updated": datetime.now(),
+                "identity_source": "manual_entry",
+            }
+            # Prepare the optimizer's replacement before changing app state or
+            # retiring OCR, so validation/calculation failures are atomic too.
+            self._optimizer.update_business_state(business_id, stock_percent, supply_percent, value)
+            self._data.business_states[business_id] = state
+            self._business_screen_generation += 1
+            self._business_parser.clear_reading(business_type)
+        logger.info(f"Manual live reading entered for {business_id}")
+
     def update_business_state(
         self,
         business_id: str,
-        stock_percent: int,
-        supply_percent: int,
-        value: int = 0,
+        stock_percent: Optional[int] = None,
+        supply_percent: Optional[int] = None,
+        value: Optional[int] = None,
         *,
         identity_source: Optional[str] = None,
     ) -> None:
-        """Update business state (from OCR or manual input)."""
-        if identity_source not in (None, "ocr_text", "selected_target"):
+        """Publish a validated live observation without retiring an OCR batch."""
+        if identity_source not in (None, "ocr_text", "selected_target", "manual_entry"):
             raise ValueError("Unknown business identity source")
+        stock_percent, supply_percent, value = normalize_live_business_reading(
+            business_id, stock_percent, supply_percent, value,
+        )
         with self._data_lock:
             state = {
                 "stock": stock_percent,
@@ -1230,6 +1277,6 @@ class GTABusinessManager:
             }
             if identity_source is not None:
                 state["identity_source"] = identity_source
-            self._data.business_states[business_id] = state
             self._optimizer.update_business_state(business_id, stock_percent, supply_percent, value)
+            self._data.business_states[business_id] = state
         logger.debug(f"Business {business_id} updated: stock={stock_percent}%, supply={supply_percent}%")

@@ -34,6 +34,11 @@ class Business:
     raid_timer: int = 0  # Minutes before raid possible (after selling)
     notes: str = ""
 
+    @property
+    def uses_supplies(self) -> bool:
+        """Whether this business produces stock from a supply meter."""
+        return self.full_production_time > 0 and self.supplies_per_full > 0
+
 
 # MC Businesses (values with both upgrades)
 COCAINE_LOCKUP = Business(
@@ -276,7 +281,9 @@ def estimate_stock_value(business: Business, stock_percent: int) -> int:
     return int(business.max_value * (stock_percent / 100))
 
 
-def estimate_time_to_full(business: Business, current_stock_percent: int) -> int:
+def estimate_time_to_full(
+    business: Business, current_stock_percent: int | None
+) -> int | None:
     """Estimate minutes until business is full.
 
     Args:
@@ -284,16 +291,22 @@ def estimate_time_to_full(business: Business, current_stock_percent: int) -> int
         current_stock_percent: Current stock level (0-100)
 
     Returns:
-        Estimated minutes to full
+        Estimated minutes to full, or None when stock or production time is unknown
     """
-    if business.full_production_time <= 0:
+    if current_stock_percent is None:
+        return None
+    if current_stock_percent >= 100:
         return 0
+    if business.full_production_time <= 0:
+        return None
 
     remaining_percent = 100 - current_stock_percent
-    return int(business.full_production_time * (remaining_percent / 100))
+    return max(1, int(business.full_production_time * (remaining_percent / 100)))
 
 
-def estimate_time_to_full_formatted(business: Business, current_stock_percent: int) -> str:
+def estimate_time_to_full_formatted(
+    business: Business, current_stock_percent: int | None
+) -> str:
     """Get formatted time until business is full.
 
     Args:
@@ -305,7 +318,9 @@ def estimate_time_to_full_formatted(business: Business, current_stock_percent: i
     """
     minutes = estimate_time_to_full(business, current_stock_percent)
 
-    if minutes <= 0:
+    if minutes is None:
+        return "Unknown"
+    if minutes == 0:
         return "Full"
 
     hours = minutes // 60
@@ -409,7 +424,7 @@ class BusinessStatus:
         return estimate_stock_value(self.business, self.stock_percent)
 
     @property
-    def time_to_full(self) -> int:
+    def time_to_full(self) -> int | None:
         """Get minutes until full."""
         return estimate_time_to_full(self.business, self.stock_percent)
 

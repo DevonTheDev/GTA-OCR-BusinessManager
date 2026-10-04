@@ -177,7 +177,7 @@ def test_card_adds_allowlisted_provenance_without_losing_status_or_age(widgets, 
     assert label in card._status_label.text()
     assert card._status_label.textFormat() == Qt.TextFormat.PlainText
     card.set_not_tracked()
-    assert card._status_label.text() == 'Not tracked - visit business to update'
+    assert card._status_label.text() == 'Not tracked · visit or enter a reading'
 
 
 def test_card_old_direct_calls_keep_status_and_replace_prior_provenance(widgets):

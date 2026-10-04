@@ -251,15 +251,15 @@ class BusinessMiniStatus(QFrame):
     def set_business(
         self,
         name: str,
-        stock_pct: int,
+        stock_pct: Optional[int],
         time_to_full: str = "",
         needs_attention: bool = False
     ) -> None:
         """Update business display."""
         self._name.setText(name)
-        self._status.setText(f"{stock_pct}%")
+        self._status.setText('Unknown' if stock_pct is None else f"{stock_pct}%")
 
-        if stock_pct >= 100:
+        if stock_pct is not None and stock_pct >= 100:
             self._time.setText("FULL")
             self._time.setStyleSheet("color: #F44336; font-size: 10px; font-weight: bold;")
         elif needs_attention:
@@ -566,8 +566,9 @@ class ExpandedQuickStats(QWidget):
         from ...game.businesses import BUSINESSES, estimate_time_to_full_formatted
 
         sorted_businesses = sorted(
-            businesses.items(),
-            key=lambda x: x[1].get("stock", 0),
+            ((bid, state) for bid, state in businesses.items() if bid in BUSINESSES),
+            key=lambda x: (x[1].get('stock') is not None,
+                           x[1].get('stock') if x[1].get('stock') is not None else 0),
             reverse=True
         )
 
@@ -576,15 +577,16 @@ class ExpandedQuickStats(QWidget):
                 bid, state = sorted_businesses[i]
                 business = BUSINESSES.get(bid)
                 if business:
-                    stock = state.get("stock", 0)
-                    supply = state.get("supply", 0)
+                    stock = state.get("stock")
+                    supply = state.get("supply")
                     time_str = estimate_time_to_full_formatted(business, stock)
 
                     bw.set_business(
                         business.name[:15],
                         stock,
                         time_str,
-                        needs_attention=supply <= 20
+                        needs_attention=(business.uses_supplies and stock is not None
+                                         and supply is not None and supply <= 20)
                     )
                     bw.show()
             else:

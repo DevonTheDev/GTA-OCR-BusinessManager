@@ -1,15 +1,15 @@
 """Workflow optimization and recommendation engine."""
 
-from typing import List, Dict, Optional
 from dataclasses import dataclass
 from datetime import datetime, timedelta
+from typing import Dict, List, Optional
 
-from ..game.businesses import Business, BUSINESSES, calculate_value_per_hour
 from ..game.activities import ActivityType
-from .priorities import PriorityCalculator, PriorityScore
-from .scheduler import ActionScheduler, ScheduledAction
+from ..game.business_readings import normalize_live_business_reading
+from ..game.businesses import BUSINESSES, Business, estimate_time_to_full
 from ..utils.logging import get_logger
-
+from .priorities import PriorityCalculator
+from .scheduler import ActionScheduler
 
 logger = get_logger("optimization")
 
@@ -33,10 +33,11 @@ class BusinessState:
     """Current state of a business."""
 
     business: Business
-    stock_percent: int = 0
-    supply_percent: int = 0
-    last_updated: datetime = None
-    estimated_value: int = 0
+    stock_percent: int | None = None
+    supply_percent: int | None = None
+    last_updated: datetime | None = None
+    estimated_value: int | None = None
+    observed_value: int | None = None
 
 
 class Optimizer:
@@ -70,31 +71,35 @@ class Optimizer:
     def update_business_state(
         self,
         business_id: str,
-        stock_percent: int,
-        supply_percent: int,
-        value: int = 0,
+        stock_percent: int | None,
+        supply_percent: int | None,
+        value: int | None = None,
     ) -> None:
         """Update the known state of a business.
 
         Args:
             business_id: Business identifier
-            stock_percent: Current stock level (0-100)
-            supply_percent: Current supply level (0-100)
-            value: Current stock value if known
+            stock_percent: Observed stock level (0-100), or None if unknown
+            supply_percent: Observed supply level (0-100), or None if unknown
+            value: Observed stock value, including zero; None if unknown
         """
-        business = BUSINESSES.get(business_id)
-        if not business:
-            return
+        stock_percent, supply_percent, value = normalize_live_business_reading(
+            business_id, stock_percent, supply_percent, value
+        )
+        business = BUSINESSES[business_id]
+        estimated_value = value
+        if estimated_value is None and stock_percent is not None:
+            estimated_value = int(business.max_value * (stock_percent / 100))
 
-        estimated_value = value or int(business.max_value * (stock_percent / 100))
-
-        self._business_states[business_id] = BusinessState(
+        state = BusinessState(
             business=business,
             stock_percent=stock_percent,
             supply_percent=supply_percent,
             last_updated=datetime.now(),
             estimated_value=estimated_value,
+            observed_value=value,
         )
+        self._business_states[business_id] = state
 
     def clear_business_states(self) -> None:
         """Forget live observations while preserving cooldowns and scheduled actions."""
@@ -175,56 +180,69 @@ class Optimizer:
         for business_id, state in self._business_states.items():
             business = state.business
 
-            # Calculate sell priority
-            time_since_update = 0
-            if state.last_updated:
-                time_since_update = int((datetime.now() - state.last_updated).total_seconds() / 60)
+            if (
+                state.stock_percent is not None
+                and state.estimated_value is not None
+                and state.estimated_value > 0
+            ):
+                # Calculate sell priority
+                time_since_update = 0
+                if state.last_updated:
+                    time_since_update = int((datetime.now() - state.last_updated).total_seconds() / 60)
 
-            sell_score = self._priority_calc.calculate_sell_priority(
-                business=business,
-                stock_percent=state.stock_percent,
-                time_since_check_minutes=time_since_update,
-                solo_mode=self._solo_mode,
-            )
-
-            # Generate recommendation based on score
-            if state.stock_percent >= 95:
-                # Full stock - high priority sell
-                priority = 1
-                action = f"Sell {business.name} NOW"
-                reason = f"Stock is full ({state.stock_percent}%). Max value: ${state.estimated_value:,}"
-            elif sell_score.total >= 0.6:
-                # High priority sell
-                priority = 1
-                action = f"Sell {business.name}"
-                reason = f"High value ready ({state.stock_percent}% stock)"
-            elif sell_score.total >= 0.4 and self._solo_mode:
-                # Medium priority - good for solo
-                priority = 2
-                action = f"Consider selling {business.name}"
-                reason = f"Good for solo sell ({state.stock_percent}%)"
-            elif state.stock_percent >= 50:
-                # Has some stock but not urgent
-                priority = 3
-                action = f"Sell {business.name} when ready"
-                reason = f"Stock at {state.stock_percent}%"
-            else:
-                # Not worth selling yet
-                sell_score = None
-
-            if sell_score and sell_score.total > 0.2:
-                recommendations.append(
-                    Recommendation(
-                        priority=priority,
-                        action=action,
-                        reason=reason,
-                        estimated_value=state.estimated_value,
-                        estimated_time_minutes=15,
-                        business_type=business_id,
-                        activity_type=ActivityType.SELL_MISSION,
-                        score=sell_score.total,
-                    )
+                sell_score = self._priority_calc.calculate_sell_priority(
+                    business=business,
+                    stock_percent=state.stock_percent,
+                    time_since_check_minutes=time_since_update,
+                    solo_mode=self._solo_mode,
+                    estimated_value=state.estimated_value,
                 )
+
+                # Generate recommendation based on score
+                if state.stock_percent >= 95:
+                    # Full stock - high priority sell
+                    priority = 1
+                    action = f"Sell {business.name} NOW"
+                    reason = f"Stock is full ({state.stock_percent}%). Max value: ${state.estimated_value:,}"
+                elif sell_score.total >= 0.6:
+                    # High priority sell
+                    priority = 1
+                    action = f"Sell {business.name}"
+                    reason = f"High value ready ({state.stock_percent}% stock)"
+                elif sell_score.total >= 0.4 and self._solo_mode:
+                    # Medium priority - good for solo
+                    priority = 2
+                    action = f"Consider selling {business.name}"
+                    reason = f"Good for solo sell ({state.stock_percent}%)"
+                elif state.stock_percent >= 50:
+                    # Has some stock but not urgent
+                    priority = 3
+                    action = f"Sell {business.name} when ready"
+                    reason = f"Stock at {state.stock_percent}%"
+                else:
+                    # Not worth selling yet
+                    sell_score = None
+
+                if sell_score and sell_score.total > 0.2:
+                    recommendations.append(
+                        Recommendation(
+                            priority=priority,
+                            action=action,
+                            reason=reason,
+                            estimated_value=state.estimated_value,
+                            estimated_time_minutes=15,
+                            business_type=business_id,
+                            activity_type=ActivityType.SELL_MISSION,
+                            score=sell_score.total,
+                        )
+                    )
+
+            if (
+                not business.uses_supplies
+                or state.stock_percent is None
+                or state.supply_percent is None
+            ):
+                continue
 
             # Calculate resupply priority
             resupply_score = self._priority_calc.calculate_resupply_priority(
@@ -236,7 +254,7 @@ class Optimizer:
             if resupply_score.total >= 0.4:
                 if state.supply_percent == 0:
                     priority = 1
-                    reason = f"Supplies EMPTY - production halted!"
+                    reason = "Supplies EMPTY - production halted!"
                 elif state.supply_percent <= 20:
                     priority = 2
                     reason = f"Supplies critically low ({state.supply_percent}%)"
@@ -400,27 +418,20 @@ class Optimizer:
         if activity_type.lower() in cooldown_map:
             self.set_cooldown(activity_type.lower(), cooldown_map[activity_type.lower()])
 
-    def estimate_time_to_full(self, business_id: str) -> int:
+    def estimate_time_to_full(self, business_id: str) -> int | None:
         """Estimate minutes until a business is full.
 
         Args:
             business_id: Business identifier
 
         Returns:
-            Estimated minutes, or 0 if unknown
+            Estimated minutes, or None if unknown; zero only for known full stock
         """
         if business_id not in self._business_states:
-            return 0
+            return None
 
         state = self._business_states[business_id]
-        business = state.business
-
-        if state.stock_percent >= 100:
-            return 0
-
-        remaining_percent = 100 - state.stock_percent
-        time_for_full = business.full_production_time
-        return int(time_for_full * (remaining_percent / 100))
+        return estimate_time_to_full(state.business, state.stock_percent)
 
     def get_business_rankings(self) -> List[tuple]:
         """Get businesses ranked by sell priority.
@@ -433,7 +444,13 @@ class Optimizer:
             for bid, state in self._business_states.items()
         }
 
-        rankings = self._priority_calc.rank_businesses(business_dict, self._solo_mode)
+        rankings = self._priority_calc.rank_businesses(
+            business_dict,
+            self._solo_mode,
+            estimated_values={
+                bid: state.estimated_value for bid, state in self._business_states.items()
+            },
+        )
 
         result = []
         for business_id, score in rankings:
@@ -449,12 +466,19 @@ class Optimizer:
         Returns:
             Dict with summary information
         """
-        total_value = sum(s.estimated_value for s in self._business_states.values())
+        total_value = sum(
+            s.estimated_value for s in self._business_states.values()
+            if s.estimated_value is not None
+        )
         businesses_ready = sum(
-            1 for s in self._business_states.values() if s.stock_percent >= 50
+            1 for s in self._business_states.values()
+            if s.stock_percent is not None and s.stock_percent >= 50
+            and s.estimated_value is not None and s.estimated_value > 0
         )
         businesses_need_supplies = sum(
-            1 for s in self._business_states.values() if s.supply_percent <= 20
+            1 for s in self._business_states.values()
+            if s.business.uses_supplies and s.stock_percent is not None
+            and s.supply_percent is not None and s.supply_percent <= 20
         )
 
         # Get top priority business
@@ -463,11 +487,14 @@ class Optimizer:
 
         return {
             "total_business_value": total_value,
+            "businesses_with_unknown_value": sum(
+                s.estimated_value is None for s in self._business_states.values()
+            ),
             "businesses_ready_to_sell": businesses_ready,
             "businesses_need_supplies": businesses_need_supplies,
             "active_cooldowns": len([c for c in self._cooldowns.values() if c > datetime.now()]),
             "top_priority_business": top_business[0] if top_business else None,
-            "scheduled_actions": len(self._scheduler.get_upcoming_actions()),
+            "scheduled_actions": self._scheduler.scheduled_count,
         }
 
     def schedule_sell(

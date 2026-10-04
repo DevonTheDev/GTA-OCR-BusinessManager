@@ -1,9 +1,9 @@
 """Priority calculation for business and activity recommendations."""
 
-from typing import Dict, List, Tuple
+from collections.abc import Mapping
 from dataclasses import dataclass
 
-from ..game.businesses import Business, BUSINESSES, calculate_value_per_hour
+from ..game.businesses import BUSINESSES, Business, calculate_value_per_hour
 
 
 @dataclass
@@ -35,6 +35,8 @@ class PriorityCalculator:
         stock_percent: int,
         time_since_check_minutes: int = 0,
         solo_mode: bool = True,
+        *,
+        estimated_value: int | None = None,
     ) -> PriorityScore:
         """Calculate priority for selling a business.
 
@@ -43,12 +45,16 @@ class PriorityCalculator:
             stock_percent: Current stock level
             time_since_check_minutes: Time since last check
             solo_mode: Whether playing solo
+            estimated_value: Effective current value; omitted values use the stock estimate
 
         Returns:
             PriorityScore with breakdown
         """
         # Value score (based on current value)
-        current_value = business.max_value * (stock_percent / 100)
+        current_value = (
+            estimated_value if estimated_value is not None
+            else business.max_value * (stock_percent / 100)
+        )
         value_score = min(1.0, current_value / 500000)  # Normalize to ~$500K max
 
         # Urgency score (higher when full or near full)
@@ -87,8 +93,8 @@ class PriorityCalculator:
     def calculate_resupply_priority(
         self,
         business: Business,
-        supply_percent: int,
-        stock_percent: int,
+        supply_percent: int | None,
+        stock_percent: int | None,
     ) -> PriorityScore:
         """Calculate priority for resupplying a business.
 
@@ -100,6 +106,9 @@ class PriorityCalculator:
         Returns:
             PriorityScore with breakdown
         """
+        if not business.uses_supplies or supply_percent is None or stock_percent is None:
+            return PriorityScore(0.0, 0.0, 0.0, 0.0, 0.0)
+
         # Value score (based on potential value when supplies convert)
         potential_value = business.max_value - (business.max_value * stock_percent / 100)
         value_score = min(1.0, potential_value / 500000)
@@ -135,14 +144,17 @@ class PriorityCalculator:
 
     def rank_businesses(
         self,
-        business_states: Dict[str, Tuple[int, int]],  # {id: (stock%, supply%)}
+        business_states: dict[str, tuple[int | None, int | None]],
         solo_mode: bool = True,
-    ) -> List[Tuple[str, PriorityScore]]:
+        *,
+        estimated_values: Mapping[str, int | None] | None = None,
+    ) -> list[tuple[str, PriorityScore]]:
         """Rank businesses by sell priority.
 
         Args:
             business_states: Dict of business states
             solo_mode: Whether playing solo
+            estimated_values: Optional effective values, preserving observed zeroes
 
         Returns:
             List of (business_id, score) tuples, highest priority first
@@ -151,9 +163,19 @@ class PriorityCalculator:
 
         for business_id, (stock, supply) in business_states.items():
             business = BUSINESSES.get(business_id)
-            if business:
-                score = self.calculate_sell_priority(business, stock, solo_mode=solo_mode)
-                rankings.append((business_id, score))
+            if business is None or stock is None:
+                continue
+            current_value = (
+                estimated_values[business_id]
+                if estimated_values is not None and business_id in estimated_values
+                else int(business.max_value * (stock / 100))
+            )
+            if current_value is None or current_value <= 0:
+                continue
+            score = self.calculate_sell_priority(
+                business, stock, solo_mode=solo_mode, estimated_value=current_value
+            )
+            rankings.append((business_id, score))
 
         # Sort by total score descending
         rankings.sort(key=lambda x: x[1].total, reverse=True)

@@ -129,11 +129,12 @@ def test_all_catalog_targets_assign_unnamed_labeled_readings(manager, business_i
 
     assert set(manager.data.business_states) == {business_id}
     state = manager.get_business_state(business_id)
-    assert (state["stock"], state["supply"], state["value"]) == (50, 75, 123456)
+    supply = 75 if BUSINESSES[business_id].uses_supplies else None
+    assert (state["stock"], state["supply"], state["value"]) == (50, supply, 123456)
     assert state["identity_source"] == "selected_target"
     optimized = manager._optimizer._business_states[business_id]
     assert (optimized.stock_percent, optimized.supply_percent, optimized.estimated_value) == (
-        50, 75, 123456,
+        50, supply, 123456,
     )
     reading = manager._business_parser.get_last_reading(BusinessType[business_id.upper()])
     assert reading.stock_level == 50
@@ -171,9 +172,18 @@ def test_automatic_keeps_existing_keyword_precedence(manager, text, business_id,
     caplog.set_level(logging.INFO)
     manager.set_business_screen_target(None)
     SyntheticBusinessCapture(manager, [(text, "Supplies: 3/4", "Value: $123,456")]).run()
-    assert set(manager.data.business_states) == {business_id}
-    assert manager.get_business_state(business_id)["identity_source"] == "ocr_text"
-    assert f"Business detected: {business_id.upper()}" in caplog.text
+    # Identification is unchanged; only cataloged cards accept live observations.
+    if business_id in BUSINESSES:
+        assert set(manager.data.business_states) == {business_id}
+        assert manager.get_business_state(business_id)["identity_source"] == "ocr_text"
+        assert f"Business detected: {business_id.upper()}" in caplog.text
+    else:
+        assert manager.data.business_states == {}
+        assert manager._optimizer._business_states == {}
+        if business_id != "unknown":
+            assert manager._business_parser.get_last_reading(
+                BusinessType[business_id.upper()]
+            ).stock_level == 50
     assert "Business assigned" not in caplog.text
 
 
@@ -210,12 +220,12 @@ def test_selection_does_not_make_blank_bare_or_invalid_readings_publishable(mana
 
 
 @pytest.mark.parametrize("frame,expected", [
-    (("", "Supplies: 1/10", ""), (0, 10, 0)),
-    (("Stock: 1/4", "", ""), (25, 0, 0)),
-    (("", "", "Value: $123,456"), (0, 0, 123456)),
-    (("Stock: 5/0", "Supplies: 1/2", ""), (0, 50, 0)),
+    (("", "Supplies: 1/10", ""), (None, 10, None)),
+    (("Stock: 1/4", "", ""), (25, None, None)),
+    (("", "", "Value: $123,456"), (None, None, 123456)),
+    (("Stock: 5/0", "Supplies: 1/2", ""), (None, 50, None)),
 ])
-def test_selected_partial_readings_keep_existing_zero_defaults(manager, frame, expected):
+def test_selected_partial_readings_replace_missing_fields_with_unknown(manager, frame, expected):
     manager.set_business_screen_target("bunker")
     manager.update_business_state("bunker", 70, 60, 900)
     SyntheticBusinessCapture(manager, [frame]).run()
@@ -234,7 +244,7 @@ def test_selection_does_not_force_business_detection(manager):
     assert capture.calls == [] and capture.ocr_calls == []
 
 
-@pytest.mark.parametrize("source", [None, "ocr_text", "selected_target"])
+@pytest.mark.parametrize("source", [None, "ocr_text", "selected_target", "manual_entry"])
 def test_optional_identity_source_preserves_direct_update_compatibility(manager, source):
     if source is None:
         manager.update_business_state("bunker", 10, 20, 300)
@@ -310,7 +320,8 @@ def test_switch_during_batch_discards_before_parser_then_accepts_next_batch(
     final_target = changes[-1]
     business_id = final_target or "bunker"
     state = manager.get_business_state(business_id)
-    assert (state["stock"], state["supply"], state["value"]) == (60, 80, 234567)
+    supply = 80 if BUSINESSES[business_id].uses_supplies else None
+    assert (state["stock"], state["supply"], state["value"]) == (60, supply, 234567)
     assert state["identity_source"] == ("selected_target" if final_target else "ocr_text")
     reading = manager._business_parser.get_last_reading(BusinessType[business_id.upper()])
     assert reading.stock_level == 60

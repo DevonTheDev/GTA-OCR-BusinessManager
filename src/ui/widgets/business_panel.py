@@ -19,7 +19,7 @@ from PyQt6.QtCore import QSignalBlocker, QTimer, Qt
 
 from ...constants import UI, BUSINESS
 from ...game.businesses import BUSINESSES, Business
-from ...utils.helpers import format_money, format_money_short, format_time
+from ...utils.helpers import format_money_short, format_time
 from ...utils.logging import get_logger
 
 logger = get_logger('ui.business_panel')
@@ -41,23 +41,26 @@ class BusinessCard(QFrame):
             QFrame#businessCard {
                 background-color: #16213e;
                 border-radius: 8px;
-                padding: 12px;
+                padding: 0;
             }
         """)
-        self.setFixedHeight(160)
+        self.setFixedHeight(204)
 
         layout = QVBoxLayout(self)
-        layout.setSpacing(8)
+        layout.setContentsMargins(12, 12, 12, 12)
+        layout.setSpacing(6)
 
         # Header
-        header_layout = QHBoxLayout()
+        header_layout = QVBoxLayout()
+        header_layout.setSpacing(0)
         name = QLabel(business.name)
         name.setTextFormat(Qt.TextFormat.PlainText)
+        name.setWordWrap(True)
         name.setStyleSheet("color: white; font-size: 14px; font-weight: bold;")
         header_layout.addWidget(name)
-        header_layout.addStretch()
 
         self._value_label = QLabel("--")
+        self._value_label.setTextFormat(Qt.TextFormat.PlainText)
         self._value_label.setStyleSheet("color: #4CAF50; font-size: 12px;")
         header_layout.addWidget(self._value_label)
 
@@ -126,31 +129,52 @@ class BusinessCard(QFrame):
         self._status_label.setStyleSheet("color: #666; font-size: 10px;")
         layout.addWidget(self._status_label)
 
+        self._live_reading_button = QPushButton('Enter live reading…')
+        self._live_reading_button.setAccessibleName(f'Enter live reading for {business.name}')
+        self._live_reading_button.setEnabled(False)
+        layout.addWidget(self._live_reading_button)
+        self.set_not_tracked()
+
+    @staticmethod
+    def _set_progress(bar, value, *, applicable=True):
+        # 0..0 would animate a busy indicator, which is not an unknown reading.
+        bar.setRange(0, 100)
+        bar.setValue(value if value is not None and applicable else 0)
+        bar.setFormat('Not applicable' if not applicable else 'Unknown' if value is None else '%p%')
+
     def update_data(
-        self, stock: int, supply: int, value: int = 0, updated: str = "",
+        self, stock: Optional[int], supply: Optional[int], value: Optional[int] = None, updated: str = "",
         identity_source: Optional[str] = None,
     ) -> None:
         """Update business card data."""
-        self._stock_bar.setValue(stock)
-        self._supply_bar.setValue(supply)
+        self._set_progress(self._stock_bar, stock)
+        self._set_progress(self._supply_bar, supply, applicable=self._business.uses_supplies)
 
-        if value > 0:
+        if value is not None:
             self._value_label.setText(format_money_short(value))
-        else:
+            self._value_label.setToolTip(f'${value:,}')
+        elif stock is not None:
             # Estimate from percentage
             est_value = int(self._business.max_value * (stock / 100))
             self._value_label.setText(f"~{format_money_short(est_value)}")
+            self._value_label.setToolTip(f'Estimated from stock: ${est_value:,}')
+        else:
+            self._value_label.setText('Unknown')
+            self._value_label.setToolTip('No observed value or known stock to estimate from')
 
         # Update stock bar color based on level
-        if stock >= BUSINESS.HIGH_STOCK_THRESHOLD:
+        if stock is None:
+            stock_color = '#666'
+            status = 'Stock unknown'
+        elif stock >= BUSINESS.HIGH_STOCK_THRESHOLD:
             stock_color = "#4CAF50"
-            status = "Ready to sell!"
+            status = "Ready to sell!" if value is None or value > 0 else 'Stock observed'
         elif stock >= BUSINESS.MEDIUM_SUPPLY_THRESHOLD:
             stock_color = "#FFD700"
-            status = "Consider selling"
+            status = "Consider selling" if value is None or value > 0 else 'Stock observed'
         else:
             stock_color = "#2196F3"
-            status = "Producing..."
+            status = "Stock observed"
 
         self._stock_bar.setStyleSheet(f"""
             QProgressBar {{
@@ -168,9 +192,12 @@ class BusinessCard(QFrame):
         """)
 
         # Update supply bar color
-        if supply <= BUSINESS.LOW_SUPPLY_THRESHOLD:
+        if not self._business.uses_supplies or supply is None:
+            supply_color = '#666'
+        elif supply <= BUSINESS.LOW_SUPPLY_THRESHOLD:
             supply_color = "#F44336"
-            status = "Needs supplies!"
+            if stock is not None and stock < 100:
+                status = "Needs supplies!"
         elif supply <= BUSINESS.MEDIUM_SUPPLY_THRESHOLD:
             supply_color = "#FFD700"
         else:
@@ -196,17 +223,20 @@ class BusinessCard(QFrame):
         source_label = {
             "ocr_text": "OCR text match",
             "selected_target": "Selected target",
+            "manual_entry": "Manual entry",
         }.get(identity_source)
         if source_label:
             status = f"{status}\n{source_label}"
         self._status_label.setText(status)
+        self._status_label.setStyleSheet("color: #AAA; font-size: 10px;")
 
     def set_not_tracked(self) -> None:
         """Mark business as not currently tracked."""
-        self._stock_bar.setValue(0)
-        self._supply_bar.setValue(0)
+        self._set_progress(self._stock_bar, None)
+        self._set_progress(self._supply_bar, None, applicable=self._business.uses_supplies)
         self._value_label.setText("--")
-        self._status_label.setText("Not tracked - visit business to update")
+        self._value_label.setToolTip('No live reading')
+        self._status_label.setText("Not tracked · visit or enter a reading")
         self._status_label.setStyleSheet("color: #666; font-size: 10px;")
 
 
@@ -219,6 +249,8 @@ class BusinessPanel(QWidget):
         self._cards: Dict[str, BusinessCard] = {}
         self._checkins_dialog = None
         self._opening_checkins = False
+        self._live_reading_dialog = None
+        self._opening_live_reading = False
         self._setup_ui()
         self._setup_update_timer()
 
@@ -249,6 +281,11 @@ class BusinessPanel(QWidget):
         self._checkins_status_label.setWordWrap(True)
         self._checkins_status_label.hide()
         layout.addWidget(self._checkins_status_label)
+        self._live_reading_status_label = QLabel()
+        self._live_reading_status_label.setTextFormat(Qt.TextFormat.PlainText)
+        self._live_reading_status_label.setWordWrap(True)
+        self._live_reading_status_label.hide()
+        layout.addWidget(self._live_reading_status_label)
 
         info = QLabel("Visit each business in-game to update stock and supply levels")
         info.setTextFormat(Qt.TextFormat.PlainText)
@@ -314,6 +351,12 @@ class BusinessPanel(QWidget):
         row, col = 0, 0
         for business_id, business in BUSINESSES.items():
             card = BusinessCard(business)
+            card._live_reading_button.setEnabled(
+                callable(getattr(self._app, 'set_manual_business_reading', None))
+            )
+            card._live_reading_button.clicked.connect(
+                lambda checked=False, bid=business_id: self._open_live_reading(bid)
+            )
             self._cards[business_id] = card
             scroll_layout.addWidget(card, row, col)
 
@@ -325,6 +368,51 @@ class BusinessPanel(QWidget):
         scroll_layout.setRowStretch(row + 1, 1)
         scroll.setWidget(scroll_content)
         layout.addWidget(scroll)
+
+    def _open_live_reading(self, business_id):
+        """Open one fixed-business draft, independently of the OCR target."""
+        if self._opening_live_reading:
+            return
+        if self._live_reading_dialog is not None:
+            self._live_reading_dialog.show()
+            self._live_reading_dialog.raise_()
+            self._live_reading_dialog.activateWindow()
+            return
+        if not callable(getattr(self._app, 'set_manual_business_reading', None)):
+            return
+        self._opening_live_reading = True
+        try:
+            from .live_business_reading_dialog import LiveBusinessReadingDialog
+            dialog = LiveBusinessReadingDialog(self._app, business_id, parent=self)
+            self._live_reading_dialog = dialog
+            dialog.applied.connect(self._live_reading_applied)
+            dialog.finished.connect(lambda result, closed=dialog: self._live_reading_finished(closed))
+            self._live_reading_status_label.hide()
+            dialog.show()
+        except Exception as exc:
+            logger.warning('Could not open live reading editor (%s)', type(exc).__name__)
+            self._live_reading_status_label.setText('Live reading editor could not be opened. Try again.')
+            self._live_reading_status_label.show()
+        finally:
+            self._opening_live_reading = False
+
+    def _live_reading_applied(self, business_id):
+        self._clear_readings_status_label.hide()
+        try:
+            self._update_display()
+        except Exception as exc:
+            logger.warning('Could not refresh applied live reading (%s)', type(exc).__name__)
+            self._live_reading_status_label.setText(
+                'Live reading applied, but the cards could not refresh. They will retry automatically.'
+            )
+        else:
+            self._live_reading_status_label.setText(f'Live reading applied for {BUSINESSES[business_id].name}.')
+        self._live_reading_status_label.show()
+
+    def _live_reading_finished(self, dialog):
+        if self._live_reading_dialog is dialog:
+            self._live_reading_dialog = None
+            dialog.deleteLater()
 
     def _clear_live_readings(self) -> None:
         """Clear disposable observations without changing capture or saved history."""
@@ -340,6 +428,7 @@ class BusinessPanel(QWidget):
                 "Live readings could not be cleared. Try again."
             )
         else:
+            self._live_reading_status_label.hide()
             try:
                 self._update_display()
             except Exception as exc:
@@ -401,6 +490,9 @@ class BusinessPanel(QWidget):
         dialog.deleteLater()
 
     def closeEvent(self, event):
+        if self._live_reading_dialog is not None and not self._live_reading_dialog.close():
+            event.ignore()
+            return
         if self._checkins_dialog is not None and not self._checkins_dialog.close():
             event.ignore()
             return
@@ -432,9 +524,9 @@ class BusinessPanel(QWidget):
                     updated_str = format_time(elapsed) + " ago"
 
                 card.update_data(
-                    stock=state.get("stock", 0),
-                    supply=state.get("supply", 0),
-                    value=state.get("value", 0),
+                    stock=state.get("stock"),
+                    supply=state.get("supply"),
+                    value=state.get("value"),
                     updated=updated_str,
                     identity_source=state.get("identity_source"),
                 )

@@ -251,3 +251,7 @@ class BusinessParser:
     def clear_readings(self) -> None:
         """Forget previously parsed observations without changing parsing rules."""
         self._last_readings.clear()
+
+    def clear_reading(self, business_type: BusinessType) -> None:
+        """Forget one business's OCR evidence, retaining all other readings."""
+        self._last_readings.pop(business_type, None)

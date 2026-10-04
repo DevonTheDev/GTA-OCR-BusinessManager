@@ -447,9 +447,11 @@ retires pending batches. The next normal capture uses the new selection.
 The target assigns identity; it does not verify the screen or improve OCR
 accuracy. Existing business-screen detection and numeric parsing still apply.
 For example, `Stock: 5/10 Supplies: 3/4 Value: $123,456` can be assigned without
-a business name. Bare `5/10 3/4 $123,456` is not newly supported. Existing
-missing-field defaults, value estimates and cross-character live-cache behavior
-remain unchanged, so verify incomplete readings against the game. **Manual
+a business name. Bare `5/10 3/4 $123,456` is not newly supported. Missing fields
+remain unknown; a missing value is estimated only when stock is known, and an
+observed `$0` stays zero. Only cataloged businesses receive live cards; use the
+target selector when Automatic cannot assign a supported business. Verify the
+readings against the game. Cross-character live-cache behavior is unchanged. **Manual
 check-ins…** remains an independent saved-observation workflow; choosing an OCR
 target does not select its character/business, prefill an editor, save history,
 change pins or schedule an action.
@@ -482,6 +484,42 @@ removes the business observations that drive stock/supply advice.
 Local tests exercise the real capture loop with synthetic OCR, blocked-batch
 and recommendation races, and actual Linux offscreen Qt controls over disposable
 SQLite records. Native Windows/game capture and OCR accuracy are unverified.
+
+### Enter a Live Business Reading
+
+On a business card, choose **Enter live reading…** when OCR is unavailable or you
+want to correct its observation. The editor is fixed to that card's business and
+starts with blank stock, supplies and value fields every time. Enter at least one
+number and choose **Apply**. Percentages accept 0–100; dollar values accept whole
+numbers from 0 to 9,223,372,036,854,775,807, without a currency symbol or commas.
+Supplies are **Not applicable** for businesses without supply-based production
+in the existing catalog.
+
+Applying replaces that business's entire live observation. A blank field becomes
+**Unknown**, even if an older reading had a value. Zero is an observed number:
+`$0` is never replaced by an estimated sale value. A missing value can still be
+estimated from known stock and is marked with `~`. The card identifies a
+**Manual entry**. Invalid entries stay open for correction; closing an edited
+draft asks whether to discard it.
+
+The cards and QuickStats distinguish unknown stock from empty stock, and
+unavailable production time from full stock. Selling suggestions need known
+stock and positive observed or estimated value. Resupply suggestions need known
+stock and supplies on a supply-based business. Partial observations remain
+visible without inventing the missing inputs for advice. Estimates continue to
+use the app's existing catalog rates; they do not verify the current game state.
+
+This action replaces live working data only. It keeps the OCR target, other
+businesses, session totals, reminders and saved history intact. Business OCR
+already in flight is retired; a fresh OCR batch can replace the manual entry.
+Capture continues while the editor is open. Use **Manual check-ins…** separately
+when you want to save an observation for a character. The live editor does not
+prefill from or write to that history.
+
+Local validation covers the actual app and Linux offscreen Qt editor/cards with
+disposable SQLite records, partial and zero-valued observations, draft/error
+recovery, and delayed versus fresh OCR. Native Windows/game capture and OCR
+accuracy remain unverified.
 
 ### Manual Business Check-ins
 

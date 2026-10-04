@@ -263,37 +263,42 @@ def test_capture_loop_updates_caches_logs_and_listeners_without_changing_schedul
     assert "Capture cycle error:" not in caplog.text
 
 
-def test_direct_updates_keep_unknown_business_and_value_estimation_policy(manager):
+def test_direct_updates_distinguish_observed_zero_from_missing_value(manager):
     manager.update_business_state("bunker", 50, 75, 123456)
     assert manager._optimizer._business_states["bunker"].estimated_value == 123456
     manager.update_business_state("bunker", 25, 10, 0)
     assert manager.get_business_state("bunker")["value"] == 0
     state = manager._optimizer._business_states["bunker"]
     assert (state.stock_percent, state.supply_percent) == (25, 10)
-    assert state.estimated_value == int(BUSINESSES["bunker"].max_value * 0.25)
+    assert state.estimated_value == 0
+    manager.update_business_state("bunker", 25, 10)
+    assert manager.get_business_state("bunker")["value"] is None
+    assert manager._optimizer._business_states["bunker"].estimated_value == int(
+        BUSINESSES["bunker"].max_value * 0.25
+    )
     assert manager._optimizer._scheduler.scheduled_count == 0
 
-    manager.update_business_state("unknown", 50, 75, 123456)
-    assert manager.get_business_state("unknown")["stock"] == 50
+    with pytest.raises(ValueError):
+        manager.update_business_state("unknown", 50, 75, 123456)
+    assert manager.get_business_state("unknown") is None
     assert "unknown" not in manager._optimizer._business_states
 
 
-def test_supply_only_capture_keeps_existing_missing_field_zero_defaults(manager, caplog):
+def test_supply_only_capture_replaces_missing_fields_with_unknown(manager, caplog):
     manager.update_business_state("bunker", 75, 50, 123456)
     run_business_captures(manager, [("Bunker", "Supplies: 1/10", "")])
     state = manager.get_business_state("bunker")
-    assert (state["stock"], state["supply"], state["value"]) == (0, 10, 0)
+    assert (state["stock"], state["supply"], state["value"]) == (None, 10, None)
     optimized = manager._optimizer._business_states["bunker"]
     assert (optimized.stock_percent, optimized.supply_percent, optimized.estimated_value) == (
-        0, 10, 0
+        None, 10, None
     )
     assert "Error processing business computer:" not in caplog.text
 
 
-def test_unidentified_capture_keeps_app_entry_without_optimizer_state(manager):
+def test_unidentified_capture_does_not_publish_an_uncataloged_live_card(manager):
     run_business_captures(manager, [("Stock: 5/10", "Supplies: 3/4", "Value: $123,456")])
-    state = manager.get_business_state("unknown")
-    assert (state["stock"], state["supply"], state["value"]) == (50, 75, 123456)
+    assert manager.data.business_states == {}
     assert manager._optimizer._business_states == {}
 
 

@@ -95,7 +95,7 @@ def test_clear_refreshes_every_card_immediately_and_keeps_target(widgets, state,
     assert app.target_changes == [] and len(emitted) == 0
     assert panel._checkins_dialog is None
     assert set(card_values(panel).values()) == {
-        (0, 0, '--', 'Not tracked - visit business to update'),
+        (0, 0, '--', 'Not tracked · visit or enter a reading'),
     }
     assert 'Live readings cleared' in panel._clear_readings_status_label.text()
     assert 'OCR' in panel._clear_readings_status_label.text()
