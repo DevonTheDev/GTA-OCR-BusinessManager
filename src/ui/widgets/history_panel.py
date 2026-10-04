@@ -65,6 +65,8 @@ class SessionHistoryPanel(QWidget):
         self._opening_activity_ledger = False
         self._activity_insights_dialog = None
         self._opening_activity_insights = False
+        self._daily_overview_dialog = None
+        self._opening_daily_overview = False
         self._comparing = False
         self._annotation_dialog = None
         self._opening_annotation = False
@@ -111,8 +113,10 @@ class SessionHistoryPanel(QWidget):
         activity_actions = QHBoxLayout()
         self._activity_ledger_button = QPushButton("Browse recorded activities…")
         self._activity_insights_button = QPushButton("Activity insights…")
+        self._daily_overview_button = QPushButton("Daily session overview…")
         activity_actions.addWidget(self._activity_ledger_button)
         activity_actions.addWidget(self._activity_insights_button)
+        activity_actions.addWidget(self._daily_overview_button)
         activity_actions.addStretch()
         layout.addLayout(activity_actions)
         search = QHBoxLayout()
@@ -197,6 +201,7 @@ class SessionHistoryPanel(QWidget):
         self._edit_annotation_button.clicked.connect(self._open_annotation)
         self._activity_ledger_button.clicked.connect(self._open_activity_ledger)
         self._activity_insights_button.clicked.connect(self._open_activity_insights)
+        self._daily_overview_button.clicked.connect(self._open_daily_overview)
         self._refresh_button.clicked.connect(self.refresh)
         self._character_combo.currentIndexChanged.connect(self._filter_changed)
         self._previous_button.clicked.connect(self._previous_page)
@@ -355,6 +360,36 @@ class SessionHistoryPanel(QWidget):
         if self._activity_insights_dialog is not dialog:
             return
         self._activity_insights_dialog = None
+        dialog.deleteLater()
+
+    def _open_daily_overview(self):
+        if self._daily_overview_dialog is not None:
+            self._daily_overview_dialog.show()
+            self._daily_overview_dialog.raise_()
+            self._daily_overview_dialog.activateWindow()
+            return
+        if self._opening_daily_overview:
+            return
+        from .daily_session_overview_dialog import DailySessionOverviewDialog
+
+        self._opening_daily_overview = True
+        try:
+            dialog = DailySessionOverviewDialog(
+                self._get_repository(), self, character_id=self._character_combo.currentData(),
+            )
+            self._daily_overview_dialog = dialog
+            dialog.finished.connect(lambda result, closed=dialog: self._daily_overview_finished(closed))
+            dialog.show()
+        except Exception as exc:
+            logger.warning("Could not open daily session overview (%s)", type(exc).__name__)
+            self._status_label.setText("Daily session overview could not be opened. Try again or refresh history.")
+        finally:
+            self._opening_daily_overview = False
+
+    def _daily_overview_finished(self, dialog):
+        if self._daily_overview_dialog is not dialog:
+            return
+        self._daily_overview_dialog = None
         dialog.deleteLater()
 
     def _update_comparison_controls(self):

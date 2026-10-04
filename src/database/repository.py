@@ -37,6 +37,14 @@ from .activity_insights import (
     MAX_INSIGHT_RECORDS,
     build_activity_insights,
 )
+from .daily_session_overview import (
+    DailySessionFilters, DailySessionOverview, DailySessionDataError,
+    DailySessionLimitError, DailySessionUnavailable,
+    MAX_DAILY_CHARACTER_NAME_BYTES, MAX_DAILY_SESSION_ROWS, MAX_DAILY_TIMESTAMP_BYTES,
+    build_daily_session_overview, daily_character_name_from_storage,
+    daily_session_end_match_from_storage, daily_session_row_from_storage,
+    validate_daily_session_filters,
+)
 from .session_comparison import (
     ActivityTypeComparison,
     SessionComparison,
@@ -105,6 +113,42 @@ _CHECKIN_ROW_COLUMNS = ", ".join([
     _checkin_text_column("m", "recorded_at", 64),
     _checkin_text_column("m", "note", MAX_CHECKIN_NOTE_BYTES),
 ])
+
+
+_DAILY_SESSION_COLUMNS = ", ".join([
+    "1 AS row_present",
+    *(f"CASE WHEN typeof({table}.{field}) = 'integer' THEN {table}.{field} END AS {name}, "
+      f"typeof({table}.{field}) AS {name}_type"
+      for table, field, name in (("s", "id", "session_id"), ("s", "character_id", "character_id"),
+                                 ("c", "id", "owner_id"))),
+    _checkin_text_column("c", "name", MAX_DAILY_CHARACTER_NAME_BYTES, "character_name"),
+    _checkin_text_column("s", "started_at", MAX_DAILY_TIMESTAMP_BYTES),
+    _checkin_text_column("s", "ended_at", MAX_DAILY_TIMESTAMP_BYTES),
+    "CASE WHEN typeof(s.total_earnings) IN ('integer', 'real') THEN s.total_earnings END AS net_change",
+])
+
+
+_DAILY_SESSION_QUERY = text(
+    "WITH owners AS ("
+    "SELECT CASE WHEN typeof(c.id) = 'integer' THEN c.id END AS context_id, "
+    "typeof(c.id) AS context_id_type, "
+    + _checkin_text_column("c", "name", MAX_DAILY_CHARACTER_NAME_BYTES, "context_name")
+    + " FROM characters c WHERE :character_id IS NOT NULL AND c.id = :character_id LIMIT 2), "
+    "evaluated AS ("
+    "SELECT s.rowid AS source_rowid, "
+    f"daily_session_end_match(coalesce(substr(CAST(s.ended_at AS BLOB), 1, {MAX_DAILY_TIMESTAMP_BYTES + 1}), x''), "
+    "typeof(s.ended_at)) AS match_status FROM sessions s "
+    "WHERE s.ended_at IS NOT NULL AND (:character_id IS NULL OR s.character_id = :character_id) "
+    "AND EXISTS (SELECT 1 FROM characters c WHERE c.id = s.character_id)), "
+    "counted AS (SELECT COUNT(CASE WHEN match_status = 1 THEN 1 END) AS matching_sessions, "
+    "COUNT(CASE WHEN match_status = -1 THEN 1 END) AS unassignable_ends FROM evaluated), "
+    "selected AS ("
+    f"SELECT {_DAILY_SESSION_COLUMNS} FROM evaluated e "
+    "JOIN sessions s ON s.rowid = e.source_rowid JOIN characters c ON c.id = s.character_id "
+    "WHERE e.match_status = 1 LIMIT :maximum) "
+    "SELECT counted.*, (SELECT count(*) FROM owners) AS owner_count, owners.*, selected.* "
+    "FROM counted LEFT JOIN owners ON 1 = 1 LEFT JOIN selected ON 1 = 1 LIMIT :maximum"
+)
 
 
 def _checkin_history_filter_sql(filters):
@@ -1124,6 +1168,73 @@ class Repository:
                 filters=filters, rows=tuple(rows), total=records[0]["total"],
                 offset=offset, limit=limit, observed_at=utc_now(),
             )
+
+    @staticmethod
+    @contextmanager
+    def _daily_session_end_predicate(db_session, filters):
+        """Install bounded UTC membership on this checked-out connection only."""
+        sql_connection = db_session.connection()
+        connection = sql_connection.connection.driver_connection
+        try:
+            connection.create_function(
+                "daily_session_end_match", 2,
+                lambda value, storage_type: daily_session_end_match_from_storage(value, storage_type, filters),
+            )
+            try:
+                yield
+            finally:
+                connection.create_function("daily_session_end_match", 2, None)
+        except sqlite3.Error:
+            # Registration/removal failure must never retain a filter closure
+            # on a physical connection returned to the pool.
+            sql_connection.invalidate()
+            raise DailySessionUnavailable(filters.character_id) from None
+
+    def get_daily_session_overview(self, filters: DailySessionFilters) -> DailySessionOverview:
+        """Capture complete daily counts and bounded source rows in one read.
+
+        The aggregate-count anchor also exists for an empty window. Unreadable
+        ends are counted across the whole owner scope before accepting payload;
+        SQL NULL ends and orphans are excluded. Only stored session net is read.
+        """
+        filters = validate_daily_session_filters(filters)
+        try:
+            with self._session_scope() as db_session:
+                observed_at = utc_now()
+                with self._daily_session_end_predicate(db_session, filters):
+                    records = db_session.execute(_DAILY_SESSION_QUERY, {
+                        "character_id": filters.character_id,
+                        "maximum": MAX_DAILY_SESSION_ROWS + 1,
+                    }).mappings().all()
+                if not records:
+                    raise DailySessionDataError()
+                first = records[0]
+                owner_count = first["owner_count"]
+                if filters.character_id is not None:
+                    if owner_count == 0:
+                        raise DailySessionUnavailable(filters.character_id)
+                    if (owner_count != 1 or first["context_id_type"] != "integer"
+                            or first["context_id"] != filters.character_id):
+                        raise DailySessionDataError()
+                    daily_character_name_from_storage(first["context_name"], first["context_name_type"])
+                total, unreadable = first["matching_sessions"], first["unassignable_ends"]
+                if type(total) is not int or total < 0 or type(unreadable) is not int or unreadable < 0:
+                    raise DailySessionDataError()
+                if unreadable:
+                    raise DailySessionDataError(unassignable_ends=unreadable)
+                if total > MAX_DAILY_SESSION_ROWS:
+                    raise DailySessionLimitError(matching_sessions=total)
+                if (len(records) != max(1, total)
+                        or any(record["matching_sessions"] != total or record["unassignable_ends"] != 0
+                               or record["owner_count"] != owner_count for record in records)):
+                    raise DailySessionDataError()
+                rows = tuple(daily_session_row_from_storage(record) for record in records if record["row_present"])
+                if len(rows) != total:
+                    raise DailySessionDataError()
+                overview = build_daily_session_overview(rows, filters, observed_at)
+            return overview
+        except (DatabaseError, SQLAlchemyError, UnicodeError, OverflowError):
+            raise DailySessionUnavailable(filters.character_id) from None
 
     def get_completed_activity_insights(
         self, filters: ActivityLedgerFilters | None = None,

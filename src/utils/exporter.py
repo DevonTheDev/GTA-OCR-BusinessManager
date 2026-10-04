@@ -18,10 +18,12 @@ if TYPE_CHECKING:
     from ..database.business_checkins import BusinessCheckInBoard, BusinessCheckInPage
     from ..database.business_checkin_comparison import BusinessCheckInComparison
     from ..database.business_checkin_trend import BusinessCheckInTrend
+    from ..database.daily_session_overview import DailySessionOverview
 
 logger = get_logger("utils.exporter")
 MAX_ACTIVITY_LEDGER_EXPORT_BYTES = 8 * 1024 * 1024
 MAX_ACTIVITY_INSIGHTS_EXPORT_BYTES = 8 * 1024 * 1024
+MAX_DAILY_SESSION_OVERVIEW_EXPORT_BYTES = 8 * 1024 * 1024
 MAX_BUSINESS_CHECKINS_EXPORT_BYTES = 8 * 1024 * 1024
 MAX_BUSINESS_CHECKIN_COMPARISON_EXPORT_BYTES = 256 * 1024
 
@@ -388,6 +390,27 @@ class DataExporter:
             return ExportResult(success=True, file_path=output_file, rows_exported=rows_exported)
         except Exception as exc:
             logger.error("Failed to export activity insights: %s", exc)
+            return ExportResult(success=False, error_message=str(exc))
+
+    def export_daily_session_overview(
+        self,
+        snapshot: "DailySessionOverview",
+        output_file: Path,
+    ) -> ExportResult:
+        """Save all accepted daily summaries and their captured source sessions."""
+        try:
+            payload = json.dumps(
+                snapshot.to_report(), ensure_ascii=False, indent=2, allow_nan=False,
+            )
+            if len(payload.encode("utf-8")) > MAX_DAILY_SESSION_OVERVIEW_EXPORT_BYTES:
+                raise ValueError("The daily session overview exceeds the 8 MiB UTF-8 export limit")
+            rows_exported = len(snapshot.rows)
+            with atomic_text_writer(output_file) as stream:
+                stream.write(payload)
+            logger.info("Exported daily session overview to JSON: %s", output_file)
+            return ExportResult(success=True, file_path=output_file, rows_exported=rows_exported)
+        except Exception as exc:
+            logger.error("Failed to export daily session overview: %s", exc)
             return ExportResult(success=False, error_message=str(exc))
 
     def export_business_checkins_snapshot(

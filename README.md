@@ -210,6 +210,69 @@ The ordinary suite skips these opt-in Qt tests. Linux offscreen rendering is
 validated; the native file chooser is substituted in tests, and Windows capture
 and interactive game integration remain unverified.
 
+### Daily Session Overview
+
+In **History**, choose **Daily session overview…** to review saved completed
+sessions by their UTC completion day. The dialog starts with History's selected
+character and the last 30 inclusive UTC dates. Choose another character or date
+window, then **Apply filters**. Its controls are independent of History's paging,
+comparison baseline and session-note search.
+
+Each day shows its session count, known recorded net change, positive elapsed
+duration and paired hourly rate, with contributing counts. Every date in the
+window is included. A day with no completed sessions has a zero session count
+and unavailable numeric totals; it is not presented as an observed zero-dollar
+result. Select a day to browse its captured source sessions, 25 per page, and
+read the full selected record. This inspection uses the same snapshot as the
+daily totals, even if the database changes afterward.
+
+- Net change uses the stored session total, including losses and spending. It
+  is not recalculated from opening/ending balances or added to activity amounts,
+  earnings events, annotations or the live gross counter
+- The whole session belongs to its normalized UTC completion date. Elapsed time
+  comes from saved start/end timestamps and includes pauses and midnight
+  crossings. Overlapping sessions are summed, so this is positive recorded
+  session duration, not time actively played within that calendar day
+- Missing or invalid starts leave the session and known net change visible,
+  with unavailable duration. Known zero and negative durations remain visible
+  but do not contribute to positive-time totals or rates
+- Net change per hour uses only sessions with both known net change and positive
+  duration. It divides their combined net by their combined elapsed time, rather
+  than averaging individual rates or combining different row sets. The paired
+  count makes that coverage explicit
+
+Integer-only net totals remain exact. Mixed numbers and rates use exact
+accumulation before conversion; a result outside finite numeric range, or a
+nonzero result too small to represent, stays unavailable with an issue. Exact
+elapsed microseconds are retained in the source rows. These are recorded
+observations, not verified payouts, profit or future performance.
+
+Both UTC dates are required and the inclusive window is limited to 366 days.
+The complete selection supports at most 10,000 source sessions; exceeding it
+asks you to narrow the window or character. A missing explicitly selected
+character is unavailable. An unreadable non-null completion timestamp prevents
+the scoped request, with its count shown, because date membership cannot be
+determined safely. This also applies to malformed end values that appear to be
+outside the window. Open sessions and rows without an existing character are
+excluded. Naive saved timestamps use the existing UTC convention; valid offsets
+are normalized before filtering and grouping.
+
+Editing controls retires the old results and export until Apply. Refresh rereads
+the applied selection; with unfinished edits it refreshes character choices and
+keeps the draft unsubmitted. **Export snapshot as JSON…** saves all captured days
+and source sessions, including filters, observation time, coverage and metric
+notes. The file chooser retains that snapshot even if controls or stored rows
+change. Cancel or closing the dialog during the chooser writes nothing. Reports
+over 8 MiB UTF-8 are refused before staging, and failed writes preserve an
+existing complete file. This is per-file recovery, not crash durability.
+
+Local verification uses real temporary SQLite and Linux offscreen Qt, including
+the MainWindow History → daily overview → source paging → export path. Native
+checks: `GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_daily_session_overview_qt.py tests/test_daily_session_overview_app_qt.py`.
+The ordinary suite skips these opt-in modules. Native file choosers are
+substituted; Windows, game capture, OCR accuracy and interactive gameplay remain
+unverified.
+
 ### Saved Session Notes and Tags
 
 In **History**, select a completed session and choose **Edit session notes…**.
