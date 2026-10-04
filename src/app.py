@@ -1285,6 +1285,32 @@ class GTABusinessManager:
                 captured_at=datetime.now(timezone.utc),
             )
 
+    def get_live_business_reading_snapshots(self) -> tuple[LiveBusinessReadingSnapshot, ...]:
+        """Capture all available raw readings in catalog order under one lock.
+
+        One UTC read time belongs to the entire capture. A malformed catalog
+        reading aborts the capture, so callers never receive a partial batch.
+        """
+        with self._data_lock:
+            captured_at = datetime.now(timezone.utc)
+            snapshots = []
+            for business_id in BUSINESSES:
+                state = self._data.business_states.get(business_id)
+                if state is None:
+                    continue
+                if not isinstance(state, dict):
+                    raise ValueError("Live business reading is unavailable")
+                snapshots.append(create_live_business_reading_snapshot(
+                    business_id,
+                    stock_percent=state.get("stock"),
+                    supply_percent=state.get("supply"),
+                    stock_value=state.get("value"),
+                    updated_at=state.get("updated"),
+                    identity_source=state.get("identity_source"),
+                    captured_at=captured_at,
+                ))
+            return tuple(snapshots)
+
     def clear_business_readings(self) -> None:
         """Forget live observations and pending OCR, retaining the target and saved data.
 

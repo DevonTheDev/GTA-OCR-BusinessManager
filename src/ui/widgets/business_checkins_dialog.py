@@ -38,10 +38,14 @@ class BusinessCheckInsDialog(QDialog):
 
     PAGE_SIZE = 25
 
-    def __init__(self, repository, parent=None, *, character_id=None, live_reading_provider=None):
+    def __init__(self, repository, parent=None, *, character_id=None, live_reading_provider=None,
+                 live_readings_provider=None):
         super().__init__(parent)
         self._repository = repository
         self._live_reading_provider = live_reading_provider
+        self._live_readings_provider = live_readings_provider
+        self._batch_editor = None
+        self._opening_batch_editor = False
         self._exporter = DataExporter(repository)
         self._board = None
         self._pins = None
@@ -115,6 +119,14 @@ class BusinessCheckInsDialog(QDialog):
         controls.addWidget(self._add_character_button)
         controls.addWidget(self._record_button)
         layout.addLayout(controls)
+        self.live_batch_button = self._live_batch_button = QPushButton('Review live check-ins…')
+        self.live_batch_button.setObjectName('businessCheckInReviewLiveBatch')
+        self.live_batch_button.setAutoDefault(False)
+        self.live_batch_button.setToolTip(
+            'Capture available live readings once, then select which to save for this board’s character.'
+            if callable(self._live_readings_provider) else 'Live reading review is unavailable here.'
+        )
+        self.live_batch_button.clicked.connect(self._open_batch_editor)
         pin_controls = QHBoxLayout()
         self._pin_button = QPushButton('Pin selected business')
         self._pin_scope_label = self._label(
@@ -124,6 +136,7 @@ class BusinessCheckInsDialog(QDialog):
         pin_label_policy = QSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
         pin_label_policy.setHeightForWidth(True)
         self._pin_scope_label.setSizePolicy(pin_label_policy)
+        pin_controls.addWidget(self.live_batch_button)
         pin_controls.addWidget(self._pin_button)
         pin_controls.addWidget(self._pin_scope_label, 1)
         layout.addLayout(pin_controls)
@@ -278,7 +291,14 @@ class BusinessCheckInsDialog(QDialog):
         return super().eventFilter(watched, event)
 
     def _update_actions(self):
+        if self._batch_editor is not None:
+            self._batch_editor._update_actions()
         available = not (self._busy or self._closed or self._closing)
+        self.live_batch_button.setEnabled(
+            available and not self._exporting and not self._opening_batch_editor
+            and callable(self._live_readings_provider) and self._board is not None
+            and self._character_combo.currentData() == self._board.character_id
+        )
         self._character_combo.setEnabled(available)
         self._refresh_button.setEnabled(available)
         self._add_character_button.setEnabled(available and not self._exporting and not self._opening_creator)
@@ -898,6 +918,89 @@ class BusinessCheckInsDialog(QDialog):
         finally:
             self._opening_editor = False
 
+    def _open_batch_editor(self):
+        if self._closed or self._closing or self._busy or self._exporting or self._opening_batch_editor:
+            return
+        if self._batch_editor is not None:
+            editor = self._batch_editor
+            self._status_label.setText(
+                f'Showing the original capture for {editor._character_name or "Saved character"} '
+                f'(#{editor._character_id}). Close that review to capture live readings again.'
+            )
+            editor.show()
+            editor.raise_()
+            editor.activateWindow()
+            return
+        board = self._board
+        repository = self._repository
+        generation = self._generation
+        if (board is None or self._character_combo.currentData() != board.character_id
+                or not callable(self._live_readings_provider)):
+            return
+        character_id, character_name = board.character_id, board.character_name
+        provider = self._live_readings_provider
+
+        def current():
+            return (not (self._closed or self._closing) and self._board is board
+                    and self._generation == generation and self._repository is repository
+                    and self._character_combo.currentData() == character_id)
+
+        self._opening_batch_editor = True
+        self._update_actions()
+        editor = None
+        try:
+            from .business_checkin_batch_editor import BusinessCheckInBatchEditor, validate_live_snapshots
+            supplied = provider()
+            if not current():
+                self._status_label.setText('The board changed while capturing live readings. Open Review live check-ins again.')
+                return
+            snapshots = validate_live_snapshots(supplied)
+            editor = BusinessCheckInBatchEditor(
+                repository, character_id, snapshots, parent=self, character_name=character_name,
+            )
+            if not current():
+                editor.deleteLater()
+                editor = None
+                self._status_label.setText('The board changed while opening the review. Open Review live check-ins again.')
+                return
+            self._batch_editor = editor
+            editor.saved.connect(lambda records, owner=editor: self._batch_checkins_saved(owner, records))
+            editor.finished.connect(lambda result, closed=editor: self._batch_editor_finished(closed))
+            editor.show()
+        except Exception as exc:
+            logger.warning('Could not open live check-in review (%s)', type(exc).__name__)
+            if editor is not None:
+                if self._batch_editor is editor:
+                    self._batch_editor = None
+                editor.deleteLater()
+            self._status_label.setText('The live check-in review could not be opened. No check-ins were saved. Try again or Refresh.')
+        finally:
+            self._opening_batch_editor = False
+            self._update_actions()
+
+    def _batch_editor_finished(self, editor):
+        if self._batch_editor is not editor:
+            return
+        self._batch_editor = None
+        editor.deleteLater()
+        self._update_actions()
+
+    def _batch_checkins_saved(self, editor, records):
+        if self._closed or self._batch_editor is not editor or not editor._committed:
+            return
+        self._saved_notice_label.setText(
+            f'Saved {len(records)} check-in(s) for '
+            f'{editor._character_name or "Saved character"} (#{editor._character_id}).'
+        )
+        self._saved_notice_label.show()
+        try:
+            self.refresh()
+        except Exception as exc:
+            logger.warning('Could not refresh saved check-in batch (%s)', type(exc).__name__)
+            self._status_label.setText(
+                'These check-ins are already saved. The board could not refresh; use Refresh to reload history.'
+            )
+
     def _open_creator(self):
         if self._closed or self._closing or self._busy or self._exporting or self._opening_creator:
             return
@@ -1005,21 +1108,24 @@ class BusinessCheckInsDialog(QDialog):
 
     def _prepare_close(self):
         if (self._closed or self._closing or self._busy or self._opening_editor
-                or self._opening_creator or self._opening_comparison or self._exporting):
+                or self._opening_creator or self._opening_comparison or self._opening_batch_editor or self._exporting):
             return False
         comparison = self._comparison_dialog
         if comparison is not None and comparison._exporting:
             return False
-        children = (self._editor, self._creator)
-        if any(child is not None and (child._busy or child._confirming_discard) for child in children):
+        children = tuple((name, getattr(self, name)) for name in ('_editor', '_batch_editor', '_creator'))
+        if any(child is not None and (child._busy or child._confirming_discard) for _, child in children):
             return False
         self._closing = True
         self._update_actions()
         try:
-            for child in children:
-                if child is not None and not child.close():
+            for name, child in children:
+                # Earlier discard prompts run nested event loops. Another child
+                # may finish and be deleted while that prompt is still open.
+                if child is not None and getattr(self, name) is child and not child.close():
                     return False
-            if comparison is not None and not comparison.close():
+            if (comparison is not None and self._comparison_dialog is comparison
+                    and not comparison.close()):
                 return False
             self._closed = True
             self._clear_baseline()
@@ -1035,6 +1141,13 @@ class BusinessCheckInsDialog(QDialog):
 
     def reject(self):
         self.done(QDialog.DialogCode.Rejected)
+
+    def close(self):
+        # A nested discard dialog can receive another parent-close request;
+        # Qt otherwise short-circuits recursive close without our closeEvent.
+        if self._closing:
+            return False
+        return super().close()
 
     def closeEvent(self, event):
         if self._prepare_close():

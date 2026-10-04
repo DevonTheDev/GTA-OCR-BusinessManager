@@ -619,6 +619,54 @@ notes, changed live readings, fixed targets, errors/retry and modal reentry.
 Windows, real gameplay/OCR accuracy and native file chooser behavior remain
 unverified.
 
+#### Review several live check-ins together
+
+In **Businesses → Manual check-ins…**, choose the saved character, then
+**Review live check-ins…**. The app captures all available catalog readings once
+under its data lock. The review shows the fixed saved character, observed values,
+reading sources, original update times and one common UTC capture time. It also
+shows how many of the eleven catalog businesses have readings. Missing readings
+are omitted; an invalid stored reading stops the capture without presenting a
+partial set. With no readings, the review opens an explanatory empty state.
+
+Nothing is selected initially. Select individual businesses or choose **Select
+all**, and use **Clear selection** to remove the selection. An optional shared
+personal note is copied unchanged to every selected check-in, including its
+Unicode, nonbreaking spaces, newlines and tabs. Choose **Save selected check-ins
+(N)** to record that reviewed selection together. The numeric fields are read-only
+here; use **Record check-in…** when you want to enter or correct individual values.
+
+Zero stays a known zero. Unknown or inapplicable measurements stay blank in saved
+data, and no optimizer estimate or previous check-in fills a missing field. Live
+readings are not character-tagged and have no expiry guarantee: verify that each
+selected observation belongs to the saved character shown in this review.
+Tracking, Settings, live-cache and board changes do not replace the open capture
+or its saved-character target. Close it and explicitly open another review for
+newer readings. Existing single-business drafts remain independent.
+
+The selected rows append in one SQLite transaction with one new UTC Save time.
+Every draft is validated before storage access, and every inserted row is checked
+before commit. A known transaction-body failure rolls back the whole attempt and
+keeps the selection and note for an explicit retry. If commit/close throws or a
+returned result cannot be verified, the outcome is **uncertain**: the rows may
+already be saved. The review keeps its values visible but disables editing and
+Save. Inspect saved history before closing it and starting another attempt.
+Successful Save cannot be repeated through the same review, even if the board
+then fails to refresh.
+
+The existing saved schema is unchanged. Source, live-update time and capture time
+remain preview information; they are not added to notes or persisted as provenance.
+History, comparison and JSON export use the same independent check-in records.
+This workflow does not change live observations, pins, active characters, capture
+settings, recommendations or accounting. It has no durable request identity, so
+it does not promise exactly-once recovery after an abrupt exit or ambiguous save.
+
+Local tests cover actual SQLite rollback and post-commit failure, one-lock raw
+captures, Linux offscreen Qt review/selection/discard controls, and the real
+MainWindow → batch Save → history/reopen/export path. They verify fixed ownership
+through board and tracking changes and keep ordinary drafts untouched. Native
+Windows, game capture/OCR accuracy and native file choosers remain unverified.
+
 #### Filter recorded check-in history
 
 Choose a saved character and business, enter a literal phrase in **Note contains**,

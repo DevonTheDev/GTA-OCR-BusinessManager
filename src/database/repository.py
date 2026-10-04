@@ -59,6 +59,9 @@ from .business_checkins import (
 from .business_checkin_comparison import (
     BusinessCheckInComparison, BusinessCheckInComparisonUnavailable,
 )
+from .business_checkin_batches import (
+    BusinessCheckInBatchUncertain, BusinessCheckInDraft, normalize_business_checkin_drafts,
+)
 from .character_profiles import (
     CharacterProfileAmbiguous, CharacterProfileLimitError, CharacterProfileUnavailable,
     MAX_CHARACTER_NAME_BYTES, SavedCharacterResult,
@@ -310,6 +313,68 @@ class Repository:
             saved = checkin_from_storage(raw)
             if saved.character_id != character_id or saved.business_id != business_id:
                 raise BusinessCheckInDataError()
+        return saved
+
+    def save_business_checkins(
+        self, character_id: int,
+        drafts: list[BusinessCheckInDraft] | tuple[BusinessCheckInDraft, ...],
+    ) -> tuple[BusinessCheckIn, ...]:
+        """Append a reviewed batch in one transaction, returning only after close.
+
+        Validation precedes storage access. Each INSERT SELECT requires the
+        existing owner even on legacy connections without foreign keys. Errors
+        while leaving the completed transaction body have an uncertain outcome:
+        the shared scope may raise after commit, so they never imply rollback.
+        """
+        validate_checkin_id(character_id)
+        drafts = normalize_business_checkin_drafts(drafts)
+        commit_phase = False
+        try:
+            with self._business_checkin_scope() as db_session:
+                recorded_at = utc_now()
+                inserted = []
+                for draft in drafts:
+                    result = db_session.execute(text(
+                        "INSERT INTO manual_business_checkins "
+                        "(character_id, business_id, recorded_at, stock_percent, supply_percent, stock_value, note) "
+                        "SELECT id, :business_id, :recorded_at, :stock_percent, :supply_percent, :stock_value, :note "
+                        "FROM characters WHERE id = :character_id"
+                    ), {"character_id": character_id, "business_id": draft.business_id,
+                        "recorded_at": recorded_at.isoformat(sep=" "), "stock_percent": draft.stock_percent,
+                        "supply_percent": draft.supply_percent, "stock_value": draft.stock_value, "note": draft.note})
+                    if result.rowcount != 1:
+                        raise BusinessCheckInUnavailable()
+                    row_id = result.lastrowid
+                    try:
+                        validate_checkin_id(row_id)
+                    except BusinessCheckInValidationError:
+                        raise BusinessCheckInDataError() from None
+                    if row_id in inserted:
+                        raise BusinessCheckInDataError()
+                    inserted.append(row_id)
+                rows = []
+                for row_id, draft in zip(inserted, drafts):
+                    raw = db_session.execute(text(
+                        f"SELECT {_CHECKIN_ROW_COLUMNS} FROM manual_business_checkins m WHERE m.id = :id"
+                    ), {"id": row_id}).mappings().first()
+                    if raw is None:
+                        raise BusinessCheckInDataError()
+                    row = checkin_from_storage(raw)
+                    if (row.id != row_id or row.character_id != character_id
+                            or row.business_id != draft.business_id or row.recorded_at != recorded_at
+                            or (row.stock_percent, row.supply_percent, row.stock_value, row.note)
+                            != (draft.stock_percent, draft.supply_percent, draft.stock_value, draft.note)):
+                        raise BusinessCheckInDataError()
+                    rows.append(row)
+                saved = tuple(rows)
+                commit_phase = True
+        except Exception as error:
+            if commit_phase:
+                raise BusinessCheckInBatchUncertain() from None
+            if isinstance(error, (BusinessCheckInValidationError, BusinessCheckInDataError,
+                                  BusinessCheckInUnavailable)):
+                raise
+            raise BusinessCheckInUnavailable() from None
         return saved
 
     def get_business_checkin_board(self, character_id: int) -> BusinessCheckInBoard:

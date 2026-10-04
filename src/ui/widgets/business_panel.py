@@ -474,6 +474,7 @@ class BusinessPanel(QWidget):
             dialog = BusinessCheckInsDialog(
                 repository, parent=self, character_id=character_id,
                 live_reading_provider=getattr(self._app, 'get_live_business_reading_snapshot', None),
+                live_readings_provider=getattr(self._app, 'get_live_business_reading_snapshots', None),
             )
             self._checkins_dialog = dialog
             dialog.finished.connect(lambda result, closed=dialog: self._checkins_finished(closed))
