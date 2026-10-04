@@ -584,6 +584,41 @@ character and business even if you change the board or Settings while it is open
   accepted observations; an export retains the chosen snapshot even if data or
   selection changes while the file chooser is open
 
+#### Copy live values into a check-in draft
+
+In a check-in editor opened from **Businesses**, choose **Preview live values…**
+to inspect the last tracked reading for that editor's fixed business. Review its
+measurements, source and update time, then choose **Use these values**. This
+replaces all three draft measurements: unknown values clear their fields, a known
+zero stays zero, and supplies are **N/A** for businesses without a supply meter.
+Estimated optimizer values are never copied. Your personal note stays exactly
+as you wrote it.
+
+Live readings are **not tagged to a saved character**. Confirm they belong to the
+character and business shown in the preview. The preview identifies manual live
+entry, OCR text matching or a user-selected OCR target when that metadata exists;
+otherwise the source is not recorded. A naive live-update timestamp is local time,
+while an aware timestamp retains its offset. Missing time is shown as unavailable.
+
+Opening the preview does not change the draft. **Cancel**, Escape or closing the
+preview leaves every draft field untouched. The preview keeps the exact snapshot
+you reviewed if live readings, board selection or tracking change while it is
+open. Use copies that snapshot once; open another preview explicitly to read newer
+values. A missing or invalid reading keeps your draft available for manual entry.
+
+**Save remains separate.** It records your reviewed draft for the editor's
+original saved character/business using the existing new UTC save timestamp.
+The preview's live source, update time and capture time are not stored as check-in
+provenance. Copying does not start capture, record a sale or alter live values,
+recommendations, settings or accounting.
+
+Local tests exercise detached snapshots and locking, actual Linux offscreen Qt
+preview controls, and synthetic OCR/manual live values through MainWindow →
+check-in draft → explicit Save → reopen/export. They cover preserved personal
+notes, changed live readings, fixed targets, errors/retry and modal reentry.
+Windows, real gameplay/OCR accuracy and native file chooser behavior remain
+unverified.
+
 #### Filter recorded check-in history
 
 Choose a saved character and business, enter a literal phrase in **Note contains**,

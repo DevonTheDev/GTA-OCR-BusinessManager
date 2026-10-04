@@ -471,7 +471,10 @@ class BusinessPanel(QWidget):
             from .business_checkins_dialog import BusinessCheckInsDialog
             repository = self._app.history_repository
             character_id = self._app.data.character_id
-            dialog = BusinessCheckInsDialog(repository, parent=self, character_id=character_id)
+            dialog = BusinessCheckInsDialog(
+                repository, parent=self, character_id=character_id,
+                live_reading_provider=getattr(self._app, 'get_live_business_reading_snapshot', None),
+            )
             self._checkins_dialog = dialog
             dialog.finished.connect(lambda result, closed=dialog: self._checkins_finished(closed))
             self._checkins_status_label.hide()

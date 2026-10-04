@@ -6,7 +6,7 @@ import time
 import threading
 from typing import Optional, Callable, List
 from dataclasses import dataclass, field
-from datetime import datetime
+from datetime import datetime, timezone
 from enum import Enum, auto
 
 from .config.settings import Settings, get_settings
@@ -22,6 +22,9 @@ from .game.state_machine import GameStateMachine, GameState, StateTransition
 from .game.activities import Activity, ActivityType
 from .game.businesses import BUSINESSES
 from .game.business_readings import normalize_live_business_reading
+from .game.live_business_snapshot import (
+    LiveBusinessReadingSnapshot, create_live_business_reading_snapshot,
+)
 from .tracking.session import SessionTracker
 from .tracking.session_goals import SessionGoalController
 from .tracking.goals import GoalType, SessionGoal
@@ -1259,6 +1262,28 @@ class GTABusinessManager:
         """Get tracked state for a business."""
         with self._data_lock:
             return self._data.business_states.get(business_id)
+
+    def get_live_business_reading_snapshot(
+        self, business_id: str,
+    ) -> Optional[LiveBusinessReadingSnapshot]:
+        """Capture validated raw observations for a detached, read-only preview."""
+        if type(business_id) is not str or business_id not in BUSINESSES:
+            raise ValueError("Choose a known business")
+        with self._data_lock:
+            state = self._data.business_states.get(business_id)
+            if state is None:
+                return None
+            if not isinstance(state, dict):
+                raise ValueError("Live business reading is unavailable")
+            return create_live_business_reading_snapshot(
+                business_id,
+                stock_percent=state.get("stock"),
+                supply_percent=state.get("supply"),
+                stock_value=state.get("value"),
+                updated_at=state.get("updated"),
+                identity_source=state.get("identity_source"),
+                captured_at=datetime.now(timezone.utc),
+            )
 
     def clear_business_readings(self) -> None:
         """Forget live observations and pending OCR, retaining the target and saved data.

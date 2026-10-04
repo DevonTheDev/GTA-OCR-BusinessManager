@@ -215,7 +215,7 @@ def _report(snapshot, kind):
             "independence": "Each check-in stands alone. Missing fields do not carry forward.",
             "recorded_at": "UTC time when Save recorded the observation, not a gameplay timestamp.",
             "ordering": "Insertion ID determines latest and history order, even if the clock moves backwards.",
-            "stock_value": "User-entered observed value, not verified sale proceeds or profit.",
+            "stock_value": "User-recorded observed value, not verified sale proceeds or profit.",
         },
     }
 

@@ -38,9 +38,10 @@ class BusinessCheckInsDialog(QDialog):
 
     PAGE_SIZE = 25
 
-    def __init__(self, repository, parent=None, *, character_id=None):
+    def __init__(self, repository, parent=None, *, character_id=None, live_reading_provider=None):
         super().__init__(parent)
         self._repository = repository
+        self._live_reading_provider = live_reading_provider
         self._exporter = DataExporter(repository)
         self._board = None
         self._pins = None
@@ -885,6 +886,7 @@ class BusinessCheckInsDialog(QDialog):
             editor = BusinessCheckInEditor(
                 self._repository, board.character_id, business,
                 parent=self, character_name=board.character_name,
+                live_reading_provider=self._live_reading_provider,
             )
             self._editor = editor
             editor.saved.connect(self._checkin_saved)

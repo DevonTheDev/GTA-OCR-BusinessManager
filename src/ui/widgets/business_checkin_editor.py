@@ -3,7 +3,7 @@
 from PyQt6.QtCore import Qt, pyqtSignal
 from PyQt6.QtWidgets import (
     QDialog, QDialogButtonBox, QFormLayout, QLabel, QLineEdit, QMessageBox,
-    QPlainTextEdit, QScrollArea, QVBoxLayout, QWidget,
+    QPlainTextEdit, QPushButton, QScrollArea, QVBoxLayout, QWidget,
 )
 
 from ...database.business_checkins import (
@@ -20,11 +20,15 @@ class BusinessCheckInEditor(QDialog):
 
     saved = pyqtSignal(object)
 
-    def __init__(self, repository, character_id, business_id, parent=None, *, character_name=''):
+    def __init__(self, repository, character_id, business_id, parent=None, *,
+                 character_name='', live_reading_provider=None):
         super().__init__(parent)
         self._repository = repository
         self._character_id = character_id
         self._business_id = business_id
+        self._character_name = character_name
+        self._live_reading_provider = live_reading_provider
+        self._live_preview = None
         self._busy = False
         self._closed = False
         self._confirming_discard = False
@@ -32,6 +36,7 @@ class BusinessCheckInEditor(QDialog):
         self.setModal(False)
         self.resize(620, 530)
         self._setup_ui(character_name)
+        self._update_actions()
 
     @staticmethod
     def _label(text=''):
@@ -57,6 +62,16 @@ class BusinessCheckInEditor(QDialog):
             'Each check-in stands alone and uses the time you press Save. '
             'Enter at least one value or a personal note.'
         ))
+        self._preview_live_button = QPushButton('Preview live values…')
+        self._preview_live_button.setObjectName('businessCheckInPreviewLive')
+        self._preview_live_button.setAutoDefault(False)
+        self._preview_live_button.setToolTip(
+            'Review the last live reading before choosing whether to copy its values into this draft.'
+            if callable(self._live_reading_provider) else
+            'Live previews are unavailable here. You can still enter and save a manual check-in.'
+        )
+        self._preview_live_button.clicked.connect(self._preview_live_values)
+        body.addWidget(self._preview_live_button)
         form = QFormLayout()
         self._stock_edit = QLineEdit()
         self._supply_edit = QLineEdit()
@@ -103,6 +118,94 @@ class BusinessCheckInEditor(QDialog):
         for control in (self._stock_edit, self._supply_edit, self._value_edit,
                         self._note_edit, self._save_button, self._cancel_button):
             control.setEnabled(enabled)
+        self._preview_live_button.setEnabled(enabled and callable(self._live_reading_provider))
+
+    def _preview_live_values(self):
+        if (self._busy or self._closed or self._confirming_discard
+                or not callable(self._live_reading_provider)):
+            return
+        self._busy = True
+        self._update_actions()
+        preview = None
+        try:
+            from ...game.live_business_snapshot import (
+                LiveBusinessReadingSnapshot, create_live_business_reading_snapshot,
+            )
+            from .business_checkin_live_preview import BusinessCheckInLivePreview
+
+            supplied = self._live_reading_provider(self._business_id)
+            if supplied is None:
+                self._status_label.setText(
+                    'No live reading is available for this business. Your draft is unchanged. '
+                    'Read or enter live values, then try again.'
+                )
+                return
+            if (type(supplied) is not LiveBusinessReadingSnapshot
+                    or supplied.business_id != self._business_id
+                    or type(supplied.uses_supplies) is not bool):
+                raise ValueError('Invalid live reading snapshot')
+            # Revalidate a provider's detached result, never fall back to mutable
+            # app state or computed recommendations. Keep our own captured copy.
+            snapshot = create_live_business_reading_snapshot(
+                self._business_id, stock_percent=supplied.stock_percent,
+                supply_percent=supplied.supply_percent, stock_value=supplied.stock_value,
+                updated_at=supplied.updated_at, identity_source=supplied.identity_source,
+                captured_at=supplied.captured_at,
+            )
+            if snapshot != supplied:
+                raise ValueError('Invalid live reading metadata')
+            preview = BusinessCheckInLivePreview(
+                snapshot, self._character_id, self._character_name, parent=self,
+            )
+            self._live_preview = preview
+            accepted = preview.exec() == QDialog.DialogCode.Accepted
+        except Exception as exc:
+            logger.warning('Could not preview live check-in values (%s)', type(exc).__name__)
+            self._status_label.setText(
+                'Live values could not be previewed. Your draft is unchanged. '
+                'Try Preview live values again.'
+            )
+        else:
+            if accepted:
+                self._copy_live_values(snapshot)
+        finally:
+            # A finished signal can run inside exec(). Retire only after that
+            # nested modal loop unwinds, while the editor still owns its guard.
+            self._live_preview = None
+            if preview is not None:
+                preview.deleteLater()
+            self._busy = False
+            self._update_actions()
+
+    def _copy_live_values(self, snapshot):
+        # Ownership covers textChanged handlers and restoration too: Save,
+        # reentry and parent closure cannot observe a partially replaced draft.
+        controls = (self._stock_edit, self._supply_edit, self._value_edit)
+        previous = tuple(control.text() for control in controls)
+        values = (snapshot.stock_percent, snapshot.supply_percent, snapshot.stock_value)
+        try:
+            for control, value in zip(controls, values):
+                control.setText('' if value is None else str(value))
+        except Exception as exc:
+            logger.warning('Could not copy live check-in values (%s)', type(exc).__name__)
+            for control, value in zip(controls, previous):
+                try:
+                    if control.text() != value:
+                        control.setText(value)
+                except Exception as restore_error:
+                    logger.warning('Could not restore check-in measurement (%s)', type(restore_error).__name__)
+            restored = tuple(control.text() for control in controls) == previous
+            self._status_label.setText(
+                'Live values could not be copied. Your draft is unchanged. '
+                'Try Preview live values again.' if restored else
+                'Live values could not be fully copied. Review your draft measurements '
+                'before saving. Your personal note is unchanged. Try Preview live values again.'
+            )
+        else:
+            self._status_label.setText(
+                'Live values copied into this draft. Your personal note is unchanged. '
+                'Review the values and press Save to record the check-in.'
+            )
 
     def _save(self):
         if self._busy or self._closed or self._confirming_discard:

@@ -118,7 +118,7 @@ class BusinessCheckInComparisonDialog(QDialog):
         self._comparison_note = self._note(comparison.comparison.note)
         body.addWidget(self._comparison_note)
         body.addWidget(self._label(
-            'These are independent manual observations. Observed stock value is user-entered, '
+            'These are independent manual observations. Observed stock value is user-recorded, '
             'not verified proceeds or profit. Recorded timestamps are UTC save times and may move backward. '
             'The selected A/B order is preserved; no elapsed gameplay time or production rate is inferred.'
         ))

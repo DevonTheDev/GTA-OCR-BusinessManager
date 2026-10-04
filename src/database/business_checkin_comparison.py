@@ -72,7 +72,7 @@ class BusinessCheckInComparison:
                 "unknown": "Null means unknown; zero is an explicit recorded value. Missing values do not carry forward.",
                 "differences": "Comparison B minus baseline A; null when either value is unknown. No improvement is inferred.",
                 "units": "Stock and supplies differences are percentage points, not percent growth. Value differences are exact dollars.",
-                "stock_value": "User-entered observed value, not verified sale proceeds or profit.",
+                "stock_value": "User-recorded observed value, not verified sale proceeds or profit.",
                 "recorded_at": "UTC time when Save recorded each observation, not a gameplay timestamp.",
                 "ordering": "The selected A/B order is preserved, regardless of insertion IDs or recorded timestamps.",
                 "captured_at": "Both records and character context were read together at comparison capture; export uses that capture.",
