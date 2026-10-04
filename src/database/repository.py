@@ -4,6 +4,7 @@ from datetime import date, datetime, time, timedelta
 from dataclasses import dataclass
 from typing import Optional, List
 from contextlib import contextmanager
+import sqlite3
 
 from sqlalchemy import LargeBinary, case, cast, func, or_, select, text, true
 from sqlalchemy.orm import Session as DBSession
@@ -46,11 +47,12 @@ from .session_comparison import (
     subtract_metrics,
 )
 from .business_checkins import (
-    BusinessCheckIn, BusinessCheckInBoard, BusinessCheckInPage,
+    BusinessCheckIn, BusinessCheckInBoard, BusinessCheckInHistoryFilters, BusinessCheckInPage,
     BusinessCheckInDataError, BusinessCheckInLimitError, BusinessCheckInUnavailable,
     CheckInCharacter, MAX_CHECKIN_BUSINESSES, MAX_CHECKIN_CHARACTERS,
     MAX_CHECKIN_CHARACTER_NAME_BYTES, MAX_CHECKIN_NOTE_BYTES,
     checkin_character_from_storage, checkin_from_storage, normalize_business_checkin,
+    checkin_history_match_from_storage, validate_business_checkin_history_filters,
     validate_checkin_business_id, validate_checkin_id, validate_checkin_page,
 )
 from .character_profiles import (
@@ -338,37 +340,89 @@ class Repository:
 
     def get_business_checkin_history(
         self, character_id: int, business_id: str, offset: int = 0, limit: int = 25,
+        *, filters: BusinessCheckInHistoryFilters | None = None,
     ) -> BusinessCheckInPage:
         """One SQLite observation owns count, page payload and character context."""
         validate_checkin_id(character_id)
         validate_checkin_business_id(business_id)
         validate_checkin_page(offset, limit)
+        filters = validate_business_checkin_history_filters(filters)
+        # Only active predicate fields cross into Python, always as bounded
+        # bytes plus SQLite's actual storage type. Other payload stays page-only.
+        if filters is not None:
+            note_args = (f"coalesce(substr(CAST(m.note AS BLOB), 1, {MAX_CHECKIN_NOTE_BYTES + 1}), x''), "
+                         "typeof(m.note)" if filters.note_query is not None else "NULL, NULL")
+            date_args = ("coalesce(substr(CAST(m.recorded_at AS BLOB), 1, 65), x''), typeof(m.recorded_at)"
+                         if filters.recorded_from is not None or filters.recorded_until is not None
+                         else "NULL, NULL")
+            prefix = (
+                "WITH evaluated AS (SELECT m.id, "
+                f"checkin_history_match({note_args}, {date_args}) AS match_status "
+                "FROM manual_business_checkins m "
+                "WHERE m.character_id = :character_id AND m.business_id = :business_id), "
+                "counted AS (SELECT COUNT(CASE WHEN match_status = 1 THEN 1 END) AS total, "
+                "coalesce(MAX(CASE WHEN match_status = -1 THEN 1 ELSE 0 END), 0) AS invalid "
+                "FROM evaluated), page AS ("
+            )
+            selection = "JOIN evaluated ON evaluated.id = m.id WHERE evaluated.match_status = 1 "
+        else:
+            prefix = (
+                "WITH counted AS (SELECT COUNT(*) AS total, 0 AS invalid FROM manual_business_checkins "
+                "WHERE character_id = :character_id AND business_id = :business_id), page AS ("
+            )
+            selection = "WHERE m.character_id = :character_id AND m.business_id = :business_id "
         statement = text(
-            "WITH counted AS ("
-            "SELECT COUNT(*) AS total FROM manual_business_checkins "
-            "WHERE character_id = :character_id AND business_id = :business_id"
-            "), page AS ("
+            prefix +
             f"SELECT {_CHECKIN_ROW_COLUMNS} FROM manual_business_checkins m "
-            "WHERE m.character_id = :character_id AND m.business_id = :business_id "
+            + selection +
             "ORDER BY m.id DESC LIMIT :limit OFFSET :offset"
             ") "
-            f"SELECT {_CHECKIN_CHARACTER_COLUMNS}, counted.total, page.* FROM characters c "
+            f"SELECT {_CHECKIN_CHARACTER_COLUMNS}, counted.total, counted.invalid, page.* FROM characters c "
             "CROSS JOIN counted LEFT JOIN page ON 1 = 1 WHERE c.id = :character_id "
             "ORDER BY page.id DESC"
         )
         with self._business_checkin_scope() as db_session:
             captured_at = utc_now()
-            raw = db_session.execute(statement, {"character_id": character_id, "business_id": business_id,
-                                                "offset": offset, "limit": limit}).mappings().all()
+            with self._business_checkin_history_predicate(db_session, filters):
+                raw = db_session.execute(statement, {"character_id": character_id, "business_id": business_id,
+                                                    "offset": offset, "limit": limit}).mappings().all()
             if not raw:
                 raise BusinessCheckInUnavailable()
+            if raw[0]["invalid"]:
+                raise BusinessCheckInDataError()
             character = checkin_character_from_storage(raw[0])
             rows = tuple(checkin_from_storage(row) for row in raw if row["row_present"])
             if any(row.character_id != character.id or row.business_id != business_id for row in rows):
                 raise BusinessCheckInDataError()
             page = BusinessCheckInPage(character.id, character.name, business_id, captured_at,
-                                       rows, offset, limit, raw[0]["total"])
+                                       rows, offset, limit, raw[0]["total"], filters)
         return page
+
+    @staticmethod
+    @contextmanager
+    def _business_checkin_history_predicate(db_session, filters):
+        """Install the exact UTC/literal predicate only for this checked-out connection."""
+        if filters is None:
+            yield
+            return
+        sql_connection = db_session.connection()
+        connection = sql_connection.connection.driver_connection
+        try:
+            connection.create_function(
+                "checkin_history_match", 4,
+                lambda *values: checkin_history_match_from_storage(*values, filters),
+            )
+            try:
+                yield
+            finally:
+                # Remove the callback (and its captured filters) before the
+                # session returns its connection to the pool, even after errors.
+                connection.create_function("checkin_history_match", 4, None)
+        except sqlite3.Error:
+            # A failed unregister must never leave a filter closure on a pooled
+            # connection. Discard the physical connection on lifecycle errors.
+            sql_connection.invalidate()
+            raise BusinessCheckInUnavailable() from None
 
     @contextmanager
     def _business_pin_scope(self):

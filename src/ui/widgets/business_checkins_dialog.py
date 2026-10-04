@@ -1,16 +1,19 @@
 """Browse and export detached, explicitly recorded manual business observations."""
 
-from datetime import timezone
+from datetime import datetime, timezone
 from pathlib import Path
 
-from PyQt6.QtCore import QSignalBlocker, Qt
+from PyQt6.QtCore import QDate, QEvent, QSignalBlocker, Qt
 from PyQt6.QtWidgets import (
-    QComboBox, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView,
-    QLabel, QPlainTextEdit, QPushButton, QSizePolicy, QSplitter, QTableWidget, QTableWidgetItem,
+    QCheckBox, QComboBox, QDateEdit, QDialog, QDialogButtonBox, QFileDialog, QHBoxLayout, QHeaderView,
+    QLabel, QLineEdit, QPlainTextEdit, QPushButton, QSizePolicy, QSplitter, QTableWidget, QTableWidgetItem,
     QVBoxLayout, QWidget,
 )
 
-from ...database.business_checkins import BUSINESS_LABELS, business_label
+from ...database.business_checkins import (
+    BUSINESS_LABELS, BusinessCheckInHistoryFilters, BusinessCheckInValidationError,
+    business_label, validate_business_checkin_history_filters,
+)
 from ...database.business_pins import BusinessPinLimitError
 from ...utils.exporter import DataExporter
 from ...utils.logging import get_logger
@@ -54,6 +57,11 @@ class BusinessCheckInsDialog(QDialog):
         self._closed = False
         self._closing = False
         self._generation = 0
+        self._history_generation = 0
+        self._history_context = None
+        self._history_filters = None
+        self._history_dirty = False
+        self._history_offset = 0
         self.setWindowTitle('Manual business check-ins')
         self.setModal(False)
         self.resize(1050, 800)
@@ -136,6 +144,39 @@ class BusinessCheckInsDialog(QDialog):
         history_layout.setContentsMargins(0, 0, 0, 0)
         self._history_label = self._label('Select a business to browse its saved check-ins')
         history_layout.addWidget(self._history_label)
+        filters = QHBoxLayout()
+        filters.addWidget(self._label('Note contains'))
+        self._history_note_filter = QLineEdit()
+        # Qt counts UTF-16 units. Validate the complete draft as Python Unicode
+        # on Apply, instead of clipping astral characters with setMaxLength(200).
+        self._history_note_filter.setMaxLength(2_147_483_647)
+        self._history_note_filter.setPlaceholderText('Literal phrase (up to 200 characters)')
+        self._history_note_filter.setMinimumWidth(80)
+        self._history_note_filter.setAccessibleName('History note contains')
+        self._history_note_filter.installEventFilter(self)
+        filters.addWidget(self._history_note_filter, 1)
+        self._history_from_enabled = QCheckBox('From UTC')
+        self._history_until_enabled = QCheckBox('Until UTC')
+        self._history_from_date = QDateEdit()
+        self._history_until_date = QDateEdit()
+        for toggle, control in ((self._history_from_enabled, self._history_from_date),
+                                (self._history_until_enabled, self._history_until_date)):
+            control.setDisplayFormat('yyyy-MM-dd')
+            control.setDateRange(QDate(1, 1, 1), QDate(9999, 12, 31))
+            control.setDate(QDate(datetime.now(timezone.utc).date()))
+            control.setCalendarPopup(True)
+            control.setAccessibleName(f'History recorded {toggle.text()} date')
+            filters.addWidget(toggle)
+            filters.addWidget(control)
+        self._history_apply_button = QPushButton('Apply')
+        self._history_clear_button = QPushButton('Clear')
+        filters.addWidget(self._history_apply_button)
+        filters.addWidget(self._history_clear_button)
+        history_layout.addLayout(filters)
+        self._history_filter_status = self._label()
+        self._history_filter_status.setSizePolicy(pin_label_policy)
+        history_layout.addWidget(self._history_filter_status)
+        self._update_history_filter_status()
         self._history_table = self._table(['Check-in', 'Recorded (UTC)', 'Stock %', 'Supplies %', 'Stock value ($)'])
         for column, width in enumerate((95, 180, 95, 100, 170)):
             self._history_table.setColumnWidth(column, width)
@@ -152,6 +193,8 @@ class BusinessCheckInsDialog(QDialog):
         self._note_edit = QPlainTextEdit()
         self._note_edit.setReadOnly(True)
         self._note_edit.setPlaceholderText('Select a saved check-in to read its full note.')
+        self._note_edit.setMinimumHeight(55)
+        self._note_edit.setMaximumHeight(100)
         history_layout.addWidget(self._note_edit)
         splitter.addWidget(history_area)
         splitter.setSizes([260, 340])
@@ -190,7 +233,23 @@ class BusinessCheckInsDialog(QDialog):
         self._next_button.clicked.connect(self._next_page)
         self._export_board_button.clicked.connect(self._export_board)
         self._export_history_button.clicked.connect(self._export_history)
+        self._history_note_filter.textChanged.connect(self._history_filter_edited)
+        self._history_from_enabled.toggled.connect(self._history_filter_edited)
+        self._history_until_enabled.toggled.connect(self._history_filter_edited)
+        self._history_from_date.dateChanged.connect(self._history_filter_edited)
+        self._history_until_date.dateChanged.connect(self._history_filter_edited)
+        self._history_apply_button.clicked.connect(self._apply_history_filters)
+        self._history_clear_button.clicked.connect(self._clear_history_filters)
         self._update_actions()
+
+    def eventFilter(self, watched, event):
+        if (watched is self._history_note_filter and event.type() == QEvent.Type.KeyPress
+                and event.key() in (Qt.Key.Key_Return, Qt.Key.Key_Enter)):
+            # Consume Return here so QDialog cannot also activate its current
+            # default button (for example Refresh) after applying the draft.
+            self._apply_history_filters()
+            return True
+        return super().eventFilter(watched, event)
 
     def _update_actions(self):
         available = not (self._busy or self._closed or self._closing)
@@ -211,6 +270,109 @@ class BusinessCheckInsDialog(QDialog):
         self._next_button.setEnabled(available and self._page is not None and self._page.has_more)
         self._export_board_button.setEnabled(available and not self._exporting and self._board is not None)
         self._export_history_button.setEnabled(available and not self._exporting and self._page is not None)
+        can_filter = (available and self._board is not None and business is not None
+                      and self._character_combo.currentData() == self._board.character_id)
+        self._history_note_filter.setEnabled(can_filter)
+        self._history_from_enabled.setEnabled(can_filter)
+        self._history_until_enabled.setEnabled(can_filter)
+        self._history_from_date.setEnabled(can_filter and self._history_from_enabled.isChecked())
+        self._history_until_date.setEnabled(can_filter and self._history_until_enabled.isChecked())
+        self._history_apply_button.setEnabled(can_filter)
+        self._history_clear_button.setEnabled(can_filter)
+
+    def _update_history_filter_status(self, message=None):
+        if message is None:
+            if self._history_dirty:
+                message = 'Filters changed. Apply to load history, or Clear.'
+            elif self._history_filters is None:
+                message = 'Applied: all saved check-ins for this business.'
+            else:
+                accepted = self._history_filters
+                parts = []
+                if accepted.note_query is not None:
+                    query = accepted.note_query
+                    preview = query[:36] + '…' if len(query) > 36 else query
+                    parts.append(f'note contains “{preview}”')
+                if accepted.recorded_from is not None:
+                    parts.append(f'from {accepted.recorded_from.isoformat()}')
+                if accepted.recorded_until is not None:
+                    parts.append(f'until {accepted.recorded_until.isoformat()}')
+                message = 'Applied: ' + '; '.join(parts) + '.'
+        self._history_filter_status.setText(
+            message + '\nLiteral notes: ASCII letters ignore case; other Unicode is exact. Dates include both UTC bounds.'
+        )
+
+    def _reset_history_filters(self, context=None):
+        self._history_generation += 1
+        self._history_context = context
+        self._history_filters = None
+        self._history_dirty = False
+        self._history_offset = 0
+        controls = (self._history_note_filter, self._history_from_enabled, self._history_until_enabled,
+                    self._history_from_date, self._history_until_date)
+        blockers = [QSignalBlocker(control) for control in controls]
+        self._history_note_filter.clear()
+        self._history_from_enabled.setChecked(False)
+        self._history_until_enabled.setChecked(False)
+        today = QDate(datetime.now(timezone.utc).date())
+        self._history_from_date.setDate(today)
+        self._history_until_date.setDate(today)
+        del blockers
+        self._update_history_filter_status()
+
+    def _history_filter_edited(self, *_):
+        self._history_generation += 1
+        self._history_dirty = True
+        self._retire_history()
+        self._update_history_filter_status()
+
+    def _history_action_available(self):
+        return (not (self._busy or self._closed or self._closing) and self._board is not None
+                and self._selected_business_id() is not None
+                and self._character_combo.currentData() == self._board.character_id)
+
+    def _apply_history_filters(self):
+        if not self._history_action_available():
+            return
+        try:
+            accepted = validate_business_checkin_history_filters(BusinessCheckInHistoryFilters(
+                note_query=self._history_note_filter.text(),
+                recorded_from=self._history_from_date.date().toPyDate() if self._history_from_enabled.isChecked() else None,
+                recorded_until=self._history_until_date.date().toPyDate() if self._history_until_enabled.isChecked() else None,
+            ))
+        except BusinessCheckInValidationError as exc:
+            self._retire_history()
+            self._history_dirty = True
+            self._update_history_filter_status(f'Invalid filters. {exc}')
+            return
+        self._history_generation += 1
+        self._history_filters = accepted
+        self._history_dirty = False
+        self._history_offset = 0
+        self._read_applied_history()
+
+    def _clear_history_filters(self):
+        if not self._history_action_available():
+            return
+        self._reset_history_filters(self._history_context)
+        self._read_applied_history()
+
+    def _read_applied_history(self):
+        self._busy = True
+        self._update_actions()
+        try:
+            self._load_history(0, self._generation)
+        except Exception as exc:
+            self._show_history_error(exc)
+        finally:
+            self._finish_read()
+
+    def _show_history_error(self, error):
+        logger.warning('Could not load filtered manual business history (%s)', type(error).__name__)
+        self._retire_history()
+        self._update_history_filter_status(
+            'History could not be loaded. Apply again or use Refresh to retry the accepted filters.'
+        )
 
     def _retire_history(self):
         self._page = None
@@ -264,7 +426,7 @@ class BusinessCheckInsDialog(QDialog):
         pending = self._pending_character_id
         selected = pending if pending is not None else (character_id if initial else self._character_combo.currentData())
         business = self._selected_business_id()
-        offset = self._page.offset if self._page is not None else 0
+        offset = self._history_offset
         self._generation += 1
         generation = self._generation
         self._busy = True
@@ -351,7 +513,12 @@ class BusinessCheckInsDialog(QDialog):
             f'Character #{board.character_id} · {preview}\n'
             f'Board captured {_timestamp(board.captured_at)} UTC'
         )
-        self._load_history(offset if self._selected_business_id() == business else 0, generation)
+        try:
+            self._load_history(offset if self._selected_business_id() == business else 0, generation)
+        except Exception as exc:
+            if self._history_filters is None:
+                raise
+            self._show_history_error(exc)
         if self._board is board:
             self._status_label.setText(
                 'Latest entries use save order. Export saves the displayed snapshot. '
@@ -408,6 +575,7 @@ class BusinessCheckInsDialog(QDialog):
     def _character_changed(self, *_):
         self._pending_character_id = None
         self._generation += 1
+        self._reset_history_filters()
         self._retire_board()
         if self._busy:
             self._status_label.setText('Selection changed. Use Refresh to load the selected character.')
@@ -421,6 +589,7 @@ class BusinessCheckInsDialog(QDialog):
 
     def _business_changed(self):
         self._generation += 1
+        self._reset_history_filters()
         self._retire_history()
         if self._busy or self._closed or self._board is None:
             return
@@ -436,20 +605,54 @@ class BusinessCheckInsDialog(QDialog):
     def _load_history(self, offset, generation):
         board = self._board
         business = self._selected_business_id()
+        repository = self._repository
         self._retire_history()
         if board is None or business is None:
             return
-        page = self._repository.get_business_checkin_history(
-            board.character_id, business, offset=offset, limit=self.PAGE_SIZE,
-        )
-        if offset and offset >= page.total:
-            offset = ((page.total - 1) // self.PAGE_SIZE) * self.PAGE_SIZE if page.total else 0
-            page = self._repository.get_business_checkin_history(
-                board.character_id, business, offset=offset, limit=self.PAGE_SIZE,
-            )
-        if self._closed or generation != self._generation or self._board is not board:
+        owner = board.character_id
+        context = (repository, owner, business)
+        if context != self._history_context:
+            self._reset_history_filters(context)
+            offset = 0
+        if self._history_dirty:
+            self._update_history_filter_status()
+            return
+        self._history_generation += 1
+        history_generation = self._history_generation
+        filters = self._history_filters
+
+        def current():
+            return (not (self._closed or self._closing) and generation == self._generation
+                    and history_generation == self._history_generation and self._board is board
+                    and repository is self._repository and self._character_combo.currentData() == owner
+                    and self._selected_business_id() == business and self._history_context == context
+                    and self._history_filters == filters and not self._history_dirty)
+
+        def read(page_offset):
+            kwargs = {'offset': page_offset, 'limit': self.PAGE_SIZE}
+            # Empty filters preserve the old call shape for older adapters.
+            if filters is not None:
+                kwargs['filters'] = filters
+            return repository.get_business_checkin_history(owner, business, **kwargs)
+
+        try:
+            page = read(offset)
+            # Check before issuing a clamp read: a retired response cannot
+            # trigger another read for an old owner, business or filter.
+            if not current():
+                return
+            if offset and offset >= page.total:
+                offset = ((page.total - 1) // self.PAGE_SIZE) * self.PAGE_SIZE if page.total else 0
+                page = read(offset)
+            if not current():
+                return
+        except Exception:
+            if current():
+                raise
             return
         self._page = page
+        self._history_offset = page.offset
+        self._update_history_filter_status()
         self._history_label.setText(f'{business_label(business)} · Saved check-ins, newest save first')
         with QSignalBlocker(self._history_table):
             self._history_table.setRowCount(len(page.rows))
@@ -465,7 +668,8 @@ class BusinessCheckInsDialog(QDialog):
                 self._history_table.selectRow(0)
         self._page_label.setText(
             f'Check-ins {page.offset + 1}–{page.offset + len(page.rows)} of {page.total}'
-            if page.rows else 'No saved check-ins for this business'
+            if page.rows else ('No matching saved check-ins for this business' if filters is not None
+                               else 'No saved check-ins for this business')
         )
         self._history_changed()
 
@@ -478,14 +682,14 @@ class BusinessCheckInsDialog(QDialog):
             self._note_edit.setPlainText(self._page.rows[index].note)
 
     def _change_page(self, offset):
-        if self._closed or self._busy or self._page is None:
+        if self._closed or self._closing or self._busy or self._page is None or self._history_dirty:
             return
         self._busy = True
         self._update_actions()
         try:
             self._load_history(offset, self._generation)
         except Exception as exc:
-            self._show_error(exc)
+            self._show_history_error(exc)
         finally:
             self._finish_read()
 
@@ -568,6 +772,8 @@ class BusinessCheckInsDialog(QDialog):
         if self._closed:
             return
         self._saved_character_result = result
+        if self._history_context is None or self._history_context[1] != result.id:
+            self._reset_history_filters()
         self._pending_character_id = result.id
         self._refresh_after_busy = self._busy
         if self._busy:
@@ -609,6 +815,8 @@ class BusinessCheckInsDialog(QDialog):
     def _export_snapshot(self, snapshot, kind):
         if snapshot is None or self._exporting or self._busy or self._closed or self._closing:
             return
+        context = (f' for character #{snapshot.character_id} · {business_label(snapshot.business_id)}'
+                   if kind == 'history' else '')
         self._exporting = True
         self._update_actions()
         try:
@@ -621,14 +829,16 @@ class BusinessCheckInsDialog(QDialog):
             result = self._exporter.export_business_checkins_snapshot(snapshot, Path(filename))
             current = self._board if kind == 'board' else self._page
             if result.success:
-                if current is snapshot:
-                    self._status_label.setText(f'Exported {len(snapshot.rows)} displayed manual check-ins to {result.file_path}')
+                if current is snapshot or kind == 'history':
+                    self._status_label.setText(
+                        f'Exported {len(snapshot.rows)} displayed manual check-ins{context} to {result.file_path}'
+                    )
             elif not self._closed:
-                self._status_label.setText('Export failed. Choose a writable location and try again.')
+                self._status_label.setText(f'Export failed{context}. Choose a writable location and try again.')
         except Exception as exc:
             logger.warning('Could not export manual check-ins (%s)', type(exc).__name__)
             if not self._closed:
-                self._status_label.setText('Export failed. Choose a writable location and try again.')
+                self._status_label.setText(f'Export failed{context}. Choose a writable location and try again.')
         finally:
             self._exporting = False
             self._update_actions()

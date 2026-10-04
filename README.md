@@ -443,12 +443,56 @@ character and business even if you change the board or Settings while it is open
 - Select a business to browse earlier check-ins, 25 at a time, and inspect the
   full selected note. Refresh reads current saved data; closing and reopening the
   board retains the records
+- Use the history's **Note contains** and optional **From UTC / Until UTC**
+  controls to find older observations, then **Apply** to load matching pages
 - Choose **Pin selected business** to keep frequently used businesses first for
   this saved character. Choose **Unpin selected business** to remove that
   preference. Pins survive closing the board and restarting the app
 - Export the displayed latest board or history page as JSON. These are separate
   accepted observations; an export retains the chosen snapshot even if data or
   selection changes while the file chooser is open
+
+#### Filter recorded check-in history
+
+Choose a saved character and business, enter a literal phrase in **Note contains**,
+optionally enable either recorded-date bound, then choose **Apply**. The history
+shows the matching total and up to 25 rows per page, newest save ID first. Select
+a row to read its full personal note. **Clear** restores the unfiltered first
+page for that character/business.
+
+Search accepts up to 200 Unicode code points in a single line. ASCII letters
+ignore case; other Unicode letters match exactly. `%`, `_` and backslashes are
+literal characters, not wildcards. An empty phrase means no note filter; actual
+spaces in a phrase are preserved. Each enabled date includes the entire chosen
+UTC day. The date refers to when Save recorded the check-in, not a gameplay time;
+stored offsets are normalized consistently with the displayed UTC timestamp.
+A clock rollback can therefore put a newer save ID on an earlier recorded date.
+
+Editing a filter clears the displayed history, selected note and history-export
+action until **Apply**. The latest board and an open recording draft remain
+available. Invalid input keeps the typed controls for correction. Paging and
+Refresh use the accepted filters; Refresh does not silently apply unfinished
+filter edits. Changing the selected character or business resets the filters.
+Reordering pins or refreshing the same selection retains accepted filters.
+
+Filtered JSON exports include the accepted phrase, UTC bounds and matching
+policy with that exact history page. A file chooser captures the page before it
+opens, so changing filters, selection or data while it is open does not rewrite
+the chosen export. The existing unfiltered JSON shape remains compatible.
+Matching counts cover all qualifying check-ins for the selected business, while
+the export contains only the displayed page. Separate page reads are fresh
+observations and do not form a multi-page database snapshot.
+
+Filtering may scan that business's saved rows. The source fields used by active
+filters are validated before matching; invalid saved note/date data causes an
+error instead of silently disappearing as a nonmatch. Other fields retain the
+existing displayed-page validation scope. A failed read is shown as unavailable,
+not as zero matches. Filtering does not change saved observations, pins, live
+business values or accounting.
+
+Local tests cover real SQLite filtering and captured exports, plus the actual
+MainWindow → record → filter → page → export flow with Linux offscreen Qt.
+Native file choosers are substituted; Windows, gameplay and OCR are unverified.
 
 Check-ins belong to saved characters. Choose **Add saved character…**, enter a
 name, and choose **Create and select** to get started on an empty database without
