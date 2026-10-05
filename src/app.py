@@ -440,8 +440,7 @@ class GTABusinessManager:
         with self._perf_monitor.time_operation("total"):
             # Capture multiple regions
             with self._perf_monitor.time_operation("capture"):
-                # These images belong to one detection cycle, not six separate
-                # rate-limited cycles. Reuse the existing batch capture API.
+                # Visual checks and all HUD text share one captured screenshot.
                 regions = self._capture.regions
                 images = self._capture.capture_multiple_regions([
                     regions.full_screen,

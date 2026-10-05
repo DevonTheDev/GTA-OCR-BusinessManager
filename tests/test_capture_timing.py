@@ -81,7 +81,9 @@ def test_batch_failure_is_paced_once_between_batches(capture_clock, monkeypatch)
     def fail():
         raise RuntimeError('synthetic capture unavailable')
     monkeypatch.setattr(capture, '_ensure_mss', fail)
-    regions = [capture.regions.money_display, capture.regions.mission_text]
+    # This fixture is only 2x2 pixels; use nonempty regions so the failure
+    # exercises the native capture boundary instead of invalid crop geometry.
+    regions = [capture.regions.full_screen, capture.regions.full_screen]
     assert capture.capture_multiple_regions(regions) == {0: None, 1: None}
     assert capture.capture_multiple_regions(regions) == {0: None, 1: None}
     assert clock.waits == [1.0]

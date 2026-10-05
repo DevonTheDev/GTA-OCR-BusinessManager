@@ -137,10 +137,11 @@ class ScreenCapture:
     def capture_multiple_regions(
         self, regions: list[Region]
     ) -> dict[int, Optional[np.ndarray]]:
-        """Capture multiple regions efficiently.
+        """Extract independent region images from one screen observation.
 
-        Captures are done without rate limiting between them,
-        only the first capture respects rate limiting.
+        The enclosing rectangle is grabbed once, so OCR crops and visual
+        detection cannot combine separate native captures from different times.
+        A failed shared grab fails the batch; invalid regions keep a None entry.
 
         Args:
             regions: List of regions to capture
@@ -148,11 +149,49 @@ class ScreenCapture:
         Returns:
             Dict mapping region index to captured image
         """
-        results = {}
-        for i, region in enumerate(regions):
-            # Only rate limit the first capture
-            results[i] = self.capture_region(region, wait_for_rate=(i == 0))
-        return results
+        results: dict[int, Optional[np.ndarray]] = dict.fromkeys(range(len(regions)))
+        if not regions:
+            return results
+
+        self._wait_for_rate_limit()
+        try:
+            width, height = self._scaler.width, self._scaler.height
+            offset_x, offset_y = self._scaler.offset
+            rectangles = {}
+            for index, region in enumerate(regions):
+                try:
+                    rectangle = region.to_mss_monitor(width, height, offset_x, offset_y)
+                    if rectangle["width"] <= 0 or rectangle["height"] <= 0:
+                        raise ValueError("Capture region has no pixels")
+                    rectangles[index] = rectangle
+                except Exception as error:
+                    logger.error(f"Invalid capture region {index}: {error}")
+
+            if not rectangles:
+                return results
+            left = min(rect["left"] for rect in rectangles.values())
+            top = min(rect["top"] for rect in rectangles.values())
+            right = max(rect["left"] + rect["width"] for rect in rectangles.values())
+            bottom = max(rect["top"] + rect["height"] for rect in rectangles.values())
+            bounds = {"left": left, "top": top, "width": right - left, "height": bottom - top}
+            image = np.array(self._ensure_mss().grab(bounds))
+            if (image.ndim != 3 or image.shape[:2] != (bounds["height"], bounds["width"])
+                    or image.shape[2] < 3):
+                raise ValueError("Captured image does not match requested bounds")
+
+            for index, rectangle in rectangles.items():
+                x, y = rectangle["left"] - left, rectangle["top"] - top
+                # Preserve independent writable images, including duplicate or
+                # overlapping crops, without retaining the enclosing BGRA image.
+                results[index] = image[
+                    y:y + rectangle["height"], x:x + rectangle["width"], :3
+                ].copy()
+            return results
+        except Exception as error:
+            logger.error(f"Failed to capture region batch: {error}")
+            return dict.fromkeys(results)
+        finally:
+            self._last_capture_time = time.monotonic()
 
     def capture_to_pil(self, region: Region) -> Optional[Image.Image]:
         """Capture a region and return as PIL Image.

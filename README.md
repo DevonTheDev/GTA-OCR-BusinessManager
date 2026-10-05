@@ -550,9 +550,25 @@ from all three regions remains separate in capture metadata. For example, a
 generic **VIP Work** header plus **Hostile Takeover** in the banner can establish
 the named activity; contradictory names in different crops remain ambiguous.
 An accepted banner result can finish an existing activity, but does not create
-a new one by itself. Coordinates are unchanged. The batch still waits once for
-its rate limit, with six region grabs and one additional OCR input per cycle;
-this is not a native latency or FPS benchmark.
+a new one by itself. Coordinates are unchanged.
+
+The full-screen visual checks, money, mission objective, center prompt, timer and
+mission banner now come from **one native screen grab per detection cycle**.
+Previously the six separate grabs could combine text from different instants,
+especially where the center and banner crops overlap. Cropping one observation
+prevents that source of contradictory titles/results or a name assembled from
+words that never appeared together. It does not resolve contradictory evidence
+already present in one screenshot or change the mission-recognition rules.
+
+The batch grabs the enclosing rectangle and returns independently writable BGR
+crops in the original order, preserving pixel rounding and monitor offsets.
+An invalid or empty region retains a missing-image entry. If the shared grab
+fails or returns the wrong dimensions, the batch returns missing images rather
+than retrying regions against a later screen. It waits once and paces failed
+attempts; an empty batch does no capture work. Standalone captures and the later
+business-computer reads keep their existing scheduling. One grab is not a
+guarantee against operating-system/compositor tearing, concurrent configuration
+changes, or a measured Windows latency, memory-use or FPS improvement.
 
 The Windows adapter now follows [WinOCR's lowercase Python API](https://github.com/GitHub30/winocr#information-that-can-be-obtained)
 and preserves backend line text, punctuation and word bounds. Windows
@@ -581,7 +597,7 @@ renders controlled text at 720p/1080p/1440p and runs production crop/preprocessi
 code through an already installed Tesseract CLI and the real capture pipeline:
 
 ```bash
-GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py
+GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py tests/test_capture_snapshot_ocr_images.py
 ```
 
 That optional diagnostic requires Tesseract with English data, DejaVuSans.ttf,
@@ -593,6 +609,12 @@ heist phases and single completion/cooldown records. Separate native-shaped
 backend tests enforce a deliberately synthetic size cap across ordinary and
 high-resolution inputs and verify bounds mapping; they do not execute Windows
 OCR or claim that the test cap is the native maximum.
+The changing-screen integration uses actual batch capture and Tesseract with
+complete rendered frames that switch between native-grab calls. Stable-frame
+controls and three transition cases cover contradictory titles, a false
+**Executive Search** assembled across frames, and conflicting PASSED/FAILED
+results through the real activity and SQLite paths. These demonstrate the
+pipeline defect and correction on controlled inputs, not its gameplay frequency.
 The test images are synthetic, not game screenshots. This repository ships
 no representative gameplay screenshot corpus or template images; default startup
 also does not automatically load a template folder. This pass does not change
@@ -1234,7 +1256,7 @@ Screen Capture (mss) → Region Extraction → OCR (winocr) → Parsing → Stat
 Capture pacing uses elapsed monotonic time, so changing the system clock cannot
 create an hour-long wait or bypass the rate limit. Failed screen grabs are paced
 as well; a disconnected or unavailable capture backend does not trigger a tight
-retry loop. Batched HUD grabs still wait only once between batches. These are
+retry loop. Batched HUD crops share one grab and wait only once between batches. These are
 scheduling guarantees, not measured native Windows FPS benchmarks.
 
 **State Machine:**

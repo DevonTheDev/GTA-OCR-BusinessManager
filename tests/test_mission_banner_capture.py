@@ -288,6 +288,6 @@ def test_six_region_app_batch_preserves_order_and_waits_once(capture_clock, app,
     app._perf_monitor = PerformanceMonitor()
     app._do_capture_cycle()
     app._do_capture_cycle()
-    assert monitors == [region.to_mss_monitor(200, 120) for region in BATCH] * 2
+    assert monitors == [REGIONS.full_screen.to_mss_monitor(200, 120)] * 2
     assert clock.waits == [1.0]
     assert app._data.total_captures == 2

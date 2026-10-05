@@ -28,6 +28,14 @@ def test_regular_detection_cycle_rate_limits_once_for_all_hud_regions(tmp_path, 
             return np.zeros((monitor["height"], monitor["width"], 4), dtype=np.uint8)
 
     monkeypatch.setattr(capture, "_ensure_mss", lambda: SyntheticScreen())
+    batches = []
+    capture_batch = capture.capture_multiple_regions
+
+    def record_batch(regions):
+        batches.append(list(regions))
+        return capture_batch(regions)
+
+    monkeypatch.setattr(capture, "capture_multiple_regions", record_batch)
     app = GTABusinessManager(Settings(tmp_path / "settings.yaml"))
     app._capture = capture
     app._perf_monitor = PerformanceMonitor()
@@ -42,7 +50,7 @@ def test_regular_detection_cycle_rate_limits_once_for_all_hud_regions(tmp_path, 
     result = app._do_capture_cycle()
 
     assert len(waits) == 1
-    assert len(grabs) == 6
+    assert len(grabs) == 1
     regions = capture.regions
     expected = [
         regions.full_screen,
@@ -52,7 +60,8 @@ def test_regular_detection_cycle_rate_limits_once_for_all_hud_regions(tmp_path, 
         regions.timer_bottom_right,
         regions.mission_banner,
     ]
-    assert grabs == [region.to_mss_monitor(200, 100, 10, 20) for region in expected]
+    assert grabs == [regions.full_screen.to_mss_monitor(200, 100, 10, 20)]
+    assert batches == [expected]
     assert result.game_state == GameState.UNKNOWN
     assert app._data.total_captures == 1
 
