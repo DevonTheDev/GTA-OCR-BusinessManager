@@ -600,6 +600,23 @@ bonus/reward text, **Objective complete**, **SUCCESS**, **COMPLETED** and **Well
 done** do not end the whole tracked mission. These are heuristic recognition
 rules, not calibrated confidence scores or proof of actual gameplay state.
 
+An explicit result and one supported canonical mission title can also share a
+single OCR segment in either order, such as **MISSION PASSED Headhunter** or
+**Headhunter MISSION FAILED**. The same bounded rule supports **JOB COMPLETE**
+and **CONTRACT COMPLETE**, with case and whitespace normalization. It retains
+the title for the existing result-ownership checks, including the otherwise
+imperative-looking **Blow Up** title. An accepted result still cannot start a new
+activity. This prevents that layout alone from inventing a mission or leaving the
+previous mission active when a different one appears.
+
+The new rule requires the complete title/result structure within one crop.
+Unknown titles, extra prose, competing titles and separate-crop fragments are
+not completed by guessing. Ordinary **blow up the vehicle** objectives, bare
+status rules, existing payout handling and contradictory-result checks keep
+their separate behavior. Mixed title/reward text outside those existing rules
+can remain unresolved. This does not establish how often native OCR produces
+the supported layout in real gameplay.
+
 The normal capture batch now includes the already-defined mission banner.
 Previously its upper title rows were outside both consumed OCR crops, so a
 readable name there could never reach automatic selection. Banner text now
@@ -655,7 +672,7 @@ renders controlled text at 720p/1080p/1440p and runs production crop/preprocessi
 code through an already installed Tesseract CLI and the real capture pipeline:
 
 ```bash
-GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py tests/test_capture_snapshot_ocr_images.py tests/test_mission_crop_ocr_images.py tests/test_mission_episode_ocr_images.py
+GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py tests/test_capture_snapshot_ocr_images.py tests/test_mission_crop_ocr_images.py tests/test_mission_episode_ocr_images.py tests/test_inline_mission_result_ocr_images.py
 ```
 
 That optional diagnostic requires Tesseract with English data, DejaVuSans.ttf,
@@ -692,6 +709,15 @@ Tesseract, production preprocessing/crop coordinates, detection, activity tracki
 and temporary SQLite. Text-based capture cases also check state/money callbacks,
 history, cooldowns and later valid completion. The checks establish these pipeline
 boundaries on controlled inputs, not real-game accuracy or native Windows behavior.
+
+Inline-result diagnostics additionally render both title/status orders at
+720p/1080p/1440p and assert the actual Tesseract transcription before checking
+capture, tracker, balance and SQLite behavior. They cover initial result screens,
+the next mission's identity, repeated and mismatched results, and conservative
+prose/unknown/crop-boundary controls. Actual balance changes remain observed;
+the correction prevents phantom tracked activities and preserves existing
+accounting policy. These generated frames do not substitute for representative
+gameplay screenshots or establish Windows OCR accuracy.
 
 ### Business Management
 - Track stock and supply levels for all businesses:

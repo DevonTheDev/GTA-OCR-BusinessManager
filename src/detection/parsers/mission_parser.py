@@ -72,19 +72,35 @@ def _contains(text: str, phrase: str) -> bool:
 # Status banners may wrap across OCR lines. A phrase must start a line or a
 # punctuation-delimited segment and finish at its boundary or a payout suffix.
 # This avoids treating explanatory text such as "if the mission failed" as a result.
+_NAMED_RESULT_PHRASES = {
+    "complete": ("mission passed", "job complete", "contract complete"),
+    "failed": ("mission failed",),
+}
 _OUTCOME_PHRASES = {
-    "complete": (
-        "mission passed", "job complete", "contract complete", "passed",
-    ),
+    "complete": (*_NAMED_RESULT_PHRASES["complete"], "passed"),
     "failed": (
-        "mission failed", "failed", "wasted", "busted", "time ran out",
+        *_NAMED_RESULT_PHRASES["failed"], "failed", "wasted", "busted", "time ran out",
         "left the area", "abandoned", "product lost", "associate died", "target escaped",
     ),
 }
 
 
+def _named_result_evidence(text: str) -> Iterable[tuple[str, str]]:
+    """Yield canonical title/results only from complete segments in one crop."""
+    names = {_normalize(name): name for name in MissionParser.MISSION_NAMES}
+    titles = "|".join(r"\s+".join(re.escape(word) for word in name.split()) for name in names)
+    for outcome, phrases in _NAMED_RESULT_PHRASES.items():
+        labels = "|".join(r"\s+".join(phrase.split()) for phrase in phrases)
+        pattern = (
+            rf"(?:^|[|/:.!])[ \t]*(?:({titles})\s+(?:{labels})|(?:{labels})\s+({titles}))"
+            rf"(?=[ \t]*(?:$|[\r\n|/:.!]))"
+        )
+        for match in re.finditer(pattern, text.casefold(), re.MULTILINE):
+            yield names[_normalize(match[1] or match[2])], outcome
+
+
 def _outcome_evidence(text: str) -> set[str]:
-    evidence = set()
+    evidence = {outcome for _, outcome in _named_result_evidence(text)}
     for outcome, phrases in _OUTCOME_PHRASES.items():
         for phrase in phrases:
             words = r"\s+".join(re.escape(word) for word in phrase.split())
@@ -289,9 +305,10 @@ class MissionParser:
         if name == "Blow Up":
             # This catalog title is also an ordinary imperative. Require its
             # end to look like a title, not "blow up the delivery vehicle".
+            # An exact title/result segment also identifies it in title-first order.
             return re.search(
                 r"(?<!\w)blow\s+up(?=[ \t]*(?:$|[\r\n\"'.:!\-]))", text, re.IGNORECASE
-            ) is not None
+            ) is not None or any(title == name for title, _ in _named_result_evidence(text))
         return True
 
     def _extract_objective(self, text: str) -> str:
