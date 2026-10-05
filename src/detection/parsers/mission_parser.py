@@ -5,6 +5,7 @@ is not. These rules use the repository's catalog, without guessing OCR typos.
 """
 
 import re
+from collections.abc import Iterable
 from dataclasses import dataclass, field
 from enum import Enum, auto
 from typing import Literal, Optional
@@ -200,43 +201,63 @@ class MissionParser:
 
     def parse(self, text: str) -> MissionReading:
         """Parse this text only; preserve raw text and the original-case objective."""
-        reading = MissionReading(raw_text=text, objective=self._extract_objective(text))
-        outcomes = _outcome_evidence(text)
+        return self.parse_regions((text,))
+
+    def parse_regions(self, texts: Iterable[str]) -> MissionReading:
+        """Combine complete evidence from independent OCR crops.
+
+        Wrapping within a crop is allowed; phrases never span crop boundaries.
+        Keep the source text and first objective in source order, then resolve
+        identity and results before changing the last active reading.
+        """
+        sources = tuple(text for text in texts if text)
+        reading = MissionReading(raw_text="\n".join(sources))
+        outcomes = set()
+        names = {}
+        categories = set()
+        phases = set()
+        keywords = set()
+        for text in sources:
+            outcomes.update(_outcome_evidence(text))
+            if not reading.objective:
+                reading.objective = self._extract_objective(text)
+            normalized = _normalize(text)
+            region_names = {
+                name: kind for name, kind in self.MISSION_NAMES.items()
+                if self._contains_name(text, normalized, name)
+            }
+            region_categories = set()
+            keywords.update(_normalize(name) for name in region_names)
+            for kind, phrases in self.MISSION_KEYWORDS.items():
+                for phrase in phrases:
+                    if _contains(normalized, phrase):
+                        region_categories.add(kind)
+                        keywords.add(phrase)
+
+            region_kinds = region_categories | set(region_names.values())
+            for phase, phrases in self.PHASE_KEYWORDS.items():
+                for phrase in phrases:
+                    # Only a family in this crop can qualify incidental phase
+                    # words. Independent labels can combine with another crop's
+                    # family; "setup your business" still cannot assert phase.
+                    label = rf"^{phrase}\s*(?:$|[:\-])"
+                    if (
+                        (region_kinds & self.HEIST_FAMILIES and _contains(normalized, phrase))
+                        or _contains(normalized, f"heist {phrase}")
+                        or any(re.search(label, _normalize(line)) for line in text.splitlines())
+                    ):
+                        phases.add(phase)
+                        keywords.add(phrase)
+            names.update(region_names)
+            categories.update(region_categories)
+
         if len(outcomes) > 1:
             reading.outcome = "conflicting"
         elif "complete" in outcomes:
             reading.outcome = "complete"
         elif "failed" in outcomes:
             reading.outcome = "failed"
-        normalized = _normalize(text)
-        names = {
-            name: kind for name, kind in self.MISSION_NAMES.items()
-            if self._contains_name(text, normalized, name)
-        }
-        categories = set()
-        keywords = {_normalize(name) for name in names}
-        for kind, phrases in self.MISSION_KEYWORDS.items():
-            for phrase in phrases:
-                if _contains(normalized, phrase):
-                    categories.add(kind)
-                    keywords.add(phrase)
-
         kinds = categories | set(names.values())
-        phases = set()
-        for phase, phrases in self.PHASE_KEYWORDS.items():
-            for phrase in phrases:
-                # In a named heist, phase words add phase only, never replace
-                # the family. A standalone label or explicit "heist prep"
-                # also identifies phase; "setup your business" does not.
-                label = rf"^{phrase}\s*(?:$|[:\-])"
-                if (
-                    (kinds & self.HEIST_FAMILIES and _contains(normalized, phrase))
-                    or _contains(normalized, f"heist {phrase}")
-                    or any(re.search(label, _normalize(line)) for line in text.splitlines())
-                ):
-                    phases.add(phase)
-                    keywords.add(phrase)
-
         incompatible_phase = bool(phases and kinds and not kinds <= self.HEIST_FAMILIES)
         ambiguous = len(names) > 1 or len(kinds) > 1 or len(phases) > 1 or incompatible_phase
         labels = set(names) | {kind.name for kind in categories - set(names.values())}

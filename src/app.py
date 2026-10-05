@@ -6,7 +6,7 @@ import re
 import time
 import threading
 from typing import Optional, Callable, List
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum, auto
 
@@ -73,6 +73,7 @@ class CaptureResult:
     activity_type: Optional[ActivityType] = None
     activity_identity_status: str = "unknown"
     banner_text: str = ""
+    state_reason: str = ""
 
 
 @dataclass
@@ -466,9 +467,13 @@ class GTABusinessManager:
                 center_text_image=center_img,
                 mission_banner_image=banner_img,
             )
+            # Reject another mission's result before it can transition state,
+            # classify a balance change or notify completion listeners.
+            state_result = self._guard_terminal_mission_identity(state_result)
 
             result.game_state = state_result.state
             result.state_confidence = state_result.confidence
+            result.state_reason = getattr(state_result, "reason", "")
             result.mission_text = state_result.mission_text
             result.objective_text = state_result.objective_text
             result.banner_text = getattr(state_result, "banner_text", "")
@@ -638,6 +643,18 @@ class GTABusinessManager:
 
     def _process_state(self, state_result: StateDetectionResult, capture_result: CaptureResult) -> None:
         """Process state-specific logic."""
+        guarded_result = self._guard_terminal_mission_identity(state_result)
+        if guarded_result is not state_result:
+            # Direct callers receive the same conservative observation as a
+            # capture cycle, without consuming the current activity.
+            capture_result.game_state = guarded_result.state
+            capture_result.state_confidence = guarded_result.confidence
+            capture_result.state_reason = guarded_result.reason
+            capture_result.mission_text = guarded_result.mission_text
+            capture_result.objective_text = guarded_result.objective_text
+            capture_result.banner_text = guarded_result.banner_text
+            capture_result.mission = guarded_result.mission
+            return
         state = state_result.state
         if (state in (GameState.MISSION_ACTIVE, GameState.HEIST_PREP, GameState.HEIST_FINALE,
                       GameState.SELLING, GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
@@ -765,9 +782,9 @@ class GTABusinessManager:
     def _mission_reading(self, state_result: StateDetectionResult) -> MissionReading:
         reading = getattr(state_result, "mission", None)
         if reading is None:
-            reading = self._mission_parser.parse("\n".join(
-                text for text in (state_result.mission_text, state_result.objective_text,
-                                  getattr(state_result, "banner_text", "")) if text
+            reading = self._mission_parser.parse_regions((
+                state_result.mission_text, state_result.objective_text,
+                getattr(state_result, "banner_text", ""),
             ))
         return reading
 
@@ -802,6 +819,45 @@ class GTABusinessManager:
             return MissionType.HEIST_FINALE
         return reading.heist_phase
 
+    def _mission_identity_compatible(self, state_result, reading) -> bool:
+        """Whether explicit name, family and phase axes can belong together.
+
+        Unknown and ambiguous identity axes provide no ownership conflict.
+        Use this same rule for refinement and accepting a terminal result.
+        """
+        family, phase = self._data.mission_identity_type, self._data.mission_heist_phase
+        new_family = self._identity_family(reading)
+        new_phase = self._identity_phase(state_result, reading)
+        unknown = MissionType.UNKNOWN
+        if family != unknown and new_family != unknown and family != new_family:
+            return False
+        if phase != unknown and new_phase != unknown and phase != new_phase:
+            return False
+        resolved_family = new_family if family == unknown else family
+        resolved_phase = new_phase if phase == unknown else phase
+        heist_families = (MissionType.CAYO_PERICO, MissionType.CASINO_HEIST, MissionType.DOOMSDAY)
+        if resolved_phase != unknown and resolved_family not in (*heist_families, unknown):
+            return False
+        current = self._activity_tracker.current_activity
+        current_name = current.name if current is not None else self._data.current_mission
+        return not (
+            self._data.mission_identity_status == "known_name"
+            and reading.identity_status == "known_name"
+            and reading.mission_name != current_name
+        )
+
+    def _guard_terminal_mission_identity(self, state_result):
+        """Keep conflicting result evidence visible without accepting its state."""
+        if (state_result.state in (GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
+                and self._data.mission_start_time is not None):
+            reading = self._mission_reading(state_result)
+            if not self._mission_identity_compatible(state_result, reading):
+                return replace(
+                    state_result, state=GameState.UNKNOWN, confidence=0.0,
+                    reason="Result identity conflicts with the current mission", mission=reading,
+                )
+        return state_result
+
     def _refine_mission_identity(self, state_result, reading, *, allow_result=False):
         """Fill unresolved identity axes without restarting time, money or activity."""
         current = self._activity_tracker.current_activity
@@ -813,24 +869,14 @@ class GTABusinessManager:
             allow_result and expected_result is not None and reading.outcome == expected_result
         )
         if (current is None or reading.identity_status not in ("known_name", "type_only")
-                or not outcome_allowed):
+                or not outcome_allowed or not self._mission_identity_compatible(state_result, reading)):
             return
         family, phase = self._data.mission_identity_type, self._data.mission_heist_phase
         new_family = self._identity_family(reading)
         new_phase = self._identity_phase(state_result, reading)
         unknown = MissionType.UNKNOWN
-        if family != unknown and new_family != unknown and family != new_family:
-            return
-        if phase != unknown and new_phase != unknown and phase != new_phase:
-            return
         resolved_family = new_family if family == unknown else family
         resolved_phase = new_phase if phase == unknown else phase
-        heist_families = (MissionType.CAYO_PERICO, MissionType.CASINO_HEIST, MissionType.DOOMSDAY)
-        if resolved_phase != unknown and resolved_family not in (*heist_families, unknown):
-            return
-        if (status == "known_name" and reading.identity_status == "known_name"
-                and reading.mission_name != current.name):
-            return
         improves_family = family == unknown and new_family != unknown
         improves_phase = phase == unknown and new_phase != unknown
         improves_name = status != "known_name" and reading.identity_status == "known_name"
@@ -890,9 +936,10 @@ class GTABusinessManager:
             return ActivityType.SELL_MISSION
         # Preserve the established generic delivery category as unresolved. A
         # later specific name can improve it; ordinary 'deliver' is insufficient.
-        text = " ".join(" ".join((state_result.mission_text, state_result.objective_text,
-                                  getattr(state_result, "banner_text", ""))).casefold().split())
-        if re.search(r"(?<!\w)deliver (?:the )?(?:goods|product)(?!\w)", text):
+        texts = (state_result.mission_text, state_result.objective_text,
+                 getattr(state_result, "banner_text", ""))
+        if any(re.search(r"(?<!\w)deliver (?:the )?(?:goods|product)(?!\w)",
+                         " ".join(text.casefold().split())) for text in texts):
             return ActivityType.SELL_MISSION
         return ActivityType.UNKNOWN
 

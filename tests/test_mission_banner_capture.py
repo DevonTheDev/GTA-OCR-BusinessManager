@@ -109,8 +109,8 @@ def test_three_crops_are_parsed_once_and_shared_with_app(app):
             super().__init__()
             self.readings = []
 
-        def parse(self, text):
-            reading = super().parse(text)
+        def parse_regions(self, texts):
+            reading = super().parse_regions(texts)
             self.readings.append(reading)
             return reading
 
@@ -192,7 +192,13 @@ def test_later_banner_does_not_replace_confirmed_incompatible_identity(app):
     banner_frame(app, banner="Hostile Takeover")
     assert app._activity_tracker.current_activity is current
     assert current.name == "Headhunter"
-    banner_frame(app, banner="MISSION PASSED\nHostile Takeover")
+    result, _ = banner_frame(app, banner="MISSION PASSED\nHostile Takeover")
+    assert result.game_state == GameState.UNKNOWN and result.state_confidence == 0.0
+    assert app._activity_tracker.current_activity is current
+    assert activity_rows(app) == []
+    assert app.cooldown_tracker.get_cooldown("headhunter") is None
+    assert app.cooldown_tracker.get_cooldown("hostile_takeover") is None
+    banner_frame(app, banner="MISSION PASSED\nHeadhunter")
     (row,) = activity_rows(app)
     assert row["name"] == "Headhunter"
     assert app.cooldown_tracker.get_cooldown("headhunter") is not None

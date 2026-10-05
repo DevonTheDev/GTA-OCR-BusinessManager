@@ -516,6 +516,18 @@ work. Explicit nightclub-promotion labels have their own activity category.
 There is no fuzzy spelling correction, model inference, new payout estimate or
 guarantee that every GTA mission is supported.
 
+Each OCR crop now contributes its own complete phrases. **Executive** in one
+region and **Search** in another cannot invent **Executive Search**; the same
+boundary applies to category markers, delivery objectives and result phrases.
+Line wrapping inside one crop still works. Complete agreeing evidence can still
+combine across crops, such as **VIP Work** plus **Hostile Takeover**, or **Casino
+Heist** plus an independent **Finale** label. An incidental phase word in another
+crop cannot borrow a heist family's context. The parser retains the original
+region text and chooses the first per-region objective without appending words
+from another crop. A phrase clipped across separate crops can therefore remain
+unresolved until one crop contains complete evidence; there is no positional
+word stitching or spelling inference.
+
 Conflicting names/categories remain ambiguous. Unknown objectives no longer
 default to a contact mission; a generic delivery classification remains
 unresolved until stronger identity evidence arrives. A visual-only result at
@@ -526,6 +538,19 @@ category is not replaced by incompatible later text.
 If the first clear title appears on an accepted result banner, it can refine an
 existing compatible activity before that activity is recorded. A result banner
 alone never creates a new activity.
+
+An explicit result with an incompatible known name, family or prep/finale phase
+is now rejected before changing the app's state or classifying a balance event.
+For example, after **Headhunter** ends and **Sightseer** starts, another named
+Headhunter result cannot complete Sightseer, record its outcome, notify completion
+listeners or start its cooldown. The capture reports an uncertain state and a
+reason while retaining the OCR text and current activity. Actual balance changes
+are still observed. A later compatible result can complete the original activity
+with its original time and money baseline. Unnamed results and compatible late
+identity refinement keep working; ambiguous identity retains its prior behavior
+and does not establish an explicit name/family/phase conflict. This is an evidence
+compatibility check, not a general solution to lingering titles, missed results,
+menus or legitimate same-name retries.
 
 Heist family, specific name and explicit prep/finale phase are kept separately.
 A previously missing compatible phase can be filled in: **Casino Heist**, then
@@ -597,7 +622,7 @@ renders controlled text at 720p/1080p/1440p and runs production crop/preprocessi
 code through an already installed Tesseract CLI and the real capture pipeline:
 
 ```bash
-GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py tests/test_capture_snapshot_ocr_images.py
+GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py tests/test_capture_snapshot_ocr_images.py tests/test_mission_crop_ocr_images.py
 ```
 
 That optional diagnostic requires Tesseract with English data, DejaVuSans.ttf,
@@ -622,6 +647,14 @@ crop placement. Actual Windows OCR execution, real
 HUD/font/layout variations, motion, lighting and gameplay false-positive rates
 remain unverified. A catalog label visible in a menu is still a possible
 recognition cue; the tests do not prove that the player has started that mission.
+
+Additional controlled 720p/1080p/1440p images cover separate fragments that used
+to invent names/categories/results, wrapped-name and agreeing-crop controls, and
+a named old result returning after another mission starts. These execute real
+Tesseract, production preprocessing/crop coordinates, detection, activity tracking
+and temporary SQLite. Text-based capture cases also check state/money callbacks,
+history, cooldowns and later valid completion. The checks establish these pipeline
+boundaries on controlled inputs, not real-game accuracy or native Windows behavior.
 
 ### Business Management
 - Track stock and supply levels for all businesses:

@@ -413,9 +413,12 @@ def test_first_clear_terminal_identity_refines_existing_activity_before_persiste
 @pytest.mark.parametrize('outcome', ['MISSION PASSED', 'MISSION FAILED'])
 def test_terminal_identity_does_not_replace_confirmed_incompatible_name(app, outcome):
     frame(app, 'Headhunter')
-    frame(app, center_text=outcome + '\nSightseer')
-    (row,) = app._repository.export_session_data(app._data.db_session_id)['activities']
-    assert row['name'] == 'Headhunter'
+    current = app._activity_tracker.current_activity
+    observed = frame(app, center_text=outcome + '\nSightseer')
+    assert observed.game_state == GameState.UNKNOWN
+    assert app._activity_tracker.current_activity is current
+    assert current.name == 'Headhunter'
+    assert app._repository.export_session_data(app._data.db_session_id)['activities'] == []
 
 
 @pytest.mark.parametrize('state,text', [

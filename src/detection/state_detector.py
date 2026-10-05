@@ -12,7 +12,7 @@ from ..game.state_machine import GameState
 from ..utils.logging import get_logger
 from .template_matcher import TemplateMatcher
 from .ocr_engine import OCREngine
-from .parsers.mission_parser import MissionParser, MissionReading, MissionType, classify_mission_outcome
+from .parsers.mission_parser import MissionParser, MissionReading, MissionType
 
 
 logger = get_logger("detection.state")
@@ -319,10 +319,10 @@ class StateDetector:
             banner_text = self._ocr.recognize_preprocessed(
                 mission_banner_image, invert=True, scale=2.0,
             ).text
-        combined_text = "\n".join(text for text in (mission_text, center_text, banner_text) if text)
-        if not combined_text.strip():
+        text_regions = (mission_text, center_text, banner_text)
+        if not any(text.strip() for text in text_regions):
             return None
-        reading = self._mission_parser.parse(combined_text)
+        reading = self._mission_parser.parse_regions(text_regions)
 
         def detected(state, confidence, reason):
             return StateDetectionResult(
@@ -334,8 +334,8 @@ class StateDetector:
         # Explicit status text can finish an activity; bonus/reward/objective
         # vocabulary alone cannot. These remain heuristic state scores, not OCR
         # confidence or calibrated gameplay accuracy.
-        outcome = classify_mission_outcome(combined_text)
-        if outcome is not None:
+        outcome = reading.outcome
+        if outcome in ("complete", "failed"):
             return detected(
                 GameState.MISSION_COMPLETE if outcome == "complete" else GameState.MISSION_FAILED,
                 0.85, "Explicit mission result text detected",
@@ -357,8 +357,8 @@ class StateDetector:
 
         def contains(keywords):
             return any(re.search(r"(?<!\w)" + re.escape(keyword).replace(r"\ ", r"\s+")
-                                 + r"(?!\w)", combined_text, re.IGNORECASE)
-                       for keyword in keywords)
+                                 + r"(?!\w)", text, re.IGNORECASE)
+                       for text in text_regions for keyword in keywords)
 
         # A generic objective may establish activity without establishing its
         # identity. Do not confuse 'customer vehicle' with selling, or substrings
