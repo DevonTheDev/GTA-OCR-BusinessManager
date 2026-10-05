@@ -99,6 +99,8 @@ class AppData:
     mission_heist_phase: MissionType = MissionType.UNKNOWN
     mission_objectives: ObjectiveEvidence = field(default_factory=ObjectiveEvidence)
     terminal_mission_episode: Optional[TerminalMissionEpisode] = None
+    # Explicit discard must not reuse an earlier capture's retained balance.
+    recovery_waiting_for_balance: bool = False
 
     # Business states
     business_states: dict = field(default_factory=dict)
@@ -112,6 +114,33 @@ class AppData:
     db_session_id: Optional[int] = None
     # Original OCR baseline for the DB session, independent of statistics resets.
     db_start_money: Optional[int] = None
+
+
+@dataclass(frozen=True, eq=False)
+class DetectionRecoverySnapshot:
+    """Frozen confirmation target; private strong references preserve ownership."""
+
+    name: str
+    activity_type: ActivityType
+    started_at: datetime
+    _run: AppData = field(repr=False)
+    _activity: Activity = field(repr=False)
+    _revision: int = field(repr=False)
+    _mission_fields: tuple = field(repr=False)
+
+
+@dataclass(frozen=True)
+class DetectionRecoveryStatus:
+    """Detached display values, with a confirmation target only when drained."""
+
+    app_state: AppState
+    capture_busy: bool
+    waiting_for_balance: bool
+    name: str
+    activity_type: Optional[ActivityType]
+    started_at: Optional[datetime]
+    message: str
+    snapshot: Optional[DetectionRecoverySnapshot] = None
 
 
 class GTABusinessManager:
@@ -130,6 +159,8 @@ class GTABusinessManager:
         self._settings = settings or get_settings()
         self._state = AppState.STOPPED
         self._lifecycle_lock = threading.RLock()
+        self._capture_busy = False
+        self._recovery_revision = 0
 
         # Core components (initialized lazily)
         self._capture: Optional[ScreenCapture] = None
@@ -407,8 +438,92 @@ class GTABusinessManager:
         """Resume capture and detection."""
         with self._lifecycle_lock:
             if self._state == AppState.PAUSED:
+                # Even Resume -> Pause without an admitted frame retires a dialog.
+                self._recovery_revision += 1
                 self._state = AppState.RUNNING
                 logger.info("Capture resumed")
+
+    def _detection_recovery_blocker(self) -> str:
+        """Called with the lifecycle lock; never wait for a worker here."""
+        if self._state != AppState.PAUSED or self._stop_event.is_set():
+            return "Capture must be paused before discarding a detected activity."
+        if self._capture_busy:
+            return "Paused; waiting for the current capture to finish."
+        return ""
+
+    def _mission_recovery_fields(self) -> tuple:
+        """Immutable ownership values, read only at the paused/drained boundary."""
+        data = self._data
+        return (data.current_mission, data.mission_start_time, data.mission_start_money,
+                data.mission_identity_status, data.mission_identity_type,
+                data.mission_heist_phase, data.mission_objectives)
+
+    def get_detection_recovery_status(self) -> DetectionRecoveryStatus:
+        """Inspect readiness without blocking capture or exposing an editable activity.
+
+        Running/busy labels are informational; only a paused, drained snapshot is
+        a confirmation target. The production worker owns all admitted writes.
+        """
+        with self._lifecycle_lock, self._data_lock:
+            activity = self._activity_tracker.current_activity
+            unfinished = (activity is not None and activity.is_active
+                          and activity.success is None
+                          and self._data.mission_start_time is not None)
+            message = self._detection_recovery_blocker()
+            snapshot = None
+            if not message:
+                if unfinished:
+                    snapshot = DetectionRecoverySnapshot(
+                        activity.name, activity.activity_type, activity.started_at,
+                        self._data, activity, self._recovery_revision,
+                        self._mission_recovery_fields(),
+                    )
+                    message = "Paused. The unfinished detection can be discarded."
+                elif self._data.recovery_waiting_for_balance:
+                    message = "Detection discarded. Resume capture and show a readable activity and balance."
+                else:
+                    message = "Paused. No unfinished detected activity."
+            elif (self._state == AppState.RUNNING
+                  and self._data.recovery_waiting_for_balance):
+                message = "Waiting for a readable activity and balance before tracking an activity."
+            return DetectionRecoveryStatus(
+                self._state, self._capture_busy, self._data.recovery_waiting_for_balance,
+                activity.name if activity else "",
+                activity.activity_type if activity else None,
+                activity.started_at if activity else None, message, snapshot,
+            )
+
+    def discard_detected_activity(self, snapshot: DetectionRecoverySnapshot) -> tuple[bool, str]:
+        """Discard exactly the confirmed unfinished observation, never its outcome.
+
+        Lifecycle -> data matches Start/Stop. No lock spans OCR or callbacks, and
+        an in-flight callback cannot reenter recovery before its iteration drains.
+        """
+        with self._lifecycle_lock, self._data_lock:
+            blocker = self._detection_recovery_blocker()
+            if blocker:
+                return False, blocker
+            activity = self._activity_tracker.current_activity
+            if (not isinstance(snapshot, DetectionRecoverySnapshot)
+                    or snapshot._run is not self._data
+                    or snapshot._activity is not activity
+                    or snapshot._revision != self._recovery_revision
+                    or activity is None or not activity.is_active or activity.success is not None
+                    or self._data.mission_start_time is None
+                    or (activity.name, activity.activity_type, activity.started_at)
+                    != (snapshot.name, snapshot.activity_type, snapshot.started_at)
+                    or self._mission_recovery_fields() != snapshot._mission_fields):
+                return False, "The detection changed. Nothing was discarded; review the current detection."
+
+            self._activity_tracker.cancel_activity()
+            self._reset_mission_state()
+            self._data.terminal_mission_episode = None
+            self._data.recovery_waiting_for_balance = True
+            self._last_capture_result = None
+            self._recovery_revision += 1
+            if self._state_detector is not None:
+                self._state_detector.reset_context()
+            return True, "Detection discarded. Resume capture and show a readable activity and balance."
 
     def _capture_loop(self) -> None:
         """Main capture loop; its finally block owns deferred resource cleanup."""
@@ -416,9 +531,17 @@ class GTABusinessManager:
         logger.debug("Capture loop started")
         try:
             while not self._stop_event.is_set():
-                if self._state != AppState.RUNNING:
+                # Admission and Pause share one lock: a paused worker is either
+                # already busy or cannot start another iteration.
+                with self._lifecycle_lock:
+                    admitted = self._state == AppState.RUNNING and not self._stop_event.is_set()
+                    if admitted:
+                        self._capture_busy = True
+                        self._recovery_revision += 1
+                if not admitted:
                     self._stop_event.wait(0.1)
                     continue
+                failed = False
                 try:
                     result = self._do_capture_cycle()
                     self._last_capture_result = result
@@ -433,6 +556,13 @@ class GTABusinessManager:
                         self._adjust_capture_rate(result.game_state)
                 except Exception as e:
                     logger.error(f"Capture cycle error: {e}")
+                    failed = True
+                finally:
+                    # Publication, synchronous callbacks and rate adjustment all
+                    # belong to the admitted iteration, including on exceptions.
+                    with self._lifecycle_lock:
+                        self._capture_busy = False
+                if failed:
                     self._stop_event.wait(1.0)
         finally:
             self._finish_stop(worker)
@@ -690,12 +820,19 @@ class GTABusinessManager:
             if reading.outcome is not None:
                 return
             if self._data.mission_start_time is None:
+                start_money = self._data.current_money
+                if self._data.recovery_waiting_for_balance:
+                    if capture_result.money is None or not capture_result.money.has_value:
+                        return
+                    # Only the validated money reading from this accepted active
+                    # capture can establish the recovered activity's baseline.
+                    start_money = capture_result.money.display_value
                 # A separately accepted start owns the new episode, including
                 # unresolved starts deliberately allowed by direct callbacks.
                 self._data.terminal_mission_episode = None
                 self._data.mission_objectives = ObjectiveEvidence()
                 self._data.mission_start_time = datetime.now()
-                self._data.mission_start_money = self._data.current_money
+                self._data.mission_start_money = start_money
                 activity_type = self._infer_activity_type(state_result, reading)
                 self._data.current_mission = self._mission_display_name(state_result, reading)
                 self._data.mission_identity_status = self._identity_status(state_result, reading)
@@ -704,6 +841,7 @@ class GTABusinessManager:
                 self._activity_tracker.start_activity(
                     activity_type=activity_type, name=self._data.current_mission,
                 )
+                self._data.recovery_waiting_for_balance = False
                 logger.info("Mission started: %s", self._data.current_mission)
             else:
                 self._refine_mission_identity(state_result, reading)

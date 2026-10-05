@@ -3,7 +3,6 @@
 from datetime import datetime, timedelta, timezone
 import json
 import os
-from types import SimpleNamespace
 
 import pytest
 
@@ -184,9 +183,14 @@ def test_cancel_adjust_and_accepted_expired_editor_use_captured_key(tracker, wid
     assert control(fixed, "cooldown_name", QtWidgets.QLineEdit).isReadOnly()
 
 
-def test_activity_manager_is_single_modeless_instance_and_deletes_timer(tracker, widgets, qt):
+def test_activity_manager_is_single_modeless_instance_and_deletes_timer(tracker, widgets, qt, tmp_path):
+    from src.app import GTABusinessManager
+    from src.config.settings import Settings
     from src.ui.widgets.activity_panel import ActivityPanel
-    panel = own(widgets, ActivityPanel(SimpleNamespace(cooldown_tracker=tracker, recent_activities=[])))
+    manager = GTABusinessManager(Settings(tmp_path / "activity-panel.yaml"))
+    manager._cooldown_tracker = tracker
+    panel = own(widgets, ActivityPanel(manager))
+    panel._update_display()
     control(panel, "manage_cooldowns").click()
     first = panel._cooldown_dialog
     assert first is not None and not first.isModal()

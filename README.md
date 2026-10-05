@@ -719,6 +719,44 @@ the correction prevents phantom tracked activities and preserves existing
 accounting policy. These generated frames do not substitute for representative
 gameplay screenshots or establish Windows OCR accuracy.
 
+#### Recover an unfinished detection
+
+If a result was missed while tracking was paused, the app can remain attached to
+the previous activity. In **Activities**, choose **Pause capture**, wait for the
+current capture to finish, then choose **Discard detected activity…**. Check the
+activity named in the confirmation. Cancel leaves it intact; accepting drops
+only that unfinished detection and keeps tracking paused. Choose **Resume
+capture** when ready for a fresh observation.
+
+Discard records no completed or failed activity and starts no cooldown. Session
+earnings, recorded balance changes, completed history, existing timers, goals and
+business readings remain intact. Its confirmation cannot discard an activity
+that was replaced or refined, or survive an intervening Resume or capture. The
+action is unavailable while capture is running, draining, stopping or stopped;
+it never waits for OCR while holding up the interface.
+
+After recovery, a new activity needs accepted activity evidence and a valid
+balance **in the same fresh capture**. Until both are available, the panel shows
+that it is waiting and no new activity estimate is started. The existing money
+validation still rejects suspicious readings, including values below $100. A
+hidden or rejected balance therefore delays recovery rather than reusing the
+old activity's balance. The new estimate covers only observations after that
+fresh start; it cannot reconstruct the missed result or the full gameplay payout.
+
+The old selected name, timer and objective are cleared. The generic game-state
+badge can retain its last observed state until another capture updates it. This
+is an explicit recovery control; a different title alone still cannot silently
+replace a tracked activity. Reliable automatic handoff after an unobserved result
+remains dependent on representative gameplay transition evidence.
+
+Local checks exercise the missed-result sequence through actual detection,
+tracking and temporary SQLite, plus worker admission, paused OCR/callbacks,
+stale confirmations and fresh-balance gating. Opt-in native controls are tested
+with `GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_detection_recovery_qt.py`
+(set variables separately on shells without inline assignments). These use Linux
+offscreen Qt and synthetic OCR inputs. Windows capture and real gameplay accuracy
+remain unverified; this adds no gameplay screenshot evidence.
+
 ### Business Management
 - Track stock and supply levels for all businesses:
   - MC Businesses (Cocaine, Meth, Cash, Weed, Documents)
