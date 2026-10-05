@@ -358,7 +358,7 @@ def test_compatible_heist_family_name_and_phase_refine_independently(app, first,
     assert (row['type'], row['name'], row['earnings']) == (kind.name, name, 1500)
     assert app._data.mission_identity_type == MissionType.UNKNOWN
     assert app._data.mission_heist_phase == MissionType.UNKNOWN
-    frame(app, 'Cayo Perico')
+    frame(app, 'Cayo Perico\nGo to the airfield')
     assert app._activity_tracker.current_activity.activity_type == ActivityType.CAYO_PERICO
 
 

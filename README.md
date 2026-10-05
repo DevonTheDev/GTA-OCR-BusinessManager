@@ -549,8 +549,41 @@ are still observed. A later compatible result can complete the original activity
 with its original time and money baseline. Unnamed results and compatible late
 identity refinement keep working; ambiguous identity retains its prior behavior
 and does not establish an explicit name/family/phase conflict. This is an evidence
-compatibility check, not a general solution to lingering titles, missed results,
-menus or legitimate same-name retries.
+compatibility check; the post-result handoff below separately handles replayed
+identity evidence.
+
+After a result, the app retains that finished mission's identity for the current
+capture session. A title-only **Headhunter** frame cannot immediately restart
+Headhunter just because OCR missed **MISSION PASSED** or **MISSION FAILED**.
+That also lets a genuinely different **Sightseer** title start with its own
+identity instead of inheriting a duplicate Headhunter activity. Capturing an
+already-visible named result establishes the same context without inventing a
+completion record.
+
+A compatible title/category can start again when a new supported imperative
+objective is observed. Comparison uses all clean objective evidence from the
+result crops and the latest nonempty accepted active observation. Reordering crops, dropping one
+of several objectives, changing line wrapping or losing result/title labels does
+not by itself establish a fresh objective. The existing display objective and raw
+OCR text remain available. Rejected reactivation reports an uncertain capture
+state with a reason and does not create another tracker, ledger row, completion
+callback or cooldown.
+
+This is a conservative observation policy. If a legitimate same-name retry shows
+exactly the same objective evidence, it can remain uncertain. Extending or
+shortening an already-seen command alone also remains uncertain; an old objective
+that OCR previously missed can appear new. Blank frames, elapsed time,
+cooldown expiry and dark/menu/loading heuristics do not prove a new attempt.
+Statistics reset and pause/resume keep this context; starting a fresh capture
+session clears it. Up to 128 distinct normalized objectives are retained; if that
+bound is exceeded, objective-based release is disabled until a distinct identity,
+a trusted explicit start state or a fresh capture session. The current detector
+does not produce that explicit start state. Unknown/ambiguous results cannot
+invent an identity, and existing unknown direct-callback activity starts retain
+their behavior. Strong generic banner detection can still start an unresolved
+activity even with ambiguous OCR text; that existing behavior remains outside
+this shared-identity guard. This does not prevent every unnamed replay or
+identify every real gameplay attempt.
 
 Heist family, specific name and explicit prep/finale phase are kept separately.
 A previously missing compatible phase can be filled in: **Casino Heist**, then
@@ -622,7 +655,7 @@ renders controlled text at 720p/1080p/1440p and runs production crop/preprocessi
 code through an already installed Tesseract CLI and the real capture pipeline:
 
 ```bash
-GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py tests/test_capture_snapshot_ocr_images.py tests/test_mission_crop_ocr_images.py
+GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_mission_ocr_images.py tests/test_capture_snapshot_ocr_images.py tests/test_mission_crop_ocr_images.py tests/test_mission_episode_ocr_images.py
 ```
 
 That optional diagnostic requires Tesseract with English data, DejaVuSans.ttf,
@@ -640,6 +673,10 @@ controls and three transition cases cover contradictory titles, a false
 **Executive Search** assembled across frames, and conflicting PASSED/FAILED
 results through the real activity and SQLite paths. These demonstrate the
 pipeline defect and correction on controlled inputs, not its gameplay frequency.
+Result-episode image cases additionally cover pass/fail title dropout, a distinct
+next mission, unchanged objectives surviving other text, a fresh same-name
+objective and capture starting on a result screen. These generated frames are
+not GTA screenshots and do not establish native Windows OCR or gameplay accuracy.
 The test images are synthetic, not game screenshots. This repository ships
 no representative gameplay screenshot corpus or template images; default startup
 also does not automatically load a template folder. This pass does not change

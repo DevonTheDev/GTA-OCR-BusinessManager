@@ -15,6 +15,9 @@ from .capture.screen_capture import ScreenCapture
 from .capture.regions import ScreenRegions
 from .detection.ocr_engine import OCREngine
 from .detection.state_detector import StateDetector, StateDetectionResult
+from .detection.mission_episode import (
+    MissionIdentity, ObjectiveEvidence, TerminalMissionEpisode, objective_evidence,
+)
 from .detection.parsers.money_parser import MoneyParser, MoneyReading
 from .detection.parsers.timer_parser import TimerParser, TimerReading
 from .detection.parsers.mission_parser import MissionParser, MissionReading, MissionType
@@ -94,6 +97,8 @@ class AppData:
     mission_identity_status: str = "unknown"
     mission_identity_type: MissionType = MissionType.UNKNOWN
     mission_heist_phase: MissionType = MissionType.UNKNOWN
+    mission_objectives: ObjectiveEvidence = field(default_factory=ObjectiveEvidence)
+    terminal_mission_episode: Optional[TerminalMissionEpisode] = None
 
     # Business states
     business_states: dict = field(default_factory=dict)
@@ -469,7 +474,7 @@ class GTABusinessManager:
             )
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
-            state_result = self._guard_terminal_mission_identity(state_result)
+            state_result = self._guard_mission_observation(state_result)
 
             result.game_state = state_result.state
             result.state_confidence = state_result.confidence
@@ -643,7 +648,7 @@ class GTABusinessManager:
 
     def _process_state(self, state_result: StateDetectionResult, capture_result: CaptureResult) -> None:
         """Process state-specific logic."""
-        guarded_result = self._guard_terminal_mission_identity(state_result)
+        guarded_result = self._guard_mission_observation(state_result)
         if guarded_result is not state_result:
             # Direct callers receive the same conservative observation as a
             # capture cycle, without consuming the current activity.
@@ -656,6 +661,9 @@ class GTABusinessManager:
             capture_result.mission = guarded_result.mission
             return
         state = state_result.state
+        if state == GameState.MISSION_STARTING and self._confident_detection(state_result):
+            # Explicit producer contract only: the current detector never emits it.
+            self._data.terminal_mission_episode = None
         if (state in (GameState.MISSION_ACTIVE, GameState.HEIST_PREP, GameState.HEIST_FINALE,
                       GameState.SELLING, GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
                 and not self._confident_detection(state_result)):
@@ -671,6 +679,7 @@ class GTABusinessManager:
                 # existing compatible activity before recording its result,
                 # without creating a new activity from the banner itself.
                 self._refine_mission_identity(state_result, reading, allow_result=True)
+            self._remember_terminal_episode(state_result, reading)
 
         # A weak visual-only frame is not enough to start or refine an activity.
         # Use the same strict threshold as the game-state transition above.
@@ -681,6 +690,10 @@ class GTABusinessManager:
             if reading.outcome is not None:
                 return
             if self._data.mission_start_time is None:
+                # A separately accepted start owns the new episode, including
+                # unresolved starts deliberately allowed by direct callbacks.
+                self._data.terminal_mission_episode = None
+                self._data.mission_objectives = ObjectiveEvidence()
                 self._data.mission_start_time = datetime.now()
                 self._data.mission_start_money = self._data.current_money
                 activity_type = self._infer_activity_type(state_result, reading)
@@ -694,6 +707,9 @@ class GTABusinessManager:
                 logger.info("Mission started: %s", self._data.current_mission)
             else:
                 self._refine_mission_identity(state_result, reading)
+            evidence = self._objective_evidence(state_result)
+            if evidence.entries and self._mission_identity_compatible(state_result, reading):
+                self._data.mission_objectives = evidence
 
         # Mission complete
         elif state == GameState.MISSION_COMPLETE and self._data.mission_start_time is not None:
@@ -819,32 +835,68 @@ class GTABusinessManager:
             return MissionType.HEIST_FINALE
         return reading.heist_phase
 
-    def _mission_identity_compatible(self, state_result, reading) -> bool:
-        """Whether explicit name, family and phase axes can belong together.
-
-        Unknown and ambiguous identity axes provide no ownership conflict.
-        Use this same rule for refinement and accepting a terminal result.
-        """
-        family, phase = self._data.mission_identity_type, self._data.mission_heist_phase
-        new_family = self._identity_family(reading)
-        new_phase = self._identity_phase(state_result, reading)
-        unknown = MissionType.UNKNOWN
-        if family != unknown and new_family != unknown and family != new_family:
-            return False
-        if phase != unknown and new_phase != unknown and phase != new_phase:
-            return False
-        resolved_family = new_family if family == unknown else family
-        resolved_phase = new_phase if phase == unknown else phase
-        heist_families = (MissionType.CAYO_PERICO, MissionType.CASINO_HEIST, MissionType.DOOMSDAY)
-        if resolved_phase != unknown and resolved_family not in (*heist_families, unknown):
-            return False
+    def _current_mission_identity(self) -> MissionIdentity:
         current = self._activity_tracker.current_activity
-        current_name = current.name if current is not None else self._data.current_mission
-        return not (
-            self._data.mission_identity_status == "known_name"
-            and reading.identity_status == "known_name"
-            and reading.mission_name != current_name
+        name = current.name if current is not None else self._data.current_mission
+        return MissionIdentity(
+            name=(name or "") if self._data.mission_identity_status == "known_name" else "",
+            family=self._data.mission_identity_type, phase=self._data.mission_heist_phase,
         )
+
+    def _reading_identity(self, state_result, reading) -> MissionIdentity:
+        return MissionIdentity(
+            name=reading.mission_name if reading.identity_status == "known_name" else "",
+            family=self._identity_family(reading), phase=self._identity_phase(state_result, reading),
+        )
+
+    def _mission_identity_compatible(self, state_result, reading) -> bool:
+        """Use the same independent ownership axes for refinement and results."""
+        return self._current_mission_identity().compatible(self._reading_identity(state_result, reading))
+
+    @staticmethod
+    def _objective_evidence(state_result) -> ObjectiveEvidence:
+        return objective_evidence((state_result.mission_text, state_result.objective_text,
+                                   getattr(state_result, "banner_text", "")))
+
+    def _guard_mission_observation(self, state_result):
+        """Apply acceptance before state/money processing and to direct callers."""
+        guarded = self._guard_terminal_mission_identity(state_result)
+        if guarded is not state_result:
+            return guarded
+        episode = self._data.terminal_mission_episode
+        if (episode is not None and self._data.mission_start_time is None
+                and state_result.state in (GameState.MISSION_ACTIVE, GameState.SELLING,
+                                           GameState.HEIST_PREP, GameState.HEIST_FINALE)
+                and self._confident_detection(state_result)):
+            reading = self._mission_reading(state_result)
+            if (episode.identity.shares_identity(self._reading_identity(state_result, reading))
+                    and not episode.objectives.has_new(self._objective_evidence(state_result))):
+                return replace(
+                    state_result, state=GameState.UNKNOWN, confidence=0.0,
+                    reason="Mission identity repeats the previous result without new objective evidence",
+                    mission=reading,
+                )
+        return state_result
+
+    def _remember_terminal_episode(self, state_result, reading):
+        """Snapshot ownership before listeners; repeated results add evidence only."""
+        objectives = self._objective_evidence(state_result)
+        if self._data.mission_start_time is not None:
+            identity = self._current_mission_identity()
+            if identity.explicit:
+                self._data.terminal_mission_episode = TerminalMissionEpisode(
+                    identity, self._data.mission_objectives.include(objectives),
+                )
+            return
+        identity = self._reading_identity(state_result, reading)
+        episode = self._data.terminal_mission_episode
+        if episode is not None and episode.identity.compatible(identity):
+            self._data.terminal_mission_episode = replace(
+                episode, objectives=episode.objectives.include(objectives),
+            )
+        elif identity.explicit and reading.identity_status in ("known_name", "type_only"):
+            # Starting capture on a result may fence it but never records a row.
+            self._data.terminal_mission_episode = TerminalMissionEpisode(identity, objectives)
 
     def _guard_terminal_mission_identity(self, state_result):
         """Keep conflicting result evidence visible without accepting its state."""
@@ -1018,6 +1070,7 @@ class GTABusinessManager:
         self._data.mission_identity_status = "unknown"
         self._data.mission_identity_type = MissionType.UNKNOWN
         self._data.mission_heist_phase = MissionType.UNKNOWN
+        self._data.mission_objectives = ObjectiveEvidence()
 
     def _process_business_computer(self) -> None:
         """Process business computer screen to extract stock/supply info."""
