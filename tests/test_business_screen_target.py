@@ -78,7 +78,7 @@ class SyntheticBusinessCapture:
             self.regions.get_business_regions().values(), self.frames[self.batches],
         ))
         self.batches += 1
-        return {0: object(), 1: None, 2: None, 3: None, 4: None, 5: None, 6: None}
+        return {0: object(), 1: None, 2: None, 3: None, 4: None, 5: None, 6: None, 7: None}
 
     def capture_region(self, region, wait_for_rate=True):
         self.calls.append((region, wait_for_rate))

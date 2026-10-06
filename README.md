@@ -758,9 +758,10 @@ Five separately published guide screenshots were also inspected and evaluated
 locally. Their [text-only provenance and baseline results](validation/gta-online-screenshot-baseline.json)
 record the source URLs, image hashes/dimensions and exact crop coordinates. Those
 baseline regions missed visible bottom objectives and the upper Cayo result
-heading. Wider-crop/non-thresholded diagnostics recovered the Cayo title but
-still missed the large result heading. The label correction applies when OCR
-supplies that text; it does not solve those image-pipeline observations.
+heading. At that stage, wider-crop/non-thresholded diagnostics recovered the Cayo
+title but missed the large result heading. The later dedicated result-header
+observation below recovers that retained summary with a different, fixed crop
+and preprocessing pass; the original baseline remains recorded unchanged.
 
 The images and derivatives are kept outside the repository because redistribution
 rights were not established. Two guide images are cropped; the three 16:9 Cayo
@@ -805,12 +806,50 @@ GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_bottom_objective_ocr_images.p
 The five supplemental guide stills were replayed through the actual capture,
 preprocessing, detector and application path. The escape instruction now starts
 a Cayo-family activity; the other four isolated frames still start no activity.
-Playing the escape frame followed by the real summary leaves that activity
-unfinished because the result heading remains unread. No completion or payout
-is fabricated. The exact observations and limits are recorded in
+In that earlier bottom-only evaluation, playing the escape frame followed by the
+real summary left the activity unfinished because the result heading remained
+unread. No completion or payout was fabricated. Those observations are retained in
 [the bottom-objective evaluation](validation/bottom-objective-evaluation.json).
 These are diagnostic Tesseract results, not Windows OCR or live-game accuracy
 measurements. The guide images remain outside the repository.
+
+#### Recognize a qualified upper heist result
+
+The same capture batch also supplies a separate upper-center result header.
+It uses the fixed relative region `(0.20, 0.12, 0.60, 0.20)` with grayscale,
+no thresholding or inversion, and 2× scaling. This preserves the existing
+mission and bottom-objective crops. It adds an OCR pass on eligible cycles;
+native performance and broader layout coverage have not been measured.
+
+This observation can supply a result only when its own text contains a complete
+**HEIST PASSED** phrase and an unambiguous supported heist family. A title alone,
+business label, objective, number or currency cannot start or refine an activity,
+open a business reading, or supply a balance or reward through this region.
+A heading that loses its heist title cannot borrow identity from another crop
+or from the currently tracked activity. Prep-qualified, ambiguous or conflicting
+header evidence remains uncertain. Existing primary business/result decisions
+and compatible activity ownership checks retain their authority.
+
+A qualified result can complete the original compatible activity once, retaining
+its start time and already established phase. A result seen while idle creates
+no activity. Repeated results and the old objective remain subject to the
+existing episode fence. Raw header text is retained separately from admitted
+result evidence and never becomes a fresh objective or payout estimate.
+
+The retained real Cayo summary is now readable through this dedicated pass.
+In a manually arranged replay of the guide's escape and summary stills, the
+actual app completes that same Cayo owner exactly once, with no inferred payout.
+The other original images retain their prior activity behavior. Generated
+controls cover mismatched owners, title dropout, contradictory evidence and
+business readings; they are not additional gameplay screenshots. Exact source
+hashes, OCR observations and limits are recorded in
+[the result-header evaluation](validation/result-header-evaluation.json).
+
+This is one observed result layout using the local Tesseract diagnostic adapter.
+It does not establish general recall across heists, languages, HUD safe zones or
+aspect ratios, and it does not validate Windows OCR, live gameplay or YouTube
+capture. The original guide images and their derivatives remain outside the
+repository because redistribution rights are unestablished.
 
 #### Recover an unfinished detection
 
@@ -1502,6 +1541,7 @@ All regions defined as relative coordinates (0.0-1.0) for multi-resolution suppo
 | money_display | Bank balance | Top-right |
 | mission_text | Mission objectives | Top-center |
 | bottom_objective | Restricted named-objective evidence | Bottom-center |
+| result_header | Qualified heist-result evidence only | Upper-center |
 | timer_display | Countdown timers | Bottom-right |
 | center_screen | Prompts/notifications | Center |
 

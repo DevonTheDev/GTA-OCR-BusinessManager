@@ -19,6 +19,16 @@ from .parsers.mission_parser import MissionParser, MissionReading, MissionType
 logger = get_logger("detection.state")
 
 
+def is_qualified_result_header(reading: MissionReading) -> bool:
+    """Require the independent header to prove both heist success and family."""
+    return (
+        reading.outcome_scope == "heist" and reading.outcome == "complete"
+        and reading.identity_status in ("known_name", "type_only")
+        and reading.mission_type in MissionParser.HEIST_FAMILIES
+        and reading.heist_phase != MissionType.HEIST_PREP
+    )
+
+
 @dataclass
 class StateDetectionResult:
     """Result of state detection."""
@@ -34,6 +44,8 @@ class StateDetectionResult:
     banner_text: str = ""
     bottom_objective_text: str = ""
     bottom_objective_command: str = ""
+    result_header_text: str = ""
+    result_header_evidence: str = ""
 
 
 @dataclass
@@ -144,6 +156,7 @@ class StateDetector:
         center_text_image: Optional[np.ndarray] = None,
         mission_banner_image: Optional[np.ndarray] = None,
         bottom_objective_image: Optional[np.ndarray] = None,
+        result_header_image: Optional[np.ndarray] = None,
     ) -> StateDetectionResult:
         """Detect current game state from screen capture.
 
@@ -153,6 +166,7 @@ class StateDetector:
             center_text_image: Optional cropped center screen region
             mission_banner_image: Optional cropped mission name/result banner
             bottom_objective_image: Optional independent bottom objective crop
+            result_header_image: Optional independent result-only heist header
 
         Returns:
             StateDetectionResult with detected state
@@ -223,10 +237,44 @@ class StateDetector:
                         quick_result, objective_result, template_result,
                     )
 
-        # Update context
+        final_result = self._result_header_observation(final_result, result_header_image)
+
+        # Update context exactly once, after every independent source is resolved.
         self._update_context(final_result)
 
         return final_result
+
+    def _result_header_observation(self, result, image):
+        """Admit only a self-qualified result, retaining primary source priority."""
+        reading = result.mission
+        protected = reading is not None and (
+            reading.outcome is not None or reading.outcome_scope is not None
+            or reading.identity_status == "ambiguous"
+        )
+        if (image is None or not self._ocr.is_available or protected
+                or result.state in (GameState.BUSINESS_COMPUTER, GameState.MISSION_COMPLETE,
+                                    GameState.MISSION_FAILED)):
+            return result
+        raw = self._ocr.recognize_preprocessed(
+            image, threshold=False, invert=False, scale=2.0,
+        ).text
+        result = replace(result, result_header_text=raw)
+        header = self._mission_parser.parse(raw)
+        if header.outcome_scope != "heist":
+            return result
+        if not is_qualified_result_header(header):
+            return replace(result, state=GameState.UNKNOWN, confidence=0.0,
+                           reason="Heist result header lacks compatible independent identity")
+        merged = self._mission_parser.parse_regions((
+            result.mission_text, result.objective_text, result.banner_text,
+            result.bottom_objective_command, raw,
+        ))
+        if not is_qualified_result_header(merged):
+            return replace(result, state=GameState.UNKNOWN, confidence=0.0,
+                           reason="Result header conflicts with primary mission evidence", mission=merged)
+        return replace(result, state=GameState.MISSION_COMPLETE, confidence=0.85,
+                       reason="Independent family-qualified heist result header", mission=merged,
+                       result_header_evidence=raw)
 
     def _bottom_objective_command(self, raw: str) -> str:
         """Admit one complete family-qualified command, never extracted scraps.
@@ -554,6 +602,10 @@ class StateDetector:
                                            else best.bottom_objective_text),
                     bottom_objective_command=(ocr.bottom_objective_command if ocr is not None
                                               else best.bottom_objective_command),
+                    result_header_text=(ocr.result_header_text if ocr is not None
+                                        else best.result_header_text),
+                    result_header_evidence=(ocr.result_header_evidence if ocr is not None
+                                            else best.result_header_evidence),
                     hud_visible=best.hud_visible,
                 )
 
@@ -562,7 +614,9 @@ class StateDetector:
                            objective_text=ocr.objective_text, mission=ocr.mission,
                            banner_text=ocr.banner_text,
                            bottom_objective_text=ocr.bottom_objective_text,
-                           bottom_objective_command=ocr.bottom_objective_command)
+                           bottom_objective_command=ocr.bottom_objective_command,
+                           result_header_text=ocr.result_header_text,
+                           result_header_evidence=ocr.result_header_evidence)
         return best
 
     def _update_context(self, result: StateDetectionResult) -> None:

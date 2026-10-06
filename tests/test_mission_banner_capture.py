@@ -25,7 +25,7 @@ from tests.test_mission_result_accounting import clock as clock
 REGIONS = ScreenRegions()
 BATCH = [REGIONS.full_screen, REGIONS.money_display, REGIONS.mission_text,
          REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner,
-         REGIONS.bottom_objective]
+         REGIONS.bottom_objective, REGIONS.result_header]
 
 
 def banner_frame(app, top="", center="", banner="", template=None):

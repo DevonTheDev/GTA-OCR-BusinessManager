@@ -19,6 +19,7 @@ class RegionType(Enum):
     PHONE_SCREEN = auto()  # In-game phone when open
     FULL_SCREEN = auto()  # Full screen capture (for template matching)
     BOTTOM_OBJECTIVE = auto()  # Objective-only bottom-center text
+    RESULT_HEADER = auto()  # Result-only upper heist heading and title
 
 
 class Region(NamedTuple):
@@ -130,6 +131,9 @@ class ScreenRegions:
     # A separate objective-only source; never a business/result/money crop.
     bottom_objective: Region = Region(x=0.25, y=0.90, width=0.50, height=0.10)
 
+    # Independent result-only observation; no objective/business/money authority.
+    result_header: Region = Region(x=0.20, y=0.12, width=0.60, height=0.20)
+
     def get_region(self, region_type: RegionType) -> Region:
         """Get a specific region by type.
 
@@ -151,6 +155,7 @@ class ScreenRegions:
             RegionType.PHONE_SCREEN: self.phone_screen,
             RegionType.FULL_SCREEN: self.full_screen,
             RegionType.BOTTOM_OBJECTIVE: self.bottom_objective,
+            RegionType.RESULT_HEADER: self.result_header,
         }
         return mapping.get(region_type, self.full_screen)
 
@@ -167,6 +172,7 @@ class ScreenRegions:
             "timer_center": self.timer_center,
             "center_prompt": self.center_prompt,
             "bottom_objective": self.bottom_objective,
+            "result_header": self.result_header,
         }
 
     def get_business_regions(self) -> dict[str, Region]:

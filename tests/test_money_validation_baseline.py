@@ -83,10 +83,10 @@ def test_new_parser_starts_with_no_accepted_history():
 def test_real_capture_accounting_drops_ocr_spike_before_database_earnings(app, monkeypatch):
     regions = SimpleNamespace(
         full_screen=0, money_display=1, mission_text=2, center_prompt=3, timer_bottom_right=4,
-        mission_banner=5, bottom_objective=6,
+        mission_banner=5, bottom_objective=6, result_header=7,
     )
     app._capture = SimpleNamespace(
-        regions=regions, capture_multiple_regions=lambda _: [object()] * 7
+        regions=regions, capture_multiple_regions=lambda _: [object()] * 8
     )
     app._perf_monitor = PerformanceMonitor()
     texts = iter(["$1,000,000", "$100,000,000", "$1,010,000"])

@@ -60,6 +60,7 @@ def test_regular_detection_cycle_rate_limits_once_for_all_hud_regions(tmp_path, 
         regions.timer_bottom_right,
         regions.mission_banner,
         regions.bottom_objective,
+        regions.result_header,
     ]
     assert grabs == [regions.full_screen.to_mss_monitor(200, 100, 10, 20)]
     assert batches == [expected]

@@ -14,7 +14,7 @@ from .config.settings import Settings, get_settings
 from .capture.screen_capture import ScreenCapture
 from .capture.regions import ScreenRegions
 from .detection.ocr_engine import OCREngine
-from .detection.state_detector import StateDetector, StateDetectionResult
+from .detection.state_detector import StateDetector, StateDetectionResult, is_qualified_result_header
 from .detection.mission_episode import (
     MissionIdentity, ObjectiveEvidence, TerminalMissionEpisode, objective_evidence,
 )
@@ -79,6 +79,8 @@ class CaptureResult:
     state_reason: str = ""
     bottom_objective_text: str = ""
     bottom_objective_command: str = ""
+    result_header_text: str = ""
+    result_header_evidence: str = ""
 
 
 @dataclass
@@ -588,9 +590,10 @@ class GTABusinessManager:
                     regions.timer_bottom_right,
                     regions.mission_banner,
                     regions.bottom_objective,
+                    regions.result_header,
                 ])
-                full_screen, money_img, mission_img, center_img, timer_img, banner_img, bottom_img = (
-                    images[index] for index in range(7)
+                full_screen, money_img, mission_img, center_img, timer_img, banner_img, bottom_img, header_img = (
+                    images[index] for index in range(8)
                 )
 
             self._data.total_captures += 1
@@ -605,6 +608,7 @@ class GTABusinessManager:
                 center_text_image=center_img,
                 mission_banner_image=banner_img,
                 bottom_objective_image=bottom_img,
+                result_header_image=header_img,
             )
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
@@ -618,6 +622,8 @@ class GTABusinessManager:
             result.banner_text = getattr(state_result, "banner_text", "")
             result.bottom_objective_text = getattr(state_result, "bottom_objective_text", "")
             result.bottom_objective_command = getattr(state_result, "bottom_objective_command", "")
+            result.result_header_text = getattr(state_result, "result_header_text", "")
+            result.result_header_evidence = getattr(state_result, "result_header_evidence", "")
             result.mission = getattr(state_result, "mission", None)
 
             # Update state machine
@@ -784,6 +790,8 @@ class GTABusinessManager:
 
     def _process_state(self, state_result: StateDetectionResult, capture_result: CaptureResult) -> None:
         """Process state-specific logic."""
+        capture_result.result_header_text = getattr(state_result, "result_header_text", "")
+        capture_result.result_header_evidence = getattr(state_result, "result_header_evidence", "")
         guarded_result = self._guard_mission_observation(state_result)
         if guarded_result is not state_result:
             # Direct callers receive the same conservative observation as a
@@ -796,6 +804,8 @@ class GTABusinessManager:
             capture_result.banner_text = guarded_result.banner_text
             capture_result.bottom_objective_text = guarded_result.bottom_objective_text
             capture_result.bottom_objective_command = guarded_result.bottom_objective_command
+            capture_result.result_header_text = guarded_result.result_header_text
+            capture_result.result_header_evidence = guarded_result.result_header_evidence
             capture_result.mission = guarded_result.mission
             return
         state = state_result.state
@@ -944,10 +954,16 @@ class GTABusinessManager:
     def _mission_reading(self, state_result: StateDetectionResult) -> MissionReading:
         reading = getattr(state_result, "mission", None)
         if reading is None:
+            header_evidence = getattr(state_result, "result_header_evidence", "")
+            if header_evidence:
+                header = self._mission_parser.parse(header_evidence)
+                if not is_qualified_result_header(header):
+                    return header
             reading = self._mission_parser.parse_regions((
                 state_result.mission_text, state_result.objective_text,
                 getattr(state_result, "banner_text", ""),
                 getattr(state_result, "bottom_objective_command", ""),
+                header_evidence,
             ))
         return reading
 
@@ -1011,6 +1027,15 @@ class GTABusinessManager:
 
     def _guard_mission_observation(self, state_result):
         """Apply acceptance before state/money processing and to direct callers."""
+        header_evidence = getattr(state_result, "result_header_evidence", "")
+        if header_evidence:
+            header = self._mission_parser.parse(header_evidence)
+            if not is_qualified_result_header(header):
+                return replace(
+                    state_result, state=GameState.UNKNOWN, confidence=0.0,
+                    reason="Result header lacks independently qualified heist evidence",
+                    mission=header, result_header_evidence="",
+                )
         guarded = self._guard_terminal_mission_identity(state_result)
         if guarded is not state_result:
             return guarded

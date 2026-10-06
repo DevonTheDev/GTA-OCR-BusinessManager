@@ -24,7 +24,7 @@ from tests.test_mission_result_accounting import clock as clock  # noqa: PLC0414
 REGIONS = ScreenRegions()
 BOTTOM = Region(.25, .90, .50, .10)
 BATCH = [REGIONS.full_screen, REGIONS.money_display, REGIONS.mission_text,
-         REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner, BOTTOM]
+         REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner, BOTTOM, REGIONS.result_header]
 CAYO_COMMAND = "Escape Cayo Perico"
 
 
@@ -140,7 +140,7 @@ def assert_not_started(app):
 
 
 @pytest.mark.parametrize("resolution", ((1280, 720), (1920, 1080), (2560, 1440)))
-def test_bottom_crop_is_last_in_same_grab_with_exact_geometry(app, monkeypatch, resolution):
+def test_bottom_crop_remains_in_same_grab_with_exact_geometry(app, monkeypatch, resolution):
     assert ScreenRegions().bottom_objective == BOTTOM
     hud = CaptureHarness(app, monkeypatch, resolution)
     height, width = resolution[1], resolution[0]

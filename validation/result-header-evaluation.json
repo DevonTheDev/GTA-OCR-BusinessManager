@@ -1,0 +1,2168 @@
+{
+  "schema_version": 1,
+  "evaluated_at_utc": "2026-10-06T22:51:17.409054+00:00",
+  "purpose": "Production-candidate source-matched still-image and generated-control workflow replay; not an accuracy benchmark",
+  "production_source": {
+    "base_head": "7e5585e112a7ed869c4e17dc83f58714707e7e02",
+    "base_tree": "e87609ccc0579cf2c03719caa58d3895d1778212",
+    "production_python_sha256": {
+      "src/__init__.py": "e925ae706c0cba81f2dc26343d2def6a708da11ae2ca2d9ea50b443c848e5d20",
+      "src/app.py": "f7e72324381030db0f88b1168316091aceb9cdd3ede506ff57136f0ed9765353",
+      "src/audio/__init__.py": "39a7e3ee26b7a971699e04e0a773856c093781cd94409074359e34792b5b2c13",
+      "src/audio/notifier.py": "e0b45ee186715d614cfae066925f22b776413bb37d3463fa93ade49acd1bc8e0",
+      "src/capture/__init__.py": "76871ec601ea395581ef4f0cb182646808bf588d8758c57efc3571000d0d2716",
+      "src/capture/regions.py": "6df2cb80eaa8c41fa6e16902db07885bad9bb8033258f508b3204da028933713",
+      "src/capture/resolution.py": "a54915d6aadb09b9b4925fc53fa923c0966ef6e46fe113774a43973cd8c91584",
+      "src/capture/screen_capture.py": "0c142f3a50a8f077f8efc667905d24f8fca16f58c60c812b5f725684f56564bb",
+      "src/config/__init__.py": "9f88c8e1b0216cb6a3079bc5cae9b613a7112e1d0c942113ce78405dd2695390",
+      "src/config/defaults.py": "0605b6e2336a246e97a22751523d831fa76b066be914fc2e26c699244f540b54",
+      "src/config/settings.py": "bc9718b653c75ca37cfaae97ab18052fd92b20256c65672bcb36f9efd0c1096c",
+      "src/constants.py": "4eaaf69843f140d3915ca94d43383504beb5c6a3ea91c15610953db6220008b8",
+      "src/database/__init__.py": "c31d074e0f31b6efec58f37ba54dbe6cbd321b1edbca897408a9b0191f2dd284",
+      "src/database/activity_insights.py": "c5337dc207b8b4c4c31767ec5915d99898312a587636b7d8c7f44af740378d11",
+      "src/database/activity_ledger.py": "9a8915fb08d8f40054cbebc6195ea59f9d5bd28a0dff9cadd716e1cc1bb1fef6",
+      "src/database/business_checkin_batches.py": "5a8b40bdffa07d3a7435648c813d1e1d327c3e22667d38e659859e7610c245a1",
+      "src/database/business_checkin_comparison.py": "7756af58ff98a4387aca3ec517e10fea38a1c71ff8cc94ed2bca4eb0f3d74f33",
+      "src/database/business_checkin_trend.py": "63f01cd94e5fb70dac4920c7b8e6c1aa2343763130e2d812725b8e7f33469cfc",
+      "src/database/business_checkins.py": "a159256807b8a182605fdd6961855054476349c62a6903598f0ac0c99b22e810",
+      "src/database/business_pins.py": "e85b8e908f0d461c98c49048e21f8889a2ec846faf13bceff98235404706debe",
+      "src/database/character_profiles.py": "bb74e7ff76a8307e9cbf677df51207c0c904682f130f70460974842887434cd3",
+      "src/database/daily_session_overview.py": "3aecb05f11f09d7ca5aaecfb9b12037dc8023617dcb70fb10dea4b74784144c2",
+      "src/database/models.py": "d2300d27b724a4bbf041c9a5447bccb71b7e963b7e14924f920ea1f82d0151fd",
+      "src/database/repository.py": "d0a6ead13b6f3d3e9a4a6b1821974c87253cae3c0d051c50d53f925a18c929b7",
+      "src/database/session_annotations.py": "df8a876d5211f978adebc1558a596c152149608506e64675e1c9e8d773a5b2b8",
+      "src/database/session_comparison.py": "9755951f212ab7b5ebbbd6f1608f880805bb93eabbaea7707e657b5bd631658e",
+      "src/detection/__init__.py": "1abccc017a7b96373603ebc7735bbcf9214bc1076b27fd635ffdb9d4029c5de5",
+      "src/detection/mission_episode.py": "89612333232f212cd704fced079a52393b0383b84af353ecd14cecdaa79e7252",
+      "src/detection/ocr_engine.py": "3db644687a607b64cfa15638265f447cd3b9d9d07e4fd05c7e4ee36ed7a5685d",
+      "src/detection/parsers/__init__.py": "b60a2ba7faf7af908201c1a3592126f3b174587c606dd68f0e0fe32e0097d203",
+      "src/detection/parsers/business_parser.py": "6196ab4b22542fe8ea5698e8e83b3cfd566f77c72ae1fc0796f1731613560ce8",
+      "src/detection/parsers/mission_parser.py": "4dad4b4eb5b6803ab947d6ee27b5770aabb9f0253c6a099240b2024fa3893238",
+      "src/detection/parsers/money_parser.py": "2b4700cae7ce0cdf49712aa1fcfed360f575574648d26851081a28eb9ba4b9fe",
+      "src/detection/parsers/timer_parser.py": "92edf8bf52a6a51e498182f79d40e3b7e49aaecb84d487629e80a4012a67f8b2",
+      "src/detection/state_detector.py": "ed0a49c1cc38c4fb60d8cd1fcdf9ed5c59feb8d09bbb88df4f29423499255d8a",
+      "src/detection/template_matcher.py": "a96b9797432363f4ea56141597067a6ae275bafb3639a37b0e2a284e9bfc9f9d",
+      "src/game/__init__.py": "3018c70f6ab8aa758d659ca2ab75b7ca3e76a378d225bc9c03bbc439b9abd342",
+      "src/game/activities.py": "64d93aad47ec76db547be469744bc362aae8560f5dd148e1ab0df42ce0911ca9",
+      "src/game/business_readings.py": "9035b2b30ad2a82031396ef2ea98fceacbb31876219beb0f2af6b9d8c55b3841",
+      "src/game/businesses.py": "52c9b6943407ce45d3481ec550507c89cde6e194b682775fc33997ca6e4e8e07",
+      "src/game/live_business_snapshot.py": "6a394d6f5acc90577c442127e932a42550aae02171d732257b07d620293323a3",
+      "src/game/missions.py": "45a24d4abbb95c909bef582f37aa2d8286e0148aa1bbc1b926da92f36219bdf3",
+      "src/game/payouts.py": "e542527c6c986664da64ee608fe7f91e12bcae9eab257cbc6ef5ac9ad6f07618",
+      "src/game/state_machine.py": "016f47579df8fd3192f2f28b0a218b5512b23d571f1cd5af485b264ff59f23a1",
+      "src/game/weekly_bonuses.py": "2219c41f30b35f95bf8c80ab4fd86c1909a506ef929665a35c26769d03d83978",
+      "src/hotkeys.py": "3f482a441da01d64a6d19ed6cdbffdad6c19c3a2a495231cbdb3a99e3c5e7139",
+      "src/main.py": "6c2ad1155c5f90059889401d68f7c25702a6978951087663039c12ccf478deb5",
+      "src/optimization/__init__.py": "4fac1301f97bca92e3c2a914b03cc3d723f7e0af6cff754e7a27a10613fedd2f",
+      "src/optimization/optimizer.py": "5988b256345755f32b40c940c184618bc69aa6a8f9d26547711165ea0dcc79af",
+      "src/optimization/priorities.py": "72603a11a482328f17a20e22b1403e9d9a5d7478fa67f15f2151b9f0c4592b98",
+      "src/optimization/recommendation_snoozes.py": "6a534afe9e1d992662ab6e2e7f0e60c73b73f60f83df43b448d669180171358c",
+      "src/optimization/scheduler.py": "7de95a3b4460b04bdbb354b842af071c1365df6ddb9022867837a1e5843a05b2",
+      "src/optimization/sell_planner.py": "42fcf7da9c89ab7cb4d4a9aa217c99676247862fb74214991539bb2f7296ae66",
+      "src/tracking/__init__.py": "a7e24806bb4638ce202ed4ec46fb47bf87e906ed4b7cd98cc7f86e1bc3ea4269",
+      "src/tracking/activity_tracker.py": "e220a9a1c31ccdb59885a0fb1327aa0e966a99fce70043cb08eb3f398072d6dd",
+      "src/tracking/analytics.py": "04c1afa6c0601118703c1701bf55d2b98836dfd0a9eeb852880c9a78001012a1",
+      "src/tracking/cooldowns.py": "d6c4abf0ec7339841e6df26384814b11e1558f74d1da43cd92c1822e1c42d2f9",
+      "src/tracking/earnings_rate.py": "b59a28748773edcfaac62a1dec2834d170b42bf7ddea1b511fd4f29d79c181e1",
+      "src/tracking/goals.py": "bfbb68c9a9b57fe679b1fbf65ea586abe998c1a5e44dcc6154b8e3ea120cadfc",
+      "src/tracking/history.py": "9f7a5e7abd3f3e7ea10e872379b1fd1c744add2e13acb29d888dce0540b5134f",
+      "src/tracking/nightclub.py": "41a08715b4ec8c2474800378193b66cde4c31dd9533de4e0b9e156e0b33d9217",
+      "src/tracking/passive_income.py": "97b3de96d2ea26e7de3d80cd2b576b6d7ac1107bb15619d83433323fe96e185b",
+      "src/tracking/session.py": "0332274a11739a386121bfff456deda7a0e169d0c18bc92252fabaab3ef94c54",
+      "src/tracking/session_goals.py": "a2fc49b49854421f406fa9103a7cd9a5b5ffc98815ce27dc78b2c8b8e6f52348",
+      "src/ui/__init__.py": "c63f13f3a3f40f8be2b37383526dcc3b6033b4e7b81f83a6539f9dfceb3c10bb",
+      "src/ui/main_window.py": "6a4f92bfc285571601cfb283ac1efe27d562da587638e10925e788b06b310e2d",
+      "src/ui/overlay.py": "1d77d23b69c1fa59e09f37c1e36978c33569b49138696c109d37ba477db22fd7",
+      "src/ui/styles/__init__.py": "8a5a97f6df26516cec4f0174753e792ce6f753f948b87152acff4c52b5ec251a",
+      "src/ui/styles/dark_theme.py": "0d102469d4d36949aac33376facc9b99aa7a7db47d78bef0d508e21e5e7aa909",
+      "src/ui/system_tray.py": "03a6459771bf1966048c383e4fd2d2a577f9e8561b83fd1553a2a878dfa9f6f9",
+      "src/ui/widgets/__init__.py": "2e07e00ef70044c366b502d0de23689238d83cea362427e2d611a6effd9c3725",
+      "src/ui/widgets/activity_insights_dialog.py": "522eb8078339ac06a39a594054db6d262ae0de3a89fe99c013c4255a47a269ea",
+      "src/ui/widgets/activity_ledger_dialog.py": "41c46ae76e22bfa585ec7ab41af99911d72c0f543233f516d4f1bf0c8f7497a3",
+      "src/ui/widgets/activity_panel.py": "23ca59e12d89af717a44bdbc8954acecb7c2c456b5ff73bad986dbd94a388cbc",
+      "src/ui/widgets/bonus_panel.py": "ece3adcdf5aff9d53957ad87c2f0fc1b68ab8116fd7798f5c3a7a4a3ba602235",
+      "src/ui/widgets/business_checkin_batch_editor.py": "6e607d341f70ff949f158b48e09dd357b038d9be418447210e29acff3d00faf0",
+      "src/ui/widgets/business_checkin_comparison_dialog.py": "c8144d4e5c52fcbf35dae6497c9f5c5583acdcf76bcb63af53082ee30aef9222",
+      "src/ui/widgets/business_checkin_editor.py": "04c0375679fe6c744dc2a5bfa853a37c7f74c86b0c99c7a9d3afdc30253e8f33",
+      "src/ui/widgets/business_checkin_live_preview.py": "920e2e9e96d2acb36e4eb31a94e99728470a171a3ab3db37d2f84cdc70bed6d3",
+      "src/ui/widgets/business_checkin_trend_dialog.py": "922de6884d0b458681b4292720cc64703a9090b7d93a39ed9224b9d2d99cd8b1",
+      "src/ui/widgets/business_checkins_dialog.py": "40a56d5fcf402b5753d795f069963730db1b1dbaedc26830ea77b1dc2f7ae4ed",
+      "src/ui/widgets/business_panel.py": "c3423f8a143277542ee00cda1be53d21f5173b9963a4890d36ff7276194a9591",
+      "src/ui/widgets/charts.py": "b0bc28c052437670c733b781b8a423c831f5f79f12ca5b37e369ebf697c8aebf",
+      "src/ui/widgets/cooldown_manager_dialog.py": "59731ffcfd7f8f0f111f3add8ae1bf5303399fbf948ae61e025caa24a8a8845c",
+      "src/ui/widgets/cooldown_widget.py": "ff4110e1336327ef8c488cdb46c138ea774c92ad7a9ca3594e398eb20f511867",
+      "src/ui/widgets/daily_session_overview_dialog.py": "e0e9769220127acac7a4e6f548733d3b109d7bcad2dfcd859649f5974e1ffc21",
+      "src/ui/widgets/dashboard.py": "2e70d508b6c6df5e4ed365a7757a0aa36684d9ee9ab6263769e3c7fd0e91915e",
+      "src/ui/widgets/earnings_rate_widget.py": "3299e3ce2c72f24e21996c1c6d1b055ff2a23e82829084910e6f2bfeb7e87515",
+      "src/ui/widgets/goal_widget.py": "8be8cfacc447c7bbec2f32f526b4873c31da19645ffa021a3244186d1530a4c6",
+      "src/ui/widgets/history_panel.py": "ee5d51e31ef92aaf2951a6f56546e93b28ffb2c12b0a54a5657193ee26532981",
+      "src/ui/widgets/live_business_reading_dialog.py": "8ad14486ca0f67328c8d6c027d6c3530496fa79f6ea155ee79b557096cb56fa4",
+      "src/ui/widgets/passive_income_widget.py": "33cd12c67913210f5739a75ba2f7642f8b280868bcc0007e56c93ee6761cce62",
+      "src/ui/widgets/quick_stats.py": "4c05d477fb6cd27380f2cd102c128cf8c1b79a59493adb473b8e4401090985d8",
+      "src/ui/widgets/recommendations.py": "ffc2c86e62a61934de5e8f6ec9f2cbabb91e851d6633684813cfe5818f5002dc",
+      "src/ui/widgets/saved_character_dialog.py": "5c7a8512c551f38fd7695be02c2dacb4ba8af647a143890482f7fc8bb8fc2263",
+      "src/ui/widgets/session_annotation_dialog.py": "f4b4dc8ce32099ca38146e55887ccb3b24692ac2e572517b2c4ecb4bb4a2fa9b",
+      "src/ui/widgets/session_comparison_dialog.py": "6e58c27ba7c9ad213da5859db3b9814fe32635527c5ab983136ab12d401f13d7",
+      "src/ui/widgets/session_goals_panel.py": "3831f53f9a7705f3deb82128324c0e10b6fa8edc1d0b61ff6b4bd12aef3552cd",
+      "src/ui/widgets/session_panel.py": "712e89a08aaa836563ffdcec6ba1a6fdeee08b23381559ee784d948c0570bf27",
+      "src/ui/widgets/settings_panel.py": "2c1959095552e90abe0bf6a8308ca20995a16f60197b74ff30e93732c971060a",
+      "src/utils/__init__.py": "b8d35db63c44cf0388e4bfc65842c04c4be0bd6718f54dfe7e7df433328cf17d",
+      "src/utils/exporter.py": "b17837098e89d4baf5667856453a9b9f889b7150a5ce50d413a8302e6a4b7505",
+      "src/utils/helpers.py": "a39a2d1f3eb524e2ad9755753cf24cab279660f5ff096109457a40f0a1f57907",
+      "src/utils/logging.py": "34ed52d5b967dbe40ead784004a9fb27de93ceb854ab1c85c5dcb12bf23dbb9f",
+      "src/utils/performance.py": "cde70e622a39b22d70560edeb0408f9188eb3463a244bb519cc13aa54b4ecfed",
+      "src/utils/persistence.py": "58a3d9a74c26a68c1fd18f1a1ef7181a6ee9fecc41de0e41b19db44af330dd93"
+    },
+    "production_manifest_sha256": "c530b3ea8f2b95d71de5e4443eff112af212e34c387b73dcb758647abe94fddf",
+    "diagnostic_files_sha256": {
+      "tests/test_mission_ocr_images.py": "f4b7556fb41aaa92242f0e3a8861c79821f133679227a279f50902f4fac4798d",
+      "tests/test_bottom_objective_capture.py": "4d6770a6217c5ca0bb1f737d0bfba68b6352a1117df66e7366332e4b049952dd",
+      "tests/test_result_header_workflow.py": "ad9795da0e3884d4e96aad2d9d7b37cac691afc075a53998e5ce0dbce40760fb",
+      "tests/test_result_header_ocr_images.py": "63cea2b7e155698d82b12efd97eac2477eb19a751c1bcc6527204e4bdde4a14c"
+    },
+    "replay_script_sha256": "f16ced114f9bac15ae3b185da7d6fde2b6d04fa746aab05e97b9ed08fb58cd1d"
+  },
+  "production_source_unchanged_during_replay": true,
+  "execution": {
+    "python": "3.11.16",
+    "opencv": "5.0.0",
+    "numpy": "2.4.6",
+    "tesseract": "tesseract 5.5.0",
+    "language": "eng",
+    "page_segmentation_mode": 6,
+    "loaded_templates": 0,
+    "diagnostic_recognition_adapter": "tests.test_mission_ocr_images.TesseractDiagnostic",
+    "production_classes": [
+      "ScreenCapture",
+      "OCREngine preprocessing",
+      "StateDetector",
+      "GTABusinessManager._do_capture_cycle",
+      "activity/session/cooldown trackers",
+      "Repository/SQLite"
+    ],
+    "prototype_detector_or_app_used": false,
+    "mocked_ocr_text_used": false,
+    "native_windows_ocr_validated": false,
+    "native_display_capture_validated": false
+  },
+  "result_header_relative_xywh": [
+    0.2,
+    0.12,
+    0.6,
+    0.2
+  ],
+  "result_header_preprocessing": {
+    "grayscale": true,
+    "threshold": false,
+    "invert": false,
+    "scale": 2.0
+  },
+  "original_image_count": 5,
+  "scenario_count": 38,
+  "passed_scenario_count": 38,
+  "all_checks_passed": true,
+  "limitations": [
+    "Five retained public-guide screenshots form a tiny convenience sample; no general accuracy percentage or recall claim.",
+    "The positive crop comes from one retained Cayo result layout. Other heists, languages, safe-zone settings and aspect ratios remain unmeasured.",
+    "Original source-matched bytes are referenced with exact URLs and hashes. Images and derivatives remain local; redistribution rights were not established.",
+    "The two original VIP stills are guide crops with unknown original capture bounds.",
+    "Generated images are controlled text fixtures, not gameplay screenshots. They exercise representative 720p/1080p/1440p geometry only.",
+    "Tesseract 5.5 diagnostic success does not establish native Windows OCR, native display capture, live gameplay or performance.",
+    "Original stills were deliberately sequenced for ownership/accounting replay; they are not proof of one recorded mission episode.",
+    "The historical broad-crop Agency source pixels were not retained. Generated Agency/business controls prove the boundary only.",
+    "No YouTube/media/browser/native Windows route, packages, Actions, credential access or external publication was used."
+  ],
+  "original_images": [
+    {
+      "image_name": "headhunter-2.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d0/27/Headhunter-2.jpg",
+      "acquired_at_utc": "2026-10-06T00:29:02.948792+00:00",
+      "sha256": "b01c78aa3a7b78f4bb78b6ca20cf71968c1c23da18d2e329766e56b4b121cc7e",
+      "dimensions": [
+        1600,
+        795
+      ],
+      "layout_limit": "Guide crop; original capture bounds unknown"
+    },
+    {
+      "image_name": "sightseer-package.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/69/Package.jpg",
+      "acquired_at_utc": "2026-10-06T00:29:42.610182+00:00",
+      "sha256": "c50c8fe3a4005bd2b71096fc0c298d0ebcffff6accde37d5b650bc9bdfdaa04e",
+      "dimensions": [
+        1600,
+        794
+      ],
+      "layout_limit": "Guide crop; original capture bounds unknown"
+    },
+    {
+      "image_name": "cayo-finale-start.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/c4/40/Cayo-Perico-Finale-1.jpg",
+      "acquired_at_utc": "2026-10-06T00:30:55.563678+00:00",
+      "sha256": "59a05cd96f32b1ee7c389744cc7c520ce144cf4261b9239b621384e566922e68",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown"
+    },
+    {
+      "image_name": "cayo-finale-escape.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/6c/e8/Cayo-Perico-Finale-42.jpg",
+      "acquired_at_utc": "2026-10-06T00:31:11.693510+00:00",
+      "sha256": "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown"
+    },
+    {
+      "image_name": "cayo-finale-summary.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+      "acquired_at_utc": "2026-10-06T00:31:11.753297+00:00",
+      "sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown"
+    }
+  ],
+  "evidence_artifacts": {
+    "production-replay.json": "30bf43e068c5bcf6e23c4546f395f3e7fbd5d2f3102e8fef63060419aefe5854",
+    "production-replay.log": "6c27c908d435f12aa44adcda5412c8d11f9e079a7e3fa9384fd91dad493af55b",
+    "replay-production.py": "f16ced114f9bac15ae3b185da7d6fde2b6d04fa746aab05e97b9ed08fb58cd1d",
+    "baseline-combined-red.log": "4648aa52be52eded70fb100dc9d03f32b74d3e954e9ce884549a92746ebebb45",
+    "baseline-red-provenance.json": "b01683e89b1b991f396130f6c174e5c6174b8ca1b25ce295900967662ae53fb2",
+    "candidate-focused.log": "307003e863f7ad58a561cffd53f23797ba6c2d8d004382ec0b5be4c4f3776bcb"
+  },
+  "coverage_distinction": {
+    "originals": "Five existing source-matched public-guide screenshots, exact bytes verified before replay; no redistribution.",
+    "generated": "Procedurally rendered controlled text pixels using local DejaVuSans and real Tesseract; representative720p/1080p/1440p.",
+    "ocr_text_mocks": "30 ordinary workflow tests; excluded from image scenario count.",
+    "new_test_gate": {
+      "ordinary_workflow_passed": 30,
+      "generated_image_ocr_passed": 28,
+      "combined_passed": 58
+    },
+    "baseline_red": {
+      "failed": 32,
+      "passed": 1,
+      "deselected": 25,
+      "meaning": "New header API/image path absent from original production; Bunker preservation already passes."
+    }
+  },
+  "checked_for_every_scenario": [
+    "expected_states",
+    "expected_open_type",
+    "exactly_expected_completions",
+    "exactly_expected_callbacks",
+    "tracker_and_callbacks_retain_exact_owner",
+    "same_source_one_grab",
+    "header_batch_last",
+    "no_invented_money_or_earnings",
+    "no_invented_payout",
+    "owner_preserved_on_rejection",
+    "no_rejected_result_cooldown",
+    "retains_expected_phase",
+    "business_fields_preserved",
+    "exact_header_transcription",
+    "header_admission",
+    "production_header_preprocessing"
+  ],
+  "rows": [
+    {
+      "label": "isolated-original-headhunter-2.jpg",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "PHONE"
+      ],
+      "raw_headers": [
+        "Se ch Oo ee ll\n1 \u2014"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "isolated-original-sightseer-package.jpg",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MENU"
+      ],
+      "raw_headers": [
+        "Ww ~_\u2014 > .__ \u2014 \u2014 \u2014\n. =6 Ts ~ _ \u2014\n> : : \u2014 -\u2014 ~~\n- _ Le \u2014 le . \u2014 ad = a\nee a \u2014 _\u2014 \u2014 ~~ aii, a \u2014\n= : \u2014 ee . ==\nSSS See eee -\u2014\n' = . .\n| . \u2014\u2014\u2014\u2014\u2014 : \u2014\n;\n' \u2014\noh \\ = SD"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "isolated-original-cayo-finale-start.jpg",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MENU"
+      ],
+      "raw_headers": [
+        "1 a a :\n. 7 1.\nJ\nid i=\nls"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "isolated-original-cayo-finale-escape.jpg",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MISSION_ACTIVE"
+      ],
+      "raw_headers": [
+        ": C \u2019 \"ae \u00e9 \u00a9\n- F, brs\n:\n. : \u2018 \u2019\n. aie = i"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        7
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": {
+        "name": "Escape Cayo Perico",
+        "type": "CAYO_PERICO",
+        "started_at": "2026-10-07T09:20:19.773498",
+        "mission_start": "2026-10-07 09:20:19.773445",
+        "start_money": null,
+        "identity_status": "type_only",
+        "family": "CAYO_PERICO",
+        "phase": "UNKNOWN",
+        "objectives": [
+          "escape cayo perico"
+        ]
+      },
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "isolated-original-cayo-finale-summary.jpg",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MISSION_COMPLETE"
+      ],
+      "raw_headers": [
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "UNKNOWN",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "original-escape-summary-repeat-old-escape",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "original public-guide screenshot",
+        "original public-guide screenshot",
+        "original public-guide screenshot",
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "MISSION_COMPLETE",
+        "MISSION_COMPLETE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        ": C \u2019 \"ae \u00e9 \u00a9\n- F, brs\n:\n. : \u2018 \u2019\n. aie = i",
+        "heist Passed\nThe Cayo Perico Heist",
+        "heist Passed\nThe Cayo Perico Heist",
+        ": C \u2019 \"ae \u00e9 \u00a9\n- F, brs\n:\n. : \u2018 \u2019\n. aie = i"
+      ],
+      "admitted_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist",
+        "heist Passed\nThe Cayo Perico Heist",
+        ""
+      ],
+      "ocr_call_counts": [
+        7,
+        6,
+        6,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "sqlite_activity_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "final_sqlite_activity_rows": [
+        {
+          "name": "Escape Cayo Perico",
+          "type": "CAYO_PERICO",
+          "success": true,
+          "earnings": 0
+        }
+      ],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "UNKNOWN",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "mismatch-CASINO_HEIST",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "ocr_call_counts": [
+        7,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        0
+      ],
+      "sqlite_activity_counts": [
+        0,
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": {
+        "name": "Casino Heist",
+        "type": "CASINO_HEIST",
+        "started_at": "2026-10-07T09:20:26.482405",
+        "mission_start": "2026-10-07 09:20:26.482355",
+        "start_money": null,
+        "identity_status": "type_only",
+        "family": "CASINO_HEIST",
+        "phase": "UNKNOWN",
+        "objectives": []
+      },
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "mismatch-VIP_WORK",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "ocr_call_counts": [
+        7,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        0
+      ],
+      "sqlite_activity_counts": [
+        0,
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": {
+        "name": "Headhunter",
+        "type": "VIP_WORK",
+        "started_at": "2026-10-07T09:20:29.729273",
+        "mission_start": "2026-10-07 09:20:29.729223",
+        "start_money": null,
+        "identity_status": "known_name",
+        "family": "VIP_WORK",
+        "phase": "UNKNOWN",
+        "objectives": []
+      },
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "mismatch-HEIST_PREP",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "HEIST_PREP",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "ocr_call_counts": [
+        7,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        0
+      ],
+      "sqlite_activity_counts": [
+        0,
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": {
+        "name": "Cayo Perico Prep",
+        "type": "HEIST_PREP",
+        "started_at": "2026-10-07T09:20:31.786576",
+        "mission_start": "2026-10-07 09:20:31.786545",
+        "start_money": null,
+        "identity_status": "type_only",
+        "family": "CAYO_PERICO",
+        "phase": "HEIST_PREP",
+        "objectives": []
+      },
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "explicit-finale-owner",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "original public-guide screenshot",
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "HEIST_FINALE",
+        "MISSION_COMPLETE",
+        "MISSION_COMPLETE"
+      ],
+      "raw_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "ocr_call_counts": [
+        7,
+        6,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        1,
+        1
+      ],
+      "sqlite_activity_counts": [
+        0,
+        1,
+        1
+      ],
+      "final_sqlite_activity_rows": [
+        {
+          "name": "Cayo Perico Finale",
+          "type": "HEIST_FINALE",
+          "success": true,
+          "earnings": 0
+        }
+      ],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "HEIST_FINALE",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "compatible-unresolved-owner",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "original public-guide screenshot"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "MISSION_COMPLETE"
+      ],
+      "raw_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        "",
+        "heist Passed\nThe Cayo Perico Heist"
+      ],
+      "ocr_call_counts": [
+        7,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        1
+      ],
+      "sqlite_activity_counts": [
+        0,
+        1
+      ],
+      "final_sqlite_activity_rows": [
+        {
+          "name": "LIMARY Ss! AI GEU Jane? i Aaeene\nSecondary Targets Take: $406354\nteva eae war te BRAS\nR\u00e9ncing}Ree: \u2018$148;685:\nBESS geeatenrnasiencs gaa, | \u00a2 me 2) yEERAROQOR",
+          "type": "CAYO_PERICO",
+          "success": true,
+          "earnings": 0
+        }
+      ],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "UNKNOWN",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "degraded-after-original-cayo",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "original public-guide screenshot",
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        ": C \u2019 \"ae \u00e9 \u00a9\n- F, brs\n:\n. : \u2018 \u2019\n. aie = i",
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        "",
+        ""
+      ],
+      "ocr_call_counts": [
+        7,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        0
+      ],
+      "sqlite_activity_counts": [
+        0,
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": {
+        "name": "Escape Cayo Perico",
+        "type": "CAYO_PERICO",
+        "started_at": "2026-10-07T09:20:41.251742",
+        "mission_start": "2026-10-07 09:20:41.251692",
+        "start_money": null,
+        "identity_status": "type_only",
+        "family": "CAYO_PERICO",
+        "phase": "UNKNOWN",
+        "objectives": [
+          "escape cayo perico"
+        ]
+      },
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "degraded-after-non-heist",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        "",
+        ""
+      ],
+      "ocr_call_counts": [
+        7,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        0
+      ],
+      "sqlite_activity_counts": [
+        0,
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": {
+        "name": "Headhunter",
+        "type": "VIP_WORK",
+        "started_at": "2026-10-07T09:20:42.980516",
+        "mission_start": "2026-10-07 09:20:42.980469",
+        "start_money": null,
+        "identity_status": "known_name",
+        "family": "VIP_WORK",
+        "phase": "UNKNOWN",
+        "objectives": []
+      },
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "degraded-after-unresolved",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        "",
+        ""
+      ],
+      "ocr_call_counts": [
+        7,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        0
+      ],
+      "sqlite_activity_counts": [
+        0,
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": {
+        "name": "Go to the location",
+        "type": "UNKNOWN",
+        "started_at": "2026-10-07T09:20:44.710317",
+        "mission_start": "2026-10-07 09:20:44.710273",
+        "start_money": null,
+        "identity_status": "unknown",
+        "family": "UNKNOWN",
+        "phase": "UNKNOWN",
+        "objectives": [
+          "go to the location"
+        ]
+      },
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "degraded-no-borrow-top",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "degraded-no-borrow-bottom",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-title",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "The Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-agency",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "Agency"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-title-agency",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "The Cayo Perico Heist\nAgency"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-objective",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "Escape Cayo Perico"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-cash",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "$1,407,990"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-business",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "Stock: 40%\nSupplies: 60%\nValue: $7000"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-prep-result",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED\nCayo Perico Prep"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "raw-header-conflicting-results",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED\nThe Cayo Perico Heist\nMISSION FAILED"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "conflict-primary-casino",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "conflict-bottom-casino",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "conflict-primary-prep",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "conflict-ambiguous-primary",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        ""
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        4
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "primary-bunker-fields",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "BUSINESS_COMPUTER"
+      ],
+      "raw_headers": [
+        ""
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        7
+      ],
+      "screen_grab_counts": [
+        4
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {
+        "bunker": {
+          "stock": 40,
+          "supply": 60,
+          "value": 7000,
+          "updated": "2026-10-07 09:20:58.996004",
+          "identity_source": "ocr_text"
+        }
+      },
+      "final_session_earnings": 0
+    },
+    {
+      "label": "primary-failure-priority",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_FAILED"
+      ],
+      "raw_headers": [
+        ""
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        4
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "primary-success-priority",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_COMPLETE"
+      ],
+      "raw_headers": [
+        ""
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        4
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "agreeing-bottom-result-idle",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_COMPLETE"
+      ],
+      "raw_headers": [
+        "HEIST PASSED\nThe Cayo Perico Heist"
+      ],
+      "admitted_headers": [
+        "HEIST PASSED\nThe Cayo Perico Heist"
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "UNKNOWN",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "generated-resolution-720p",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "generated controlled text image",
+        "generated controlled text image",
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "MISSION_COMPLETE",
+        "MISSION_COMPLETE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        ""
+      ],
+      "admitted_headers": [
+        "",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        ""
+      ],
+      "ocr_call_counts": [
+        7,
+        6,
+        6,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "sqlite_activity_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "final_sqlite_activity_rows": [
+        {
+          "name": "Escape Cayo Perico",
+          "type": "CAYO_PERICO",
+          "success": true,
+          "earnings": 0
+        }
+      ],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "UNKNOWN",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "generated-dropout-720p",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "generated-resolution-1080p",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "generated controlled text image",
+        "generated controlled text image",
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "MISSION_COMPLETE",
+        "MISSION_COMPLETE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        ""
+      ],
+      "admitted_headers": [
+        "",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        ""
+      ],
+      "ocr_call_counts": [
+        7,
+        6,
+        6,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "sqlite_activity_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "final_sqlite_activity_rows": [
+        {
+          "name": "Escape Cayo Perico",
+          "type": "CAYO_PERICO",
+          "success": true,
+          "earnings": 0
+        }
+      ],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "UNKNOWN",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "generated-dropout-1080p",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "generated-resolution-1440p",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image",
+        "generated controlled text image",
+        "generated controlled text image",
+        "generated controlled text image"
+      ],
+      "states": [
+        "MISSION_ACTIVE",
+        "MISSION_COMPLETE",
+        "MISSION_COMPLETE",
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        ""
+      ],
+      "admitted_headers": [
+        "",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        "HEIST PASSED\nThe Cayo Perico Heist",
+        ""
+      ],
+      "ocr_call_counts": [
+        7,
+        6,
+        6,
+        6
+      ],
+      "screen_grab_counts": [
+        1,
+        1,
+        1,
+        1
+      ],
+      "completion_callback_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "sqlite_activity_counts": [
+        0,
+        1,
+        1,
+        1
+      ],
+      "final_sqlite_activity_rows": [
+        {
+          "name": "Escape Cayo Perico",
+          "type": "CAYO_PERICO",
+          "success": true,
+          "earnings": 0
+        }
+      ],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": "UNKNOWN",
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    },
+    {
+      "label": "generated-dropout-1440p",
+      "passed": true,
+      "failed_checks": [],
+      "image_kinds": [
+        "generated controlled text image"
+      ],
+      "states": [
+        "UNKNOWN"
+      ],
+      "raw_headers": [
+        "HEIST PASSED"
+      ],
+      "admitted_headers": [
+        ""
+      ],
+      "ocr_call_counts": [
+        6
+      ],
+      "screen_grab_counts": [
+        1
+      ],
+      "completion_callback_counts": [
+        0
+      ],
+      "sqlite_activity_counts": [
+        0
+      ],
+      "final_sqlite_activity_rows": [],
+      "final_sqlite_earning_rows": [],
+      "final_current_owner": null,
+      "callbacks_are_exact_initial_owner": true,
+      "original_owner_start_preserved": true,
+      "terminal_phase": null,
+      "final_business_fields": {},
+      "final_session_earnings": 0
+    }
+  ],
+  "original_header_ocr_observations": {
+    "headhunter-2.jpg": [
+      {
+        "region": "result_header",
+        "relative_xywh": [
+          0.2,
+          0.12,
+          0.6,
+          0.2
+        ],
+        "absolute_ltrb": [
+          320,
+          95,
+          1280,
+          254
+        ],
+        "source_crop_shape": [
+          159,
+          960,
+          3
+        ],
+        "source_crop_pixels_sha256": "9ecbd7e7b99a32394e5eef946069337de34b5394d1fd9ddc0748eb5dd84b2245",
+        "preprocessing_parameters": {
+          "grayscale": true,
+          "threshold": false,
+          "invert": false,
+          "scale": 2.0
+        },
+        "preprocessed_shape": [
+          318,
+          1920,
+          3
+        ],
+        "preprocessed_pixels_sha256": "1aaab5c233a49a4adbf402e657794d741ad2864a3e10677f15010d16c268b143",
+        "text": "Se ch Oo ee ll\n1 \u2014",
+        "diagnostic_word_confidence": 0.3327620085714286
+      }
+    ],
+    "sightseer-package.jpg": [
+      {
+        "region": "result_header",
+        "relative_xywh": [
+          0.2,
+          0.12,
+          0.6,
+          0.2
+        ],
+        "absolute_ltrb": [
+          320,
+          95,
+          1280,
+          254
+        ],
+        "source_crop_shape": [
+          159,
+          960,
+          3
+        ],
+        "source_crop_pixels_sha256": "81fe476419378399b2f59f23d82a0e108b2b62db73a89635986048a52fb59ad8",
+        "preprocessing_parameters": {
+          "grayscale": true,
+          "threshold": false,
+          "invert": false,
+          "scale": 2.0
+        },
+        "preprocessed_shape": [
+          318,
+          1920,
+          3
+        ],
+        "preprocessed_pixels_sha256": "6673787fed30cfa0dd9290d19d2843b2cb28861d52a10298a95366584985828d",
+        "text": "Ww ~_\u2014 > .__ \u2014 \u2014 \u2014\n. =6 Ts ~ _ \u2014\n> : : \u2014 -\u2014 ~~\n- _ Le \u2014 le . \u2014 ad = a\nee a \u2014 _\u2014 \u2014 ~~ aii, a \u2014\n= : \u2014 ee . ==\nSSS See eee -\u2014\n' = . .\n| . \u2014\u2014\u2014\u2014\u2014 : \u2014\n;\n' \u2014\noh \\ = SD",
+        "diagnostic_word_confidence": 0.3345651329687499
+      }
+    ],
+    "cayo-finale-start.jpg": [
+      {
+        "region": "result_header",
+        "relative_xywh": [
+          0.2,
+          0.12,
+          0.6,
+          0.2
+        ],
+        "absolute_ltrb": [
+          320,
+          108,
+          1280,
+          288
+        ],
+        "source_crop_shape": [
+          180,
+          960,
+          3
+        ],
+        "source_crop_pixels_sha256": "08d15d70e4fdd3ed55912b08185995eda50f0da950fc31140cbde443c77c4107",
+        "preprocessing_parameters": {
+          "grayscale": true,
+          "threshold": false,
+          "invert": false,
+          "scale": 2.0
+        },
+        "preprocessed_shape": [
+          360,
+          1920,
+          3
+        ],
+        "preprocessed_pixels_sha256": "648ecdb69bb1c582579f4d474df7cd2c765e40525f6ffe183050e1d0e86fab4d",
+        "text": "1 a a :\n. 7 1.\nJ\nid i=\nls",
+        "diagnostic_word_confidence": 0.29622057181818184
+      }
+    ],
+    "cayo-finale-escape.jpg": [
+      {
+        "region": "result_header",
+        "relative_xywh": [
+          0.2,
+          0.12,
+          0.6,
+          0.2
+        ],
+        "absolute_ltrb": [
+          320,
+          108,
+          1280,
+          288
+        ],
+        "source_crop_shape": [
+          180,
+          960,
+          3
+        ],
+        "source_crop_pixels_sha256": "a71d76046070b9d1ea3b04291fc38d9ff1e6c7ecf313ebb0085b0a0850752725",
+        "preprocessing_parameters": {
+          "grayscale": true,
+          "threshold": false,
+          "invert": false,
+          "scale": 2.0
+        },
+        "preprocessed_shape": [
+          360,
+          1920,
+          3
+        ],
+        "preprocessed_pixels_sha256": "216f56089a2e150e4ff9d76ce230746aff8515dac62f7609335baaed515635db",
+        "text": ": C \u2019 \"ae \u00e9 \u00a9\n- F, brs\n:\n. : \u2018 \u2019\n. aie = i",
+        "diagnostic_word_confidence": 0.25744915611111113
+      }
+    ],
+    "cayo-finale-summary.jpg": [
+      {
+        "region": "result_header",
+        "relative_xywh": [
+          0.2,
+          0.12,
+          0.6,
+          0.2
+        ],
+        "absolute_ltrb": [
+          320,
+          108,
+          1280,
+          288
+        ],
+        "source_crop_shape": [
+          180,
+          960,
+          3
+        ],
+        "source_crop_pixels_sha256": "3dfadfd57b0bbac3d0cfcfb056f5c8409b38bcec30023e05a7b2664fee4fbc91",
+        "preprocessing_parameters": {
+          "grayscale": true,
+          "threshold": false,
+          "invert": false,
+          "scale": 2.0
+        },
+        "preprocessed_shape": [
+          360,
+          1920,
+          3
+        ],
+        "preprocessed_pixels_sha256": "1026364a7f9a978fc597e9b9ba9ff340ade50ef14139cdb0e30266998c02322d",
+        "text": "heist Passed\nThe Cayo Perico Heist",
+        "diagnostic_word_confidence": 0.9476802966666668
+      }
+    ]
+  }
+}

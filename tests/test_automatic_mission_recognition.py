@@ -44,11 +44,11 @@ def frame(app, mission_text="", center_text="", brightness=70, color=None, templ
     app._capture = SimpleNamespace(
         regions=SimpleNamespace(
             full_screen=0, money_display=1, mission_text=2,
-            center_prompt=3, timer_bottom_right=4, mission_banner=5, bottom_objective=6,
+            center_prompt=3, timer_bottom_right=4, mission_banner=5, bottom_objective=6, result_header=7,
         ),
         capture_multiple_regions=lambda regions: [
             full_image,
-            None, mission_image, center_image, None, None, None,
+            None, mission_image, center_image, None, None, None, None,
         ],
     )
     return app._do_capture_cycle()
