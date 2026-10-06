@@ -77,6 +77,8 @@ class CaptureResult:
     activity_identity_status: str = "unknown"
     banner_text: str = ""
     state_reason: str = ""
+    bottom_objective_text: str = ""
+    bottom_objective_command: str = ""
 
 
 @dataclass
@@ -585,9 +587,10 @@ class GTABusinessManager:
                     regions.center_prompt,
                     regions.timer_bottom_right,
                     regions.mission_banner,
+                    regions.bottom_objective,
                 ])
-                full_screen, money_img, mission_img, center_img, timer_img, banner_img = (
-                    images[index] for index in range(6)
+                full_screen, money_img, mission_img, center_img, timer_img, banner_img, bottom_img = (
+                    images[index] for index in range(7)
                 )
 
             self._data.total_captures += 1
@@ -601,6 +604,7 @@ class GTABusinessManager:
                 mission_text_image=mission_img,
                 center_text_image=center_img,
                 mission_banner_image=banner_img,
+                bottom_objective_image=bottom_img,
             )
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
@@ -612,6 +616,8 @@ class GTABusinessManager:
             result.mission_text = state_result.mission_text
             result.objective_text = state_result.objective_text
             result.banner_text = getattr(state_result, "banner_text", "")
+            result.bottom_objective_text = getattr(state_result, "bottom_objective_text", "")
+            result.bottom_objective_command = getattr(state_result, "bottom_objective_command", "")
             result.mission = getattr(state_result, "mission", None)
 
             # Update state machine
@@ -788,6 +794,8 @@ class GTABusinessManager:
             capture_result.mission_text = guarded_result.mission_text
             capture_result.objective_text = guarded_result.objective_text
             capture_result.banner_text = guarded_result.banner_text
+            capture_result.bottom_objective_text = guarded_result.bottom_objective_text
+            capture_result.bottom_objective_command = guarded_result.bottom_objective_command
             capture_result.mission = guarded_result.mission
             return
         state = state_result.state
@@ -939,6 +947,7 @@ class GTABusinessManager:
             reading = self._mission_parser.parse_regions((
                 state_result.mission_text, state_result.objective_text,
                 getattr(state_result, "banner_text", ""),
+                getattr(state_result, "bottom_objective_command", ""),
             ))
         return reading
 
@@ -946,6 +955,9 @@ class GTABusinessManager:
     def _mission_display_name(state_result, reading):
         if reading.identity_status == "known_name":
             return reading.mission_name
+        command = getattr(state_result, "bottom_objective_command", "")
+        if reading.identity_status == "type_only" and command:
+            return command
         return (state_result.mission_text or state_result.objective_text
                 or getattr(state_result, "banner_text", "")
                 or ("Sell Mission" if state_result.state == GameState.SELLING else "Unknown Mission"))
@@ -994,7 +1006,8 @@ class GTABusinessManager:
     @staticmethod
     def _objective_evidence(state_result) -> ObjectiveEvidence:
         return objective_evidence((state_result.mission_text, state_result.objective_text,
-                                   getattr(state_result, "banner_text", "")))
+                                   getattr(state_result, "banner_text", ""),
+                                   getattr(state_result, "bottom_objective_command", "")))
 
     def _guard_mission_observation(self, state_result):
         """Apply acceptance before state/money processing and to direct callers."""

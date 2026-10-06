@@ -22,13 +22,13 @@ from tests.test_mission_result_accounting import clock as clock
 def capture_frame(app, mission="", center="", banner="", balance=1000):
     """Provide one screenshot's independent OCR crops, including real money OCR."""
     images = [np.full((120, 200, 3), 100, dtype=np.uint8),
-              object(), object(), object(), None, object()]
+              object(), object(), object(), None, object(), None]
     words = {id(images[index]): text for index, text in (
         (1, f"${balance:,}"), (2, mission), (3, center), (5, banner),
     )}
     app._capture = SimpleNamespace(
         regions=SimpleNamespace(full_screen=0, money_display=1, mission_text=2,
-                                center_prompt=3, timer_bottom_right=4, mission_banner=5),
+                                center_prompt=3, timer_bottom_right=4, mission_banner=5, bottom_objective=6),
         capture_multiple_regions=lambda regions: [images[index] for index in regions],
     )
     app._ocr = SimpleNamespace(

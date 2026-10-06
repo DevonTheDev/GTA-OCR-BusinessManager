@@ -18,6 +18,7 @@ class RegionType(Enum):
     BUSINESS_SUPPLIES = auto()  # Business computer supplies display
     PHONE_SCREEN = auto()  # In-game phone when open
     FULL_SCREEN = auto()  # Full screen capture (for template matching)
+    BOTTOM_OBJECTIVE = auto()  # Objective-only bottom-center text
 
 
 class Region(NamedTuple):
@@ -126,6 +127,9 @@ class ScreenRegions:
     # Full screen (for template matching, state detection)
     full_screen: Region = Region(x=0.0, y=0.0, width=1.0, height=1.0)
 
+    # A separate objective-only source; never a business/result/money crop.
+    bottom_objective: Region = Region(x=0.25, y=0.90, width=0.50, height=0.10)
+
     def get_region(self, region_type: RegionType) -> Region:
         """Get a specific region by type.
 
@@ -146,6 +150,7 @@ class ScreenRegions:
             RegionType.BUSINESS_SUPPLIES: self.business_supplies,
             RegionType.PHONE_SCREEN: self.phone_screen,
             RegionType.FULL_SCREEN: self.full_screen,
+            RegionType.BOTTOM_OBJECTIVE: self.bottom_objective,
         }
         return mapping.get(region_type, self.full_screen)
 
@@ -161,6 +166,7 @@ class ScreenRegions:
             "timer_bottom": self.timer_bottom_right,
             "timer_center": self.timer_center,
             "center_prompt": self.center_prompt,
+            "bottom_objective": self.bottom_objective,
         }
 
     def get_business_regions(self) -> dict[str, Region]:

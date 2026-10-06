@@ -756,8 +756,8 @@ screen alone does not start a new activity.
 
 Five separately published guide screenshots were also inspected and evaluated
 locally. Their [text-only provenance and baseline results](validation/gta-online-screenshot-baseline.json)
-record the source URLs, image hashes/dimensions and exact crop coordinates. The
-default regions missed visible bottom objectives and the upper Cayo result
+record the source URLs, image hashes/dimensions and exact crop coordinates. Those
+baseline regions missed visible bottom objectives and the upper Cayo result
 heading. Wider-crop/non-thresholded diagnostics recovered the Cayo title but
 still missed the large result heading. The label correction applies when OCR
 supplies that text; it does not solve those image-pipeline observations.
@@ -767,6 +767,50 @@ rights were not established. Two guide images are cropped; the three 16:9 Cayo
 images still have unknown original capture and HUD settings. This small sample
 is not a Windows OCR accuracy benchmark or a gameplay transition test, and it
 does not replace the still-pending YouTube screengrab work.
+
+#### Recognize a named bottom objective
+
+The capture cycle also reads a narrow bottom-center objective region from the
+same screenshot. A clean instruction such as **Escape Cayo Perico.** can now
+supply the existing Cayo family classification when the upper crops miss it.
+The activity displays the observed instruction; this does not invent a mission
+title, finale phase, successful result or payout. The accepted instruction also
+participates in the existing completed-mission replay guard, so the same old
+objective cannot immediately restart that mission.
+
+This additional region has a restricted role. It must contain one complete
+instruction with an unambiguous supported mission family. Generic instructions,
+bare names, numbers, currency, explicit result text and standalone **RP**,
+**Platinum** or **Continue** rows do not supply new activity evidence through
+this region. Extra text can
+make the observation unusable. Recognized business screens and existing mission
+results retain their original processing, and conflicting mission identities
+remain uncertain. Bottom text is never used as a business reading, balance or
+result source.
+
+The extra read uses one fixed grayscale, inverted, 2× preprocessing pass. It
+does not expand the upper crops or change their preprocessing. This conservative
+rule can miss valid objectives containing counters, numeric destinations or
+noisy footer text, and it does not prove that every possible result-table layout
+is excluded. The extra OCR call also adds work to eligible capture cycles.
+
+Controlled capture/accounting tests and optional generated-image tests exercise
+these boundaries at 720p, 1080p and 1440p. Run the image checks with the existing
+local Tesseract diagnostic dependencies:
+
+```sh
+GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_bottom_objective_ocr_images.py
+```
+
+The five supplemental guide stills were replayed through the actual capture,
+preprocessing, detector and application path. The escape instruction now starts
+a Cayo-family activity; the other four isolated frames still start no activity.
+Playing the escape frame followed by the real summary leaves that activity
+unfinished because the result heading remains unread. No completion or payout
+is fabricated. The exact observations and limits are recorded in
+[the bottom-objective evaluation](validation/bottom-objective-evaluation.json).
+These are diagnostic Tesseract results, not Windows OCR or live-game accuracy
+measurements. The guide images remain outside the repository.
 
 #### Recover an unfinished detection
 
@@ -1457,6 +1501,7 @@ All regions defined as relative coordinates (0.0-1.0) for multi-resolution suppo
 |--------|---------|------------------|
 | money_display | Bank balance | Top-right |
 | mission_text | Mission objectives | Top-center |
+| bottom_objective | Restricted named-objective evidence | Bottom-center |
 | timer_display | Countdown timers | Bottom-right |
 | center_screen | Prompts/notifications | Center |
 

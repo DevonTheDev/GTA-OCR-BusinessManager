@@ -277,6 +277,8 @@ class OCREngine:
         image: np.ndarray,
         invert: bool = True,
         scale: float = 2.0,
+        *,
+        threshold: bool = True,
     ) -> OCRResult:
         """Preprocess and recognize an image.
 
@@ -286,13 +288,14 @@ class OCREngine:
             image: Input image (BGR numpy array)
             invert: Invert colors
             scale: Scale factor
+            threshold: Apply adaptive thresholding (default preserves existing crops)
 
         Returns:
             OCRResult with text and word bounds in preprocessed image coordinates
         """
         processed = self.preprocess_for_ocr(
             image,
-            threshold=True,
+            threshold=threshold,
             invert=invert,
             scale=scale,
         )

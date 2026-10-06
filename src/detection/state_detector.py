@@ -32,6 +32,8 @@ class StateDetectionResult:
     hud_visible: bool = True
     mission: Optional[MissionReading] = None
     banner_text: str = ""
+    bottom_objective_text: str = ""
+    bottom_objective_command: str = ""
 
 
 @dataclass
@@ -141,6 +143,7 @@ class StateDetector:
         mission_text_image: Optional[np.ndarray] = None,
         center_text_image: Optional[np.ndarray] = None,
         mission_banner_image: Optional[np.ndarray] = None,
+        bottom_objective_image: Optional[np.ndarray] = None,
     ) -> StateDetectionResult:
         """Detect current game state from screen capture.
 
@@ -149,6 +152,7 @@ class StateDetector:
             mission_text_image: Optional cropped mission text region
             center_text_image: Optional cropped center screen region
             mission_banner_image: Optional cropped mission name/result banner
+            bottom_objective_image: Optional independent bottom objective crop
 
         Returns:
             StateDetectionResult with detected state
@@ -169,10 +173,86 @@ class StateDetector:
         # Combine results with priority
         final_result = self._combine_results(quick_result, ocr_result, template_result)
 
+        # First preserve the existing decision and its source ownership. Bottom
+        # text cannot displace a business screen or lend identity to a result.
+        main_reading = final_result.mission
+        protected = main_reading is not None and (
+            main_reading.outcome is not None or main_reading.outcome_scope is not None
+            or main_reading.identity_status == "ambiguous"
+        )
+        if (bottom_objective_image is not None and self._ocr.is_available
+                and not protected
+                and final_result.state not in (GameState.BUSINESS_COMPUTER,
+                                               GameState.MISSION_COMPLETE,
+                                               GameState.MISSION_FAILED)):
+            raw = self._ocr.recognize_preprocessed(
+                bottom_objective_image, threshold=False, invert=True, scale=2.0,
+            ).text
+            final_result = replace(final_result, bottom_objective_text=raw)
+            command = self._bottom_objective_command(raw)
+            if command:
+                reading = self._mission_parser.parse_regions((
+                    final_result.mission_text, final_result.objective_text,
+                    final_result.banner_text, command,
+                ))
+                if reading.identity_status == "ambiguous":
+                    # A strong visual/template cue cannot override conflicting
+                    # independent identities or start/refine an activity.
+                    final_result = replace(
+                        final_result, state=GameState.UNKNOWN, confidence=0.0,
+                        reason="Bottom objective conflicts with primary mission identity",
+                        mission=reading,
+                    )
+                elif (reading.identity_status in ("known_name", "type_only")
+                      and reading.mission_type not in (MissionType.UNKNOWN, MissionType.HEIST_PREP,
+                                                       MissionType.HEIST_FINALE)):
+                    if reading.heist_phase == MissionType.HEIST_PREP:
+                        state = GameState.HEIST_PREP
+                    elif reading.heist_phase == MissionType.HEIST_FINALE:
+                        state = GameState.HEIST_FINALE
+                    elif reading.mission_type == MissionType.SELL_MISSION:
+                        state = GameState.SELLING
+                    else:
+                        state = GameState.MISSION_ACTIVE
+                    objective_result = replace(
+                        final_result, state=state, confidence=0.8,
+                        reason="Complete bottom objective supplies specific mission identity",
+                        mission=reading, bottom_objective_command=command,
+                    )
+                    final_result = self._combine_results(
+                        quick_result, objective_result, template_result,
+                    )
+
         # Update context
         self._update_context(final_result)
 
         return final_result
+
+    def _bottom_objective_command(self, raw: str) -> str:
+        """Admit one complete family-qualified command, never extracted scraps.
+
+        Numeric/currency text and observed standalone result-footer markers are
+        vetoes only. This bounded check cannot recover tokens omitted by OCR.
+        """
+        if any(char.isdigit() or char in "$€£¥" for char in raw):
+            return ""
+        if any(line.strip().casefold().rstrip(".!?").strip() in {"rp", "platinum", "continue"}
+               for line in raw.splitlines()):
+            return ""
+        commands = objective_evidence((raw,)).entries
+        command = " ".join(raw.split()).rstrip(".!?").strip()
+        if len(commands) != 1 or command.casefold() not in commands:
+            return ""
+        # The admitted, normalized source must retain its own identity too:
+        # folding a newline can remove a catalog title's required boundary.
+        for text in dict.fromkeys((raw, command)):
+            reading = self._mission_parser.parse(text)
+            if (reading.outcome is not None or reading.outcome_scope is not None
+                    or reading.identity_status not in ("known_name", "type_only")
+                    or reading.mission_type in (MissionType.UNKNOWN, MissionType.HEIST_PREP,
+                                               MissionType.HEIST_FINALE)):
+                return ""
+        return command
 
     def _quick_state_check(self, image: np.ndarray) -> StateDetectionResult:
         """Perform quick color/pattern-based state checks."""
@@ -470,13 +550,19 @@ class StateDetector:
                     objective_text=ocr.objective_text if ocr is not None else best.objective_text,
                     mission=ocr.mission if ocr is not None else best.mission,
                     banner_text=ocr.banner_text if ocr is not None else best.banner_text,
+                    bottom_objective_text=(ocr.bottom_objective_text if ocr is not None
+                                           else best.bottom_objective_text),
+                    bottom_objective_command=(ocr.bottom_objective_command if ocr is not None
+                                              else best.bottom_objective_command),
                     hud_visible=best.hud_visible,
                 )
 
         if ocr is not None:
             best = replace(best, mission_text=ocr.mission_text,
                            objective_text=ocr.objective_text, mission=ocr.mission,
-                           banner_text=ocr.banner_text)
+                           banner_text=ocr.banner_text,
+                           bottom_objective_text=ocr.bottom_objective_text,
+                           bottom_objective_command=ocr.bottom_objective_command)
         return best
 
     def _update_context(self, result: StateDetectionResult) -> None:

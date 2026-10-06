@@ -22,9 +22,9 @@ def run_two_cycles(app, monkeypatch, state, *, active_fps=3.0, timer_available=T
     app._capture = SimpleNamespace(
         regions=SimpleNamespace(
             full_screen=0, money_display=1, mission_text=2, center_prompt=3, timer_bottom_right=4,
-            mission_banner=5,
+            mission_banner=5, bottom_objective=6,
         ),
-        capture_multiple_regions=lambda regions: [object(), None, None, None, timer, None],
+        capture_multiple_regions=lambda regions: [object(), None, None, None, timer, None, None],
         set_capture_rate=rates.append,
     )
 

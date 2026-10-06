@@ -1,0 +1,1496 @@
+{
+  "schema_version": 1,
+  "purpose": "Supplemental source-matched public-guide still replay; not a gameplay accuracy benchmark",
+  "evaluated_at_utc": "2026-10-06T18:29:59.906004+00:00",
+  "production_source": {
+    "source_tree_sha256": "4d153bfab9a524773d22392226de7633ce195077e8d6f668f4b1d1d463bd091e",
+    "source_blobs": {
+      "src/app.py": {
+        "git_blob_sha1": "a7d9ba4979f0b69584f2e27dd09b887a485a5e4d",
+        "sha256": "e205c38c6487ea1c51d98cf02dbdefeb19726df9dc62342cf8564e737a0c12b5"
+      },
+      "src/capture/regions.py": {
+        "git_blob_sha1": "ad6f617100865f486c31ca9ac5f4e57f582ac502",
+        "sha256": "422fd03b0768cb8edb9ce247dd07e098db35ef77b354f5647f87a6fb75d4dc77"
+      },
+      "src/capture/screen_capture.py": {
+        "git_blob_sha1": "97916efe827fd4ed90019e354ba5005c8d54db35",
+        "sha256": "0c142f3a50a8f077f8efc667905d24f8fca16f58c60c812b5f725684f56564bb"
+      },
+      "src/detection/ocr_engine.py": {
+        "git_blob_sha1": "95c53bec72161c3cbf1c0502fd149ddfddeceb79",
+        "sha256": "3db644687a607b64cfa15638265f447cd3b9d9d07e4fd05c7e4ee36ed7a5685d"
+      },
+      "src/detection/state_detector.py": {
+        "git_blob_sha1": "ed86e74aabf5f6f32ff39a21d2c98028e5dd8993",
+        "sha256": "3885998eb96799ebaa0816dd713ae5ddf07d3bee4df14632da6c65b00616578d"
+      },
+      "src/detection/mission_episode.py": {
+        "git_blob_sha1": "0ff033729ddecaca458857b0d341a9dc53eba557",
+        "sha256": "89612333232f212cd704fced079a52393b0383b84af353ecd14cecdaa79e7252"
+      },
+      "src/detection/template_matcher.py": {
+        "git_blob_sha1": "26d4a86ae43347a12877e18b6d5484a575f5afe5",
+        "sha256": "a96b9797432363f4ea56141597067a6ae275bafb3639a37b0e2a284e9bfc9f9d"
+      },
+      "src/detection/parsers/mission_parser.py": {
+        "git_blob_sha1": "b8ad8451fd562bb9063f9b4f4adc9d4389faa6c8",
+        "sha256": "4dad4b4eb5b6803ab947d6ee27b5770aabb9f0253c6a099240b2024fa3893238"
+      },
+      "src/detection/parsers/money_parser.py": {
+        "git_blob_sha1": "7755ce6d7a1cac79cbe4c5b92b1110fe4bf305be",
+        "sha256": "2b4700cae7ce0cdf49712aa1fcfed360f575574648d26851081a28eb9ba4b9fe"
+      },
+      "src/detection/parsers/timer_parser.py": {
+        "git_blob_sha1": "973c9d61206b6de12a395fb77046965a90a810a1",
+        "sha256": "92edf8bf52a6a51e498182f79d40e3b7e49aaecb84d487629e80a4012a67f8b2"
+      },
+      "src/detection/parsers/business_parser.py": {
+        "git_blob_sha1": "c19ff0099dcb993d8d45d509c3b71b2d9e2f98b4",
+        "sha256": "6196ab4b22542fe8ea5698e8e83b3cfd566f77c72ae1fc0796f1731613560ce8"
+      },
+      "src/game/state_machine.py": {
+        "git_blob_sha1": "530f7bd49a660d921883ace42d21d3403cd9f5ee",
+        "sha256": "016f47579df8fd3192f2f28b0a218b5512b23d571f1cd5af485b264ff59f23a1"
+      },
+      "src/game/activities.py": {
+        "git_blob_sha1": "7ed5169b0733f9cf255b30f982d3f3ce915806a2",
+        "sha256": "64d93aad47ec76db547be469744bc362aae8560f5dd148e1ab0df42ce0911ca9"
+      },
+      "src/tracking/activity_tracker.py": {
+        "git_blob_sha1": "a8057a883a8e13a2737a2ac0814e593b026fed75",
+        "sha256": "e220a9a1c31ccdb59885a0fb1327aa0e966a99fce70043cb08eb3f398072d6dd"
+      },
+      "src/tracking/session.py": {
+        "git_blob_sha1": "15487c9fed03c4ba21b8752d15356ef48bde5d15",
+        "sha256": "0332274a11739a386121bfff456deda7a0e169d0c18bc92252fabaab3ef94c54"
+      },
+      "src/database/repository.py": {
+        "git_blob_sha1": "710d826ab2415f9680b20ff1add88f984246877b",
+        "sha256": "d0a6ead13b6f3d3e9a4a6b1821974c87253cae3c0d051c50d53f925a18c929b7"
+      },
+      "tests/test_mission_ocr_images.py": {
+        "git_blob_sha1": "35445f62197ac66f052b760fb4dc1067af04f52c",
+        "sha256": "42873f811847f59ae159d42036ec230d1725ed0fd710b384439b07d574c5f406"
+      }
+    },
+    "base_commit": "3d375ef33ca519d32cc8fa7db4806e52c880ce79"
+  },
+  "execution": {
+    "production_classes": [
+      "ScreenCapture",
+      "OCREngine preprocessing",
+      "StateDetector",
+      "GTABusinessManager._do_capture_cycle",
+      "trackers",
+      "Repository/SQLite"
+    ],
+    "recognition_adapter": "tests.test_mission_ocr_images.TesseractDiagnostic; test only",
+    "python": "3.11.16",
+    "opencv": "5.0.0",
+    "numpy": "2.4.6",
+    "tesseract": "tesseract 5.5.0",
+    "language": "eng",
+    "page_segmentation_mode": 6,
+    "loaded_templates": 0,
+    "native_windows_ocr_validated": false,
+    "native_display_capture_validated": false,
+    "live_gameplay_validated": false,
+    "prototype_detector_or_app_used": false,
+    "pixels_included": false
+  },
+  "images": [
+    {
+      "image_name": "headhunter-2.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d0/27/Headhunter-2.jpg",
+      "sha256": "b01c78aa3a7b78f4bb78b6ca20cf71968c1c23da18d2e329766e56b4b121cc7e",
+      "dimensions": [
+        1600,
+        795
+      ],
+      "layout_limit": "Guide crop; original capture bounds unknown",
+      "capture_regions": [
+        {
+          "region": "full_screen",
+          "relative_xywh": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ],
+          "absolute_ltrb": [
+            0,
+            0,
+            1600,
+            795
+          ]
+        },
+        {
+          "region": "money_display",
+          "relative_xywh": [
+            0.78,
+            0.015,
+            0.21,
+            0.045
+          ],
+          "absolute_ltrb": [
+            1248,
+            11,
+            1584,
+            47
+          ]
+        },
+        {
+          "region": "mission_text",
+          "relative_xywh": [
+            0.25,
+            0.02,
+            0.5,
+            0.08
+          ],
+          "absolute_ltrb": [
+            400,
+            15,
+            1200,
+            79
+          ]
+        },
+        {
+          "region": "center_prompt",
+          "relative_xywh": [
+            0.25,
+            0.45,
+            0.5,
+            0.15
+          ],
+          "absolute_ltrb": [
+            400,
+            357,
+            1200,
+            477
+          ]
+        },
+        {
+          "region": "timer_bottom_right",
+          "relative_xywh": [
+            0.85,
+            0.9,
+            0.14,
+            0.06
+          ],
+          "absolute_ltrb": [
+            1360,
+            715,
+            1584,
+            763
+          ]
+        },
+        {
+          "region": "mission_banner",
+          "relative_xywh": [
+            0.2,
+            0.35,
+            0.6,
+            0.15
+          ],
+          "absolute_ltrb": [
+            320,
+            278,
+            1280,
+            397
+          ]
+        },
+        {
+          "region": "bottom_objective",
+          "relative_xywh": [
+            0.25,
+            0.9,
+            0.5,
+            0.1
+          ],
+          "absolute_ltrb": [
+            400,
+            715,
+            1200,
+            795
+          ]
+        }
+      ],
+      "bottom_objective_text": "Assassinate tis fine! target. |",
+      "bottom_objective_command": "",
+      "classifier": {
+        "state": "PHONE",
+        "score": 0.6,
+        "reason": "Phone UI detected",
+        "mission": {
+          "identity_status": "unknown",
+          "mission_type": "UNKNOWN",
+          "mission_name": "",
+          "candidates": [],
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null,
+          "objective": ""
+        }
+      },
+      "activity_name": "",
+      "activity_type": null,
+      "effects": {
+        "current_activity": null,
+        "persisted_activities": [],
+        "persisted_earnings": [],
+        "session_earnings": 0,
+        "activities_completed": 0,
+        "current_money": null,
+        "money_reading_present": false,
+        "money_change": 0,
+        "business_readings_count": 0,
+        "business_ids": []
+      },
+      "ocr_call_count": 5,
+      "ocr_calls": [
+        {
+          "region": "mission_text",
+          "input_dimensions": [
+            800,
+            64
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "nt Deets a i"
+        },
+        {
+          "region": "center_prompt",
+          "input_dimensions": [
+            800,
+            120
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "is, ee — as De, a meer EE a i Uo SO RES ae EST neti a :\ntS rm BSS eee ume camer, SW i bee rer a"
+        },
+        {
+          "region": "mission_banner",
+          "input_dimensions": [
+            960,
+            119
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "bottom_objective",
+          "input_dimensions": [
+            800,
+            80
+          ],
+          "threshold": false,
+          "invert": true,
+          "scale": 2.0,
+          "text": "Assassinate tis fine! target. |"
+        },
+        {
+          "region": "money_display",
+          "input_dimensions": [
+            336,
+            36
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "7 . Shee -"
+        }
+      ],
+      "bottom_ocr_call_count": 1,
+      "original_app_ocr_call_count": 4,
+      "total_app_ocr_call_delta_from_original": 1,
+      "added_detector_bottom_passes": 1,
+      "native_grab_count": 1,
+      "native_grabs": [
+        {
+          "left": 0,
+          "top": 0,
+          "width": 1600,
+          "height": 795
+        }
+      ]
+    },
+    {
+      "image_name": "sightseer-package.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/69/Package.jpg",
+      "sha256": "c50c8fe3a4005bd2b71096fc0c298d0ebcffff6accde37d5b650bc9bdfdaa04e",
+      "dimensions": [
+        1600,
+        794
+      ],
+      "layout_limit": "Guide crop; original capture bounds unknown",
+      "capture_regions": [
+        {
+          "region": "full_screen",
+          "relative_xywh": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ],
+          "absolute_ltrb": [
+            0,
+            0,
+            1600,
+            794
+          ]
+        },
+        {
+          "region": "money_display",
+          "relative_xywh": [
+            0.78,
+            0.015,
+            0.21,
+            0.045
+          ],
+          "absolute_ltrb": [
+            1248,
+            11,
+            1584,
+            47
+          ]
+        },
+        {
+          "region": "mission_text",
+          "relative_xywh": [
+            0.25,
+            0.02,
+            0.5,
+            0.08
+          ],
+          "absolute_ltrb": [
+            400,
+            15,
+            1200,
+            79
+          ]
+        },
+        {
+          "region": "center_prompt",
+          "relative_xywh": [
+            0.25,
+            0.45,
+            0.5,
+            0.15
+          ],
+          "absolute_ltrb": [
+            400,
+            357,
+            1200,
+            476
+          ]
+        },
+        {
+          "region": "timer_bottom_right",
+          "relative_xywh": [
+            0.85,
+            0.9,
+            0.14,
+            0.06
+          ],
+          "absolute_ltrb": [
+            1360,
+            714,
+            1584,
+            762
+          ]
+        },
+        {
+          "region": "mission_banner",
+          "relative_xywh": [
+            0.2,
+            0.35,
+            0.6,
+            0.15
+          ],
+          "absolute_ltrb": [
+            320,
+            277,
+            1280,
+            397
+          ]
+        },
+        {
+          "region": "bottom_objective",
+          "relative_xywh": [
+            0.25,
+            0.9,
+            0.5,
+            0.1
+          ],
+          "absolute_ltrb": [
+            400,
+            714,
+            1200,
+            794
+          ]
+        }
+      ],
+      "bottom_objective_text": "Retrieve the package.",
+      "bottom_objective_command": "",
+      "classifier": {
+        "state": "MENU",
+        "score": 0.7,
+        "reason": "Menu overlay detected",
+        "mission": {
+          "identity_status": "unknown",
+          "mission_type": "UNKNOWN",
+          "mission_name": "",
+          "candidates": [],
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null,
+          "objective": ""
+        }
+      },
+      "activity_name": "",
+      "activity_type": null,
+      "effects": {
+        "current_activity": null,
+        "persisted_activities": [],
+        "persisted_earnings": [],
+        "session_earnings": 0,
+        "activities_completed": 0,
+        "current_money": null,
+        "money_reading_present": false,
+        "money_change": 0,
+        "business_readings_count": 0,
+        "business_ids": []
+      },
+      "ocr_call_count": 5,
+      "ocr_calls": [
+        {
+          "region": "mission_text",
+          "input_dimensions": [
+            800,
+            64
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "oa ee a aan a AE ety es Ser oe cae ye, !\nae pO EATS ae aad wea =\nay res a gh en Pastis . ge Se oe wT tag\ndoo weet - LEE an any aoa ~ a 4,\nWye rr SESE ne ee Ta MT ee a 7 eee “t io\n“ +e . we ay EE Eee ~ om re ae\n‘oa! Ane L te ee gE a oe a gerd 7 eo ew a an an"
+        },
+        {
+          "region": "center_prompt",
+          "input_dimensions": [
+            800,
+            119
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "; a Mey — ys a ARUN eo Cee nee ere"
+        },
+        {
+          "region": "mission_banner",
+          "input_dimensions": [
+            960,
+            120
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "bottom_objective",
+          "input_dimensions": [
+            800,
+            80
+          ],
+          "threshold": false,
+          "invert": true,
+          "scale": 2.0,
+          "text": "Retrieve the package."
+        },
+        {
+          "region": "money_display",
+          "input_dimensions": [
+            336,
+            36
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "” ae Oey Fee * ‘"
+        }
+      ],
+      "bottom_ocr_call_count": 1,
+      "original_app_ocr_call_count": 4,
+      "total_app_ocr_call_delta_from_original": 1,
+      "added_detector_bottom_passes": 1,
+      "native_grab_count": 1,
+      "native_grabs": [
+        {
+          "left": 0,
+          "top": 0,
+          "width": 1600,
+          "height": 794
+        }
+      ]
+    },
+    {
+      "image_name": "cayo-finale-start.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/c4/40/Cayo-Perico-Finale-1.jpg",
+      "sha256": "59a05cd96f32b1ee7c389744cc7c520ce144cf4261b9239b621384e566922e68",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown",
+      "capture_regions": [
+        {
+          "region": "full_screen",
+          "relative_xywh": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ],
+          "absolute_ltrb": [
+            0,
+            0,
+            1600,
+            900
+          ]
+        },
+        {
+          "region": "money_display",
+          "relative_xywh": [
+            0.78,
+            0.015,
+            0.21,
+            0.045
+          ],
+          "absolute_ltrb": [
+            1248,
+            13,
+            1584,
+            54
+          ]
+        },
+        {
+          "region": "mission_text",
+          "relative_xywh": [
+            0.25,
+            0.02,
+            0.5,
+            0.08
+          ],
+          "absolute_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ]
+        },
+        {
+          "region": "center_prompt",
+          "relative_xywh": [
+            0.25,
+            0.45,
+            0.5,
+            0.15
+          ],
+          "absolute_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ]
+        },
+        {
+          "region": "timer_bottom_right",
+          "relative_xywh": [
+            0.85,
+            0.9,
+            0.14,
+            0.06
+          ],
+          "absolute_ltrb": [
+            1360,
+            810,
+            1584,
+            864
+          ]
+        },
+        {
+          "region": "mission_banner",
+          "relative_xywh": [
+            0.2,
+            0.35,
+            0.6,
+            0.15
+          ],
+          "absolute_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ]
+        },
+        {
+          "region": "bottom_objective",
+          "relative_xywh": [
+            0.25,
+            0.9,
+            0.5,
+            0.1
+          ],
+          "absolute_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ]
+        }
+      ],
+      "bottom_objective_text": "Go to El Rubio's compound.",
+      "bottom_objective_command": "",
+      "classifier": {
+        "state": "MENU",
+        "score": 0.7,
+        "reason": "Menu overlay detected",
+        "mission": {
+          "identity_status": "unknown",
+          "mission_type": "UNKNOWN",
+          "mission_name": "",
+          "candidates": [],
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null,
+          "objective": ""
+        }
+      },
+      "activity_name": "",
+      "activity_type": null,
+      "effects": {
+        "current_activity": null,
+        "persisted_activities": [],
+        "persisted_earnings": [],
+        "session_earnings": 0,
+        "activities_completed": 0,
+        "current_money": null,
+        "money_reading_present": false,
+        "money_change": 0,
+        "business_readings_count": 0,
+        "business_ids": []
+      },
+      "ocr_call_count": 5,
+      "ocr_calls": [
+        {
+          "region": "mission_text",
+          "input_dimensions": [
+            800,
+            72
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "center_prompt",
+          "input_dimensions": [
+            800,
+            135
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "1. I oo . a |"
+        },
+        {
+          "region": "mission_banner",
+          "input_dimensions": [
+            960,
+            135
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "bottom_objective",
+          "input_dimensions": [
+            800,
+            90
+          ],
+          "threshold": false,
+          "invert": true,
+          "scale": 2.0,
+          "text": "Go to El Rubio's compound."
+        },
+        {
+          "region": "money_display",
+          "input_dimensions": [
+            336,
+            41
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        }
+      ],
+      "bottom_ocr_call_count": 1,
+      "original_app_ocr_call_count": 4,
+      "total_app_ocr_call_delta_from_original": 1,
+      "added_detector_bottom_passes": 1,
+      "native_grab_count": 1,
+      "native_grabs": [
+        {
+          "left": 0,
+          "top": 0,
+          "width": 1600,
+          "height": 900
+        }
+      ]
+    },
+    {
+      "image_name": "cayo-finale-escape.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/6c/e8/Cayo-Perico-Finale-42.jpg",
+      "sha256": "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown",
+      "capture_regions": [
+        {
+          "region": "full_screen",
+          "relative_xywh": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ],
+          "absolute_ltrb": [
+            0,
+            0,
+            1600,
+            900
+          ]
+        },
+        {
+          "region": "money_display",
+          "relative_xywh": [
+            0.78,
+            0.015,
+            0.21,
+            0.045
+          ],
+          "absolute_ltrb": [
+            1248,
+            13,
+            1584,
+            54
+          ]
+        },
+        {
+          "region": "mission_text",
+          "relative_xywh": [
+            0.25,
+            0.02,
+            0.5,
+            0.08
+          ],
+          "absolute_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ]
+        },
+        {
+          "region": "center_prompt",
+          "relative_xywh": [
+            0.25,
+            0.45,
+            0.5,
+            0.15
+          ],
+          "absolute_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ]
+        },
+        {
+          "region": "timer_bottom_right",
+          "relative_xywh": [
+            0.85,
+            0.9,
+            0.14,
+            0.06
+          ],
+          "absolute_ltrb": [
+            1360,
+            810,
+            1584,
+            864
+          ]
+        },
+        {
+          "region": "mission_banner",
+          "relative_xywh": [
+            0.2,
+            0.35,
+            0.6,
+            0.15
+          ],
+          "absolute_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ]
+        },
+        {
+          "region": "bottom_objective",
+          "relative_xywh": [
+            0.25,
+            0.9,
+            0.5,
+            0.1
+          ],
+          "absolute_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ]
+        }
+      ],
+      "bottom_objective_text": "Escape Cayo Perico.",
+      "bottom_objective_command": "Escape Cayo Perico",
+      "classifier": {
+        "state": "MISSION_ACTIVE",
+        "score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "mission": {
+          "identity_status": "type_only",
+          "mission_type": "CAYO_PERICO",
+          "mission_name": "",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null,
+          "objective": "Escape Cayo Perico"
+        }
+      },
+      "activity_name": "Escape Cayo Perico",
+      "activity_type": "CAYO_PERICO",
+      "effects": {
+        "current_activity": {
+          "name": "Escape Cayo Perico",
+          "type": "CAYO_PERICO",
+          "identity_status": "type_only",
+          "heist_phase": "UNKNOWN"
+        },
+        "persisted_activities": [],
+        "persisted_earnings": [],
+        "session_earnings": 0,
+        "activities_completed": 0,
+        "current_money": null,
+        "money_reading_present": false,
+        "money_change": 0,
+        "business_readings_count": 0,
+        "business_ids": []
+      },
+      "ocr_call_count": 6,
+      "ocr_calls": [
+        {
+          "region": "mission_text",
+          "input_dimensions": [
+            800,
+            72
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "center_prompt",
+          "input_dimensions": [
+            800,
+            135
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "et <= —— = = = Fuel dd gc = ——— ne a . ="
+        },
+        {
+          "region": "mission_banner",
+          "input_dimensions": [
+            960,
+            135
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "at Oe te we At ar oe\nwe Pod . im. +. ete ."
+        },
+        {
+          "region": "bottom_objective",
+          "input_dimensions": [
+            800,
+            90
+          ],
+          "threshold": false,
+          "invert": true,
+          "scale": 2.0,
+          "text": "Escape Cayo Perico."
+        },
+        {
+          "region": "money_display",
+          "input_dimensions": [
+            336,
+            41
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "timer_bottom_right",
+          "input_dimensions": [
+            224,
+            54
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "Oo ———aL"
+        }
+      ],
+      "bottom_ocr_call_count": 1,
+      "original_app_ocr_call_count": 4,
+      "total_app_ocr_call_delta_from_original": 2,
+      "added_detector_bottom_passes": 1,
+      "native_grab_count": 1,
+      "native_grabs": [
+        {
+          "left": 0,
+          "top": 0,
+          "width": 1600,
+          "height": 900
+        }
+      ]
+    },
+    {
+      "image_name": "cayo-finale-summary.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+      "sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown",
+      "capture_regions": [
+        {
+          "region": "full_screen",
+          "relative_xywh": [
+            0.0,
+            0.0,
+            1.0,
+            1.0
+          ],
+          "absolute_ltrb": [
+            0,
+            0,
+            1600,
+            900
+          ]
+        },
+        {
+          "region": "money_display",
+          "relative_xywh": [
+            0.78,
+            0.015,
+            0.21,
+            0.045
+          ],
+          "absolute_ltrb": [
+            1248,
+            13,
+            1584,
+            54
+          ]
+        },
+        {
+          "region": "mission_text",
+          "relative_xywh": [
+            0.25,
+            0.02,
+            0.5,
+            0.08
+          ],
+          "absolute_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ]
+        },
+        {
+          "region": "center_prompt",
+          "relative_xywh": [
+            0.25,
+            0.45,
+            0.5,
+            0.15
+          ],
+          "absolute_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ]
+        },
+        {
+          "region": "timer_bottom_right",
+          "relative_xywh": [
+            0.85,
+            0.9,
+            0.14,
+            0.06
+          ],
+          "absolute_ltrb": [
+            1360,
+            810,
+            1584,
+            864
+          ]
+        },
+        {
+          "region": "mission_banner",
+          "relative_xywh": [
+            0.2,
+            0.35,
+            0.6,
+            0.15
+          ],
+          "absolute_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ]
+        },
+        {
+          "region": "bottom_objective",
+          "relative_xywh": [
+            0.25,
+            0.9,
+            0.5,
+            0.1
+          ],
+          "absolute_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ]
+        }
+      ],
+      "bottom_objective_text": "oT | ey",
+      "bottom_objective_command": "",
+      "classifier": {
+        "state": "MISSION_ACTIVE",
+        "score": 0.6,
+        "reason": "Mission indicators visible",
+        "mission": {
+          "identity_status": "unknown",
+          "mission_type": "UNKNOWN",
+          "mission_name": "",
+          "candidates": [],
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null,
+          "objective": ""
+        }
+      },
+      "activity_name": "",
+      "activity_type": null,
+      "effects": {
+        "current_activity": null,
+        "persisted_activities": [],
+        "persisted_earnings": [],
+        "session_earnings": 0,
+        "activities_completed": 0,
+        "current_money": null,
+        "money_reading_present": false,
+        "money_change": 0,
+        "business_readings_count": 0,
+        "business_ids": []
+      },
+      "ocr_call_count": 6,
+      "ocr_calls": [
+        {
+          "region": "mission_text",
+          "input_dimensions": [
+            800,
+            72
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "center_prompt",
+          "input_dimensions": [
+            800,
+            135
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "LIMARY Ss! AI GEU Jane? i Aaeene\nSecondary Targets Take: $406354\nteva eae war te BRAS\nRéncing}Ree: ‘$148;685:\nBESS geeatenrnasiencs gaa, | ¢ me 2) yEERAROQOR"
+        },
+        {
+          "region": "mission_banner",
+          "input_dimensions": [
+            960,
+            135
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "| Approach Vehicle ‘Kosatie |\nSS6ondan arqete Take: $406:354"
+        },
+        {
+          "region": "bottom_objective",
+          "input_dimensions": [
+            800,
+            90
+          ],
+          "threshold": false,
+          "invert": true,
+          "scale": 2.0,
+          "text": "oT | ey"
+        },
+        {
+          "region": "money_display",
+          "input_dimensions": [
+            336,
+            41
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": ""
+        },
+        {
+          "region": "timer_bottom_right",
+          "input_dimensions": [
+            224,
+            54
+          ],
+          "threshold": true,
+          "invert": true,
+          "scale": 2.0,
+          "text": "ciel ee\nies REG PNR PEEPS!"
+        }
+      ],
+      "bottom_ocr_call_count": 1,
+      "original_app_ocr_call_count": 5,
+      "total_app_ocr_call_delta_from_original": 1,
+      "added_detector_bottom_passes": 1,
+      "native_grab_count": 1,
+      "native_grabs": [
+        {
+          "left": 0,
+          "top": 0,
+          "width": 1600,
+          "height": 900
+        }
+      ]
+    }
+  ],
+  "sequences": [
+    {
+      "label": "real escape then real summary",
+      "frame_order": [
+        "cayo-finale-escape.jpg",
+        "cayo-finale-summary.jpg"
+      ],
+      "source_hashes": [
+        "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+        "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877"
+      ],
+      "first_step_reuses_single_frame_record": "cayo-finale-escape.jpg",
+      "second_step": {
+        "image_name": "cayo-finale-summary.jpg",
+        "capture_regions": [
+          {
+            "region": "full_screen",
+            "relative_xywh": [
+              0.0,
+              0.0,
+              1.0,
+              1.0
+            ],
+            "absolute_ltrb": [
+              0,
+              0,
+              1600,
+              900
+            ]
+          },
+          {
+            "region": "money_display",
+            "relative_xywh": [
+              0.78,
+              0.015,
+              0.21,
+              0.045
+            ],
+            "absolute_ltrb": [
+              1248,
+              13,
+              1584,
+              54
+            ]
+          },
+          {
+            "region": "mission_text",
+            "relative_xywh": [
+              0.25,
+              0.02,
+              0.5,
+              0.08
+            ],
+            "absolute_ltrb": [
+              400,
+              18,
+              1200,
+              90
+            ]
+          },
+          {
+            "region": "center_prompt",
+            "relative_xywh": [
+              0.25,
+              0.45,
+              0.5,
+              0.15
+            ],
+            "absolute_ltrb": [
+              400,
+              405,
+              1200,
+              540
+            ]
+          },
+          {
+            "region": "timer_bottom_right",
+            "relative_xywh": [
+              0.85,
+              0.9,
+              0.14,
+              0.06
+            ],
+            "absolute_ltrb": [
+              1360,
+              810,
+              1584,
+              864
+            ]
+          },
+          {
+            "region": "mission_banner",
+            "relative_xywh": [
+              0.2,
+              0.35,
+              0.6,
+              0.15
+            ],
+            "absolute_ltrb": [
+              320,
+              315,
+              1280,
+              450
+            ]
+          },
+          {
+            "region": "bottom_objective",
+            "relative_xywh": [
+              0.25,
+              0.9,
+              0.5,
+              0.1
+            ],
+            "absolute_ltrb": [
+              400,
+              810,
+              1200,
+              900
+            ]
+          }
+        ],
+        "bottom_objective_text": "oT | ey",
+        "bottom_objective_command": "",
+        "classifier": {
+          "state": "MISSION_ACTIVE",
+          "score": 0.6,
+          "reason": "Mission indicators visible",
+          "mission": {
+            "identity_status": "unknown",
+            "mission_type": "UNKNOWN",
+            "mission_name": "",
+            "candidates": [],
+            "heist_phase": "UNKNOWN",
+            "outcome": null,
+            "outcome_scope": null,
+            "objective": ""
+          }
+        },
+        "activity_type": "CAYO_PERICO",
+        "activity_name": "Escape Cayo Perico",
+        "persisted_activity_count": 0,
+        "persisted_earning_count": 0,
+        "session_earnings": 0,
+        "cooldown_count": 0,
+        "ocr_call_count": 6,
+        "ocr_calls": [
+          {
+            "region": "mission_text",
+            "input_dimensions": [
+              800,
+              72
+            ],
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0,
+            "text": ""
+          },
+          {
+            "region": "center_prompt",
+            "input_dimensions": [
+              800,
+              135
+            ],
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0,
+            "text": "LIMARY Ss! AI GEU Jane? i Aaeene\nSecondary Targets Take: $406354\nteva eae war te BRAS\nRéncing}Ree: ‘$148;685:\nBESS geeatenrnasiencs gaa, | ¢ me 2) yEERAROQOR"
+          },
+          {
+            "region": "mission_banner",
+            "input_dimensions": [
+              960,
+              135
+            ],
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0,
+            "text": "| Approach Vehicle ‘Kosatie |\nSS6ondan arqete Take: $406:354"
+          },
+          {
+            "region": "bottom_objective",
+            "input_dimensions": [
+              800,
+              90
+            ],
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0,
+            "text": "oT | ey"
+          },
+          {
+            "region": "money_display",
+            "input_dimensions": [
+              336,
+              41
+            ],
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0,
+            "text": ""
+          },
+          {
+            "region": "timer_bottom_right",
+            "input_dimensions": [
+              224,
+              54
+            ],
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0,
+            "text": "ciel ee\nies REG PNR PEEPS!"
+          }
+        ],
+        "bottom_ocr_call_count": 1,
+        "native_grab_count": 1,
+        "native_grabs": [
+          {
+            "left": 0,
+            "top": 0,
+            "width": 1600,
+            "height": 900
+          }
+        ]
+      },
+      "checks": {
+        "same_activity_still_open": true,
+        "activity_start_unchanged": true,
+        "mission_start_unchanged": true,
+        "activity_still_cayo": true,
+        "result_heading_not_recognized": true,
+        "no_completed_activity_rows": true,
+        "no_earning_rows": true,
+        "no_completed_tracker_activity": true,
+        "no_completion_count": true,
+        "no_payout_or_money_reading": true,
+        "no_cooldown": true,
+        "no_business_update": true,
+        "one_shared_capture": true,
+        "one_grayscale_bottom_pass": true
+      },
+      "passed": true,
+      "retained_limitation": "The actual summary completion heading remains unread; the existing Cayo activity stays unfinished and no completion or payout is fabricated."
+    }
+  ],
+  "source_unchanged_during_replay": true,
+  "bounded_assertions_passed": true,
+  "limitations": [
+    "Five separately published guide stills are supplemental examples, not a representative accuracy benchmark. The original capture settings and HUD safe zone are unknown; two images are guide crops.",
+    "TesseractDiagnostic substitutes only the recognition backend and image data is supplied at the screen-grab boundary. Native Windows OCR, native display capture and live gameplay are unvalidated.",
+    "No YouTube gameplay frames were acquired. This guide-image evaluation does not fulfill or replace the pending YouTube screenshot request.",
+    "The Cayo escape family is recovered; its finale phase is not inferred. The Cayo start frame remains unidentified and the result summary heading remains unread. Escape followed by summary therefore leaves an unfinished Cayo activity.",
+    "The numeric classifier scores are existing heuristics, not OCR confidence or calibrated gameplay accuracy.",
+    "One grayscale bottom detector pass is added to eligible frames. Total app calls can increase by two when the new active state also triggers the existing timer OCR. No native Windows latency claim is made.",
+    "Clean whole-command, concrete-family admission rejects tested numeric, currency, outcome and standalone RP/Platinum/Continue footer cases. Arbitrary tables, lost labels, merged footer lines and background noise are not exhaustively excluded; valid numeric or noisy objectives can be missed.",
+    "The historical broad-crop Agency false-positive pixels/transcript were lost. Current synthetic Agency authority controls are distinct and do not reproduce that historical image experiment.",
+    "Source image bytes and derivatives are intentionally absent because redistribution rights were not established."
+  ],
+  "prototype_regressions_preserved": [
+    "Mixed Escape Cayo Perico objective and Player Take/Alex $25000 rows started a Cayo activity in the initial extraction prototype; strict raw-source admission now rejects those controlled cases.",
+    "A prior prototype overrode a primary Bunker screen and suppressed stock40%, supplies60%, value$7000; final production preserves primary business/results before bottom OCR.",
+    "Whole-source whitespace equality alone admitted an objective followed by RP, Platinum or CONTINUE; final production vetoes those standalone footer rows.",
+    "Raw Escape Blow Up newline Bay could retain a title boundary lost in normalized command text; final production requires concrete unambiguous raw, normalized and merged identities."
+  ]
+}

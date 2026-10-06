@@ -39,10 +39,10 @@ def frame(app, mission="", center="", banner="", *, brightness=70, template=None
     app._perf_monitor = app._perf_monitor or PerformanceMonitor()
     app._capture = SimpleNamespace(
         regions=SimpleNamespace(full_screen=0, money_display=1, mission_text=2,
-                                center_prompt=3, timer_bottom_right=4, mission_banner=5),
+                                center_prompt=3, timer_bottom_right=4, mission_banner=5, bottom_objective=6),
         capture_multiple_regions=lambda _regions: [
             np.full((120, 200, 3), brightness, dtype=np.uint8),
-            None, images[0], images[1], None, images[2]],
+            None, images[0], images[1], None, images[2], None],
         close=lambda: None,
     )
     return app._do_capture_cycle()

@@ -35,12 +35,13 @@ def capture(monkeypatch):
 def test_all_hud_images_come_from_one_screen_observation(capture):
     regions = capture.regions
     requested = [regions.full_screen, regions.money_display, regions.mission_text,
-                 regions.center_prompt, regions.timer_bottom_right, regions.mission_banner]
+                 regions.center_prompt, regions.timer_bottom_right, regions.mission_banner,
+                 regions.bottom_objective]
     images = capture.capture_multiple_regions(requested)
 
     assert len(capture.grabs) == 1
     assert capture.waits == [True]
-    assert list(images) == list(range(6))
+    assert list(images) == list(range(7))
     for index, region in enumerate(requested):
         left, top, right, bottom = region.to_absolute(100, 80)
         crop = images[index]

@@ -57,7 +57,7 @@ class Pipeline:
         self.extra_callback = None
         self.callback_results = []
         self.images = [np.full((120, 200, 3), 100, dtype=np.uint8),
-                       object(), object(), object(), None, object()]
+                       object(), object(), object(), None, object(), None]
 
     def gate(self, stage):
         if self.stage != stage:
@@ -70,7 +70,7 @@ class Pipeline:
     def initialize(self):
         capture = SimpleNamespace(closed=False)
         capture.regions = SimpleNamespace(full_screen=0, money_display=1, mission_text=2,
-                                          center_prompt=3, timer_bottom_right=4, mission_banner=5)
+                                          center_prompt=3, timer_bottom_right=4, mission_banner=5, bottom_objective=6)
 
         def capture_regions(regions):
             self.gate("capture")
