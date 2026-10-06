@@ -1,0 +1,287 @@
+{
+  "schema_version": 1,
+  "purpose": "Supplemental public-guide still-image baseline; not an accuracy benchmark",
+  "evaluated_at_utc": "2026-10-06T00:32:35.767136+00:00",
+  "repository_commit": "dd7202782e2c98efeb7621334d42962cfddb44a9",
+  "annotation_method": "Visual inspection before batch OCR",
+  "backend": {
+    "production_components": [
+      "ScreenRegions.to_absolute",
+      "OCREngine preprocessing",
+      "StateDetector",
+      "MissionParser"
+    ],
+    "recognition_adapter": "tests/test_mission_ocr_images.py:TesseractDiagnostic (test only)",
+    "tesseract": "tesseract 5.5.0",
+    "python": "3.11.16",
+    "opencv": "5.0.0",
+    "language": "eng",
+    "page_segmentation_mode": 6,
+    "threshold": true,
+    "invert": true,
+    "scale": 2.0,
+    "loaded_templates": 0
+  },
+  "relative_regions_xywh": {
+    "mission_text": [
+      0.25,
+      0.02,
+      0.5,
+      0.08
+    ],
+    "center_prompt": [
+      0.25,
+      0.45,
+      0.5,
+      0.15
+    ],
+    "mission_banner": [
+      0.2,
+      0.35,
+      0.6,
+      0.15
+    ]
+  },
+  "images": [
+    {
+      "image_name": "headhunter-2.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d0/27/Headhunter-2.jpg",
+      "acquired_at_utc": "2026-10-06T00:29:02.948792+00:00",
+      "sha256": "b01c78aa3a7b78f4bb78b6ca20cf71968c1c23da18d2e329766e56b4b121cc7e",
+      "dimensions": [
+        1600,
+        795
+      ],
+      "visible_objective": "Assassinate the final target.",
+      "visible_title": null,
+      "visible_result": null,
+      "layout_limit": "Guide crop; original capture bounds unknown",
+      "production_bounds_ltrb": {
+        "mission_text": [
+          400,
+          15,
+          1200,
+          79
+        ],
+        "center_prompt": [
+          400,
+          357,
+          1200,
+          477
+        ],
+        "mission_banner": [
+          320,
+          278,
+          1280,
+          397
+        ]
+      },
+      "observed_result": {
+        "state": "PHONE",
+        "mission_type": "UNKNOWN",
+        "identity_status": "unknown",
+        "heist_phase": "UNKNOWN",
+        "outcome": null
+      }
+    },
+    {
+      "image_name": "sightseer-package.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/69/Package.jpg",
+      "acquired_at_utc": "2026-10-06T00:29:42.610182+00:00",
+      "sha256": "c50c8fe3a4005bd2b71096fc0c298d0ebcffff6accde37d5b650bc9bdfdaa04e",
+      "dimensions": [
+        1600,
+        794
+      ],
+      "visible_objective": "Retrieve the package.",
+      "visible_title": null,
+      "visible_result": null,
+      "layout_limit": "Guide crop; original capture bounds unknown",
+      "production_bounds_ltrb": {
+        "mission_text": [
+          400,
+          15,
+          1200,
+          79
+        ],
+        "center_prompt": [
+          400,
+          357,
+          1200,
+          476
+        ],
+        "mission_banner": [
+          320,
+          277,
+          1280,
+          397
+        ]
+      },
+      "observed_result": {
+        "state": "MENU",
+        "mission_type": "UNKNOWN",
+        "identity_status": "unknown",
+        "heist_phase": "UNKNOWN",
+        "outcome": null
+      }
+    },
+    {
+      "image_name": "cayo-finale-start.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/c4/40/Cayo-Perico-Finale-1.jpg",
+      "acquired_at_utc": "2026-10-06T00:30:55.563678+00:00",
+      "sha256": "59a05cd96f32b1ee7c389744cc7c520ce144cf4261b9239b621384e566922e68",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "visible_objective": "Go to El Rubio's compound.",
+      "visible_title": null,
+      "visible_result": null,
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown",
+      "production_bounds_ltrb": {
+        "mission_text": [
+          400,
+          18,
+          1200,
+          90
+        ],
+        "center_prompt": [
+          400,
+          405,
+          1200,
+          540
+        ],
+        "mission_banner": [
+          320,
+          315,
+          1280,
+          450
+        ]
+      },
+      "observed_result": {
+        "state": "MENU",
+        "mission_type": "UNKNOWN",
+        "identity_status": "unknown",
+        "heist_phase": "UNKNOWN",
+        "outcome": null
+      }
+    },
+    {
+      "image_name": "cayo-finale-escape.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/6c/e8/Cayo-Perico-Finale-42.jpg",
+      "acquired_at_utc": "2026-10-06T00:31:11.693510+00:00",
+      "sha256": "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "visible_objective": "Escape Cayo Perico.",
+      "visible_title": null,
+      "visible_result": null,
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown",
+      "production_bounds_ltrb": {
+        "mission_text": [
+          400,
+          18,
+          1200,
+          90
+        ],
+        "center_prompt": [
+          400,
+          405,
+          1200,
+          540
+        ],
+        "mission_banner": [
+          320,
+          315,
+          1280,
+          450
+        ]
+      },
+      "observed_result": {
+        "state": "MENU",
+        "mission_type": "UNKNOWN",
+        "identity_status": "unknown",
+        "heist_phase": "UNKNOWN",
+        "outcome": null
+      }
+    },
+    {
+      "image_name": "cayo-finale-summary.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+      "acquired_at_utc": "2026-10-06T00:31:11.753297+00:00",
+      "sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "visible_objective": null,
+      "visible_title": "The Cayo Perico Heist",
+      "visible_result": "heist passed",
+      "layout_limit": "16:9 with visible edges; original capture and safe-zone settings unknown",
+      "production_bounds_ltrb": {
+        "mission_text": [
+          400,
+          18,
+          1200,
+          90
+        ],
+        "center_prompt": [
+          400,
+          405,
+          1200,
+          540
+        ],
+        "mission_banner": [
+          320,
+          315,
+          1280,
+          450
+        ]
+      },
+      "observed_result": {
+        "state": "MISSION_ACTIVE",
+        "mission_type": "UNKNOWN",
+        "identity_status": "unknown",
+        "heist_phase": "UNKNOWN",
+        "outcome": null
+      }
+    }
+  ],
+  "excluded": {
+    "count": 4,
+    "reason": "Cropped mission-selection menus; not active gameplay evidence"
+  },
+  "findings": [
+    "Visible bottom objectives are outside the three mission OCR crops.",
+    "The Cayo result heading and title sit above the configured banner crop.",
+    "These default-crop diagnostic outputs did not recover the visible mission meanings."
+  ],
+  "additional_diagnostics": {
+    "upward_banner_xywh": [
+      0.2,
+      0.15,
+      0.6,
+      0.35
+    ],
+    "old_position_synthetic_controls_unchanged": 36,
+    "coverage_result": "Heading covered, but adaptive-threshold transcription still unusable.",
+    "nonthresholded_options": "At the expanded bounds, grayscale at 2x with either inversion and raw input recover the Cayo title but omit the large result heading.",
+    "unchanged_parser_replay": "CAYO_PERICO/type_only, MISSION_ACTIVE, unknown phase, null outcome.",
+    "selected_synthetic_option_controls_unchanged": 15
+  },
+  "limitations": [
+    "Images and derivatives are not distributed; redistribution rights were not established.",
+    "The two cropped VIP images must not calibrate production coordinates.",
+    "This convenience sample is small and biased. No accuracy percentage is established.",
+    "No Windows OCR, native capture, motion, transition, tracking, accounting or payout behavior was tested.",
+    "No YouTube media was acquired; the separate YouTube screengrab request remains pending.",
+    "The later heist-label parser correction does not claim to fix these image-pipeline observations."
+  ]
+}

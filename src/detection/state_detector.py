@@ -335,6 +335,8 @@ class StateDetector:
         # vocabulary alone cannot. These remain heuristic state scores, not OCR
         # confidence or calibrated gameplay accuracy.
         outcome = reading.outcome
+        if reading.outcome_scope == "heist" and outcome is None:
+            return detected(GameState.UNKNOWN, 0.0, "Heist result lacks compatible identity evidence")
         if outcome in ("complete", "failed"):
             return detected(
                 GameState.MISSION_COMPLETE if outcome == "complete" else GameState.MISSION_FAILED,
@@ -414,6 +416,8 @@ class StateDetector:
         """Combine detection results from multiple sources."""
         outcomes = (GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
         if ocr is not None and ocr.mission is not None:
+            if ocr.mission.outcome_scope == "heist" and ocr.mission.outcome is None:
+                return ocr
             if ocr.mission.outcome == "conflicting":
                 return ocr
             if ocr.mission.outcome in ("complete", "failed"):

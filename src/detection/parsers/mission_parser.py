@@ -53,6 +53,9 @@ class MissionReading:
     candidates: tuple[str, ...] = ()
     heist_phase: MissionType = MissionType.UNKNOWN
     outcome: Optional[Literal["complete", "failed", "conflicting"]] = None
+    # A scoped result label is independent of identity/phase. Keep its scope
+    # even when unqualified, so a template cannot promote it to an activity.
+    outcome_scope: Optional[Literal["heist"]] = None
 
     @property
     def has_mission(self) -> bool:
@@ -83,6 +86,18 @@ _OUTCOME_PHRASES = {
         "left the area", "abandoned", "product lost", "associate died", "target escaped",
     ),
 }
+_HEIST_SUCCESS_PHRASE = "heist passed"
+_HEIST_SUCCESS = re.compile(
+    r"(?:^|[|/:.!])[ \t]*(?P<label>heist\s+passed)(?!\w)"
+    r"(?=[ \t]*(?:$|[\r\n|/!.:+$\d-]))",
+    re.IGNORECASE | re.MULTILINE,
+)
+
+
+def _is_heist_success(match: re.Match) -> bool:
+    # IGNORECASE also equates dotted/dotless I; keep the identity parser's
+    # stricter casefold policy without rewriting ordinary result text.
+    return _normalize(match["label"]) == _HEIST_SUCCESS_PHRASE
 
 
 def _named_result_evidence(text: str) -> Iterable[tuple[str, str]]:
@@ -100,6 +115,11 @@ def _named_result_evidence(text: str) -> Iterable[tuple[str, str]]:
 
 
 def _outcome_evidence(text: str) -> set[str]:
+    original = text
+    # A wrapped HEIST/PASSED must not fall through to the generic bare PASSED
+    # rule. Scope qualification happens after collecting this observation's
+    # identities, without joining any independent OCR crops.
+    text = _HEIST_SUCCESS.sub(lambda match: "|" if _is_heist_success(match) else match[0], text)
     evidence = {outcome for _, outcome in _named_result_evidence(text)}
     for outcome, phrases in _OUTCOME_PHRASES.items():
         for phrase in phrases:
@@ -121,11 +141,23 @@ def _outcome_evidence(text: str) -> set[str]:
     # OCR can collapse adjacent banners onto one line without punctuation.
     # Preserve contradictory explicit mission results even when neither
     # satisfies the stricter rules required to assert a single result.
-    normalized = _normalize(text)
+    normalized = _normalize(original)
     if _contains(normalized, "mission failed") and any(
         _contains(normalized, phrase)
-        for phrase in ("mission passed", "job complete", "contract complete")
+        for phrase in _NAMED_RESULT_PHRASES["complete"]
     ):
+        evidence.update(("complete", "failed"))
+    # Only a complete adjacent banner pair may relax the new scoped label's
+    # suffix boundary. A heist success mentioned in prose must not suppress an
+    # otherwise valid generic failure elsewhere in this crop.
+    adjacent = re.finditer(
+        r"(?:^|[|/:.!])[ \t]*(heist\s+passed\s+mission\s+failed|"
+        r"mission\s+failed\s+heist\s+passed)(?!\w)"
+        r"(?=[ \t]*(?:$|[\r\n|/!.:+$\d-]))",
+        original, re.IGNORECASE | re.MULTILINE,
+    )
+    if any(_normalize(match[1]) in ("heist passed mission failed", "mission failed heist passed")
+           for match in adjacent):
         evidence.update(("complete", "failed"))
     return evidence
 
@@ -137,12 +169,8 @@ def classify_mission_outcome(text: str) -> Optional[Literal["complete", "failed"
     result for the whole mission. Objective verbs never establish an outcome.
     Both the detector and the parser use this same result policy.
     """
-    evidence = _outcome_evidence(text)
-    if evidence == {"complete"}:
-        return "complete"
-    if evidence == {"failed"}:
-        return "failed"
-    return None
+    outcome = MissionParser().parse(text).outcome
+    return outcome if outcome in ("complete", "failed") else None
 
 
 class MissionParser:
@@ -234,6 +262,8 @@ class MissionParser:
         phases = set()
         keywords = set()
         for text in sources:
+            if any(_is_heist_success(match) for match in _HEIST_SUCCESS.finditer(text)):
+                reading.outcome_scope = "heist"
             outcomes.update(_outcome_evidence(text))
             if not reading.objective:
                 reading.objective = self._extract_objective(text)
@@ -267,12 +297,6 @@ class MissionParser:
             names.update(region_names)
             categories.update(region_categories)
 
-        if len(outcomes) > 1:
-            reading.outcome = "conflicting"
-        elif "complete" in outcomes:
-            reading.outcome = "complete"
-        elif "failed" in outcomes:
-            reading.outcome = "failed"
         kinds = categories | set(names.values())
         incompatible_phase = bool(phases and kinds and not kinds <= self.HEIST_FAMILIES)
         ambiguous = len(names) > 1 or len(kinds) > 1 or len(phases) > 1 or incompatible_phase
@@ -291,7 +315,24 @@ class MissionParser:
             else:
                 reading.identity_status = "type_only"
                 reading.candidates = (reading.mission_type.name,)
-            reading.is_active = reading.outcome is None
+
+        qualified_heist = (
+            reading.identity_status in ("known_name", "type_only")
+            and (reading.mission_type in self.HEIST_FAMILIES
+                 or reading.heist_phase == MissionType.HEIST_FINALE)
+            and reading.heist_phase != MissionType.HEIST_PREP
+        )
+        if reading.outcome_scope == "heist":
+            outcomes.add("complete")
+        if len(outcomes) > 1:
+            reading.outcome = "conflicting"
+        elif reading.outcome_scope == "heist" and not qualified_heist:
+            reading.outcome = None
+        elif "complete" in outcomes:
+            reading.outcome = "complete"
+        elif "failed" in outcomes:
+            reading.outcome = "failed"
+        reading.is_active = reading.has_mission and reading.outcome is None and reading.outcome_scope is None
 
         reading.keywords_found = sorted(keywords)
         if reading.has_mission and reading.is_active:

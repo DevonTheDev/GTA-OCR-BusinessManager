@@ -719,6 +719,29 @@ the correction prevents phantom tracked activities and preserves existing
 accounting policy. These generated frames do not substitute for representative
 gameplay screenshots or establish Windows OCR accuracy.
 
+#### Heist success labels and real-image evidence
+
+When OCR returns **HEIST PASSED** together with unambiguous supported heist
+identity or an explicit finale label, the app can complete a compatible tracked
+activity. A standalone unqualified label, contradictory evidence, or an explicitly
+tracked prep/non-heist activity remains uncertain. The phrase must be complete
+within one OCR crop; this does not infer a finale phase or a payout, and a result
+screen alone does not start a new activity.
+
+Five separately published guide screenshots were also inspected and evaluated
+locally. Their [text-only provenance and baseline results](validation/gta-online-screenshot-baseline.json)
+record the source URLs, image hashes/dimensions and exact crop coordinates. The
+default regions missed visible bottom objectives and the upper Cayo result
+heading. Wider-crop/non-thresholded diagnostics recovered the Cayo title but
+still missed the large result heading. The label correction applies when OCR
+supplies that text; it does not solve those image-pipeline observations.
+
+The images and derivatives are kept outside the repository because redistribution
+rights were not established. Two guide images are cropped; the three 16:9 Cayo
+images still have unknown original capture and HUD settings. This small sample
+is not a Windows OCR accuracy benchmark or a gameplay transition test, and it
+does not replace the still-pending YouTube screengrab work.
+
 #### Recover an unfinished detection
 
 If a result was missed while tracking was paused, the app can remain attached to

@@ -817,7 +817,7 @@ class GTABusinessManager:
                      GameState.HEIST_FINALE, GameState.SELLING):
             reading = self._mission_reading(state_result)
             capture_result.mission = reading
-            if reading.outcome is not None:
+            if reading.outcome is not None or reading.outcome_scope is not None:
                 return
             if self._data.mission_start_time is None:
                 start_money = self._data.current_money
@@ -1038,13 +1038,23 @@ class GTABusinessManager:
 
     def _guard_terminal_mission_identity(self, state_result):
         """Keep conflicting result evidence visible without accepting its state."""
-        if (state_result.state in (GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
-                and self._data.mission_start_time is not None):
+        if state_result.state in (GameState.MISSION_COMPLETE, GameState.MISSION_FAILED):
             reading = self._mission_reading(state_result)
-            if not self._mission_identity_compatible(state_result, reading):
+            current = self._activity_tracker.current_activity
+            scope_conflict = False
+            if reading.outcome_scope == "heist":
+                allowed_types = {self._activity_kind(family) for family in MissionParser.HEIST_FAMILIES}
+                allowed_types.update((ActivityType.HEIST_FINALE, ActivityType.UNKNOWN))
+                scope_conflict = (
+                    state_result.state != GameState.MISSION_COMPLETE or reading.outcome != "complete"
+                    or self._data.mission_heist_phase == MissionType.HEIST_PREP
+                    or (current is not None and current.activity_type not in allowed_types)
+                )
+            if scope_conflict or (self._data.mission_start_time is not None
+                                  and not self._mission_identity_compatible(state_result, reading)):
                 return replace(
                     state_result, state=GameState.UNKNOWN, confidence=0.0,
-                    reason="Result identity conflicts with the current mission", mission=reading,
+                    reason="Result scope or identity conflicts with the current mission", mission=reading,
                 )
         return state_result
 

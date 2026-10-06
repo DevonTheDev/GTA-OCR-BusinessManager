@@ -9,7 +9,7 @@ import re
 from dataclasses import dataclass
 from typing import Iterable
 
-from .parsers.mission_parser import MissionParser, MissionType, _OUTCOME_PHRASES
+from .parsers.mission_parser import MissionParser, MissionType, _OUTCOME_PHRASES, _HEIST_SUCCESS_PHRASE
 
 
 OBJECTIVE_LIMIT = 128
@@ -78,6 +78,7 @@ class TerminalMissionEpisode:
 
 # Share the parser's catalog rather than inventing additional mission labels.
 _LABELS = set(MissionParser.MISSION_NAMES)
+_LABELS.add(_HEIST_SUCCESS_PHRASE)
 for _labels in (*MissionParser.MISSION_KEYWORDS.values(),
                 *MissionParser.PHASE_KEYWORDS.values(), *_OUTCOME_PHRASES.values()):
     _LABELS.update(_labels)
@@ -92,7 +93,9 @@ def _phrases(values):
 _LABEL = _phrases(_LABELS)
 _PREFIX_LABEL = re.compile(rf"^(?:{_LABEL})(?!\w)\s*", re.IGNORECASE)
 _SUFFIX_LABEL = re.compile(rf"(?:^|\n)\s*(?:{_LABEL})$", re.IGNORECASE)
-_RESULT = _phrases(phrase for phrases in _OUTCOME_PHRASES.values() for phrase in phrases)
+_RESULT = _phrases([_HEIST_SUCCESS_PHRASE, *(
+    phrase for phrases in _OUTCOME_PHRASES.values() for phrase in phrases
+)])
 _RESULT_BOUNDARY = re.compile(rf"(?<!\w)(?:{_RESULT})(?!\w)", re.IGNORECASE)
 # Reward rows have a value/sign structure, not an open-ended list of labels.
 _FOOTER_ROW = re.compile(
