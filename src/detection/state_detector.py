@@ -12,6 +12,7 @@ from ..game.state_machine import GameState
 from ..utils.logging import get_logger
 from .template_matcher import TemplateMatcher
 from .ocr_engine import OCREngine
+from .mission_episode import objective_evidence
 from .parsers.mission_parser import MissionParser, MissionReading, MissionType
 
 
@@ -368,7 +369,13 @@ class StateDetector:
         if contains(("deliver the product", "deliver the goods", "sell mission",
                      "remaining deliveries", "deliveries remaining")):
             return detected(GameState.SELLING, 0.75, "Delivery objective text detected")
-        if contains(self.MISSION_ACTIVE_KEYWORDS):
+        # A result table's "Take" label is not an imperative objective. Keep
+        # other existing generic cues, but admit take-only text only when one
+        # crop supplies a complete Take/Take out command. An unrelated command
+        # cannot validate it, and objective_evidence never stitches crops.
+        other_keywords = [keyword for keyword in self.MISSION_ACTIVE_KEYWORDS if keyword != "take"]
+        if contains(other_keywords) or (contains(("take",)) and any(
+                command.startswith("take ") for command in objective_evidence(text_regions).entries)):
             return detected(GameState.MISSION_ACTIVE, 0.7, "Mission objective text detected; identity unresolved")
         if contains(self.BUSINESS_KEYWORDS):
             return detected(GameState.BUSINESS_COMPUTER, 0.75, "Business UI text detected")

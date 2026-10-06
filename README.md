@@ -528,6 +528,32 @@ from another crop. A phrase clipped across separate crops can therefore remain
 unresolved until one crop contains complete evidence; there is no positional
 word stitching or spelling inference.
 
+When **take** is the only generic active keyword, it now requires a complete
+imperative from the existing per-crop objective evidence. **Take the briefcase**,
+**Objective: Take the briefcase** and **Take out the guards** retain the generic
+mission score of `0.7`; wrapping inside one crop is supported. Bare **Take** or
+**Take out**, result-table labels such as **Secondary Targets Take:**, embedded
+prose and fragments split across separate crops cannot trigger that generic
+branch. An unrelated **Bring the briefcase** command cannot validate a table's
+**Take** label. Specific mission identities, explicit results, delivery rules
+and the other existing generic keywords retain their priority and behavior.
+
+This narrow rule prevents the demonstrated result-table false start. It does
+not recover an unread heist title/result heading or change the capture crops.
+It conservatively refuses a take objective preceded by OCR noise such as
+**Score 42**, or punctuation such as **Take, the briefcase**. Text regressions,
+actual app/tracker/SQLite checks and opt-in synthetic-image Tesseract tests verify
+these boundaries; they do not measure gameplay recall or accuracy. A strong
+existing generic banner template can still start an unresolved activity.
+
+A fresh local Tesseract check of one public-guide Cayo result screenshot also
+prevented the false activity start. Its unchanged visual layer still returned a
+weak `MISSION_ACTIVE/0.6`; the existing application threshold rejected it. The
+[provenance and evaluation record](tests/fixtures/ocr_take_result_table_evaluation.json)
+keeps the source URL, fixed pipeline and bounded result without including pixels.
+This diagnostic used no loaded templates. It does not establish native Windows
+OCR performance or accuracy across gameplay sequences.
+
 Conflicting names/categories remain ambiguous. Unknown objectives no longer
 default to a contact mission; a generic delivery classification remains
 unresolved until stronger identity evidence arrives. A visual-only result at

@@ -1,0 +1,165 @@
+{
+  "schema_version": 1,
+  "evaluation_label": "Fresh local diagnostic verification of one public-guide GTA Online Cayo result image",
+  "source": {
+    "kind": "public-guide result screenshot",
+    "guide_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+    "observed_image_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+    "acquired_at_utc": "2026-10-06T00:31:11.753297+00:00",
+    "image_sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+    "dimensions_wh": [
+      1600,
+      900
+    ],
+    "image_bytes_included": false
+  },
+  "code": {
+    "baseline_commit": "699673d617045bab1114c080b600cadc242dfa48",
+    "baseline_detector_sha256": "4518f917324550a0634fc703006ecae1018c9edb2ae3c9952502f1a14ec6677b",
+    "candidate_detector_sha256": "0478d55a3a69511a258728788b92ab724106e596a983a97eed9c2f79f613ec06",
+    "production_ocr_module_sha256": "571ab7c60182a12b14a4c6901d68ccae1ac0479835babb20b7641f64c2425add",
+    "production_regions_module_sha256": "83bee442f36f1946079707c35f3b3657e73562e600d7c9accd5758cc490dca39",
+    "supporting_source_and_test_harness_unchanged": true
+  },
+  "execution": {
+    "date_utc": "2026-10-06",
+    "backend": "installed diagnostic Tesseract CLI via original TesseractDiagnostic test adapter",
+    "backend_version": "5.5.0",
+    "language": "eng",
+    "backend_binary_sha256": "74b76a5b994adcc18be362bf64ed5118082b2401d5d9a35242e92fc4c62e2b4b",
+    "eng_traineddata_sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2",
+    "command": [
+      "tesseract",
+      "stdin",
+      "stdout",
+      "-l",
+      "eng",
+      "--psm",
+      "6",
+      "tsv"
+    ],
+    "opencv_version": "5.0.0",
+    "numpy_version": "2.4.6",
+    "pillow_version": "12.3.0",
+    "capture_method": "Original full-frame capture test adapter fed unchanged real BGR screenshot pixels; actual app capture-loop, guards, state machine, tracker and disposable SQLite",
+    "successful_comparison_runs": 2,
+    "fresh_mission_crop_calls_in_comparison": 6,
+    "normal_additional_app_money_timer_calls_in_comparison": 4,
+    "preliminary_recorder_retry_calls": 10,
+    "total_fresh_ocr_calls_executed": 20,
+    "loaded_template_count": 0
+  },
+  "fixed_pipeline": {
+    "crop_search_or_parameter_tuning": false,
+    "preprocessing": {
+      "threshold": true,
+      "invert": true,
+      "scale": 2.0,
+      "scale_interpolation": "INTER_CUBIC",
+      "grayscale_conversion": "BGR2GRAY",
+      "threshold_method": "ADAPTIVE_THRESH_GAUSSIAN_C",
+      "threshold_type": "THRESH_BINARY",
+      "threshold_max_value": 255,
+      "threshold_block_size": 11,
+      "threshold_C": 2,
+      "recognition_input_conversion": "GRAY2RGB"
+    },
+    "mission_crops": [
+      {
+        "name": "mission_text",
+        "bounds_ltrb": [
+          400,
+          18,
+          1200,
+          90
+        ],
+        "raw_bgr_array_sha256": "b17db9fd83e09d1180686aa5a17bf8acca0f424f8f203bc9a97b1f1796ddda35",
+        "preprocessed_grayscale_array_sha256": "78af73bb3d33b15ba6894a36e01f5ff6f26998e4d748bfdadfba73243d037af9",
+        "ocr_input_png_sha256": "af0ea443647dba2e183680fac010a83923cd5b9b4adc3379c2e550488f6db04c",
+        "raw_tesseract_tsv_sha256": "a8214565f000356fe2a0a85242923456387b50e604e2c7028b5e47f8cbb4e282"
+      },
+      {
+        "name": "center_prompt",
+        "bounds_ltrb": [
+          400,
+          405,
+          1200,
+          540
+        ],
+        "raw_bgr_array_sha256": "f10112e495ca1f357dc288f47efaefa8ff85e112c0e073cafb6813d594b56577",
+        "preprocessed_grayscale_array_sha256": "0f965f8ab2c9dbec2cc8ae445cf04b351991806bbbf995a7f20d9b3485ea46a9",
+        "ocr_input_png_sha256": "b01f520d6ff9c8b2b3f139410ffc232c01d739a1481d293a6a152127b19ed2cf",
+        "raw_tesseract_tsv_sha256": "9b0e961f97da5263fb24dec773e700c6583c9146d7e4fc049f505b784f41ac87"
+      },
+      {
+        "name": "mission_banner",
+        "bounds_ltrb": [
+          320,
+          315,
+          1280,
+          450
+        ],
+        "raw_bgr_array_sha256": "aed26f5ac593729d0185bbd970674c188ca4fdfc70fa266ab76823ccd7f05c29",
+        "preprocessed_grayscale_array_sha256": "ca4d25d096a2b3b9fcd960cbf4888dbfbed80d146e401adfab88f1cfdaf65f91",
+        "ocr_input_png_sha256": "c9b789abba2feaa00a93f212d13d853c2f77fb64b212873e7ff00bd761470378",
+        "raw_tesseract_tsv_sha256": "ed586806401a42f38fd5348d591073633d1ca9d83a0d5f0272f008890f2274d0"
+      }
+    ],
+    "baseline_candidate_input_pixels_and_ocr_outputs_identical": true
+  },
+  "fresh_ocr_summary": {
+    "mission_identity_status": "unknown",
+    "explicit_outcome": null,
+    "clean_take_command_count": 0,
+    "raw_transcripts_and_word_content_included": false
+  },
+  "outcomes": {
+    "baseline": {
+      "generic_ocr_classification": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.7,
+        "observation_basis": "Winning generic OCR classification in actual baseline capture-loop detection"
+      },
+      "combined_detector": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.7
+      },
+      "application_admitted": true,
+      "started_activity_type": "UNKNOWN",
+      "mission_start_created": true
+    },
+    "candidate": {
+      "generic_ocr_classification": {
+        "state": "UNKNOWN",
+        "heuristic_score": 0.0,
+        "observation_basis": "Directly observed actual OCR layer before composition"
+      },
+      "combined_detector": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.6,
+        "reason_category": "unchanged weak visual mission indicators"
+      },
+      "application_admitted": false,
+      "activity_started": false,
+      "mission_start_created": false,
+      "state_machine_state": "UNKNOWN"
+    },
+    "both_runs": {
+      "money_baseline": null,
+      "earnings": 0,
+      "completed_activities": 0,
+      "sqlite_activity_rows": 0,
+      "cooldowns_created": 0,
+      "terminal_episode_created": false
+    }
+  },
+  "bounded_conclusion": "The frozen Take-only correction removes the generic result-table false start on this one real image at the actual app admission boundary",
+  "limits": [
+    "Public-guide image, not YouTube-sourced media",
+    "Fresh local Tesseract diagnostic and capture-adapter test, not native Windows OCR or native game capture",
+    "Single isolated frame, not a real time-ordered gameplay episode or gameplay accuracy estimate",
+    "Visible Cayo title and HEIST PASSED heading remain missed by fixed crops; no title/outcome recovery claim",
+    "No pixels, transcripts, player names or private data included; no image redistribution permission established",
+    "The existing diagnostic harness loads no image templates; a strong template match remains a separate unchanged admission path"
+  ]
+}
