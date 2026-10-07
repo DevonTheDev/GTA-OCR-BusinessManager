@@ -90,7 +90,8 @@ def test_rendered_escape_header_repeat_and_old_escape_complete_exact_owner_once(
     assert row["success"] is True and row["earnings"] == 0
     assert saved["earnings"] == [] and app.session_earnings == 0
     assert len(hud.grabs) == len(hud.waits) == 4
-    assert all(batch[-1] == HEADER and len(batch) == 8 for batch in hud.batches)
+    assert all(batch[7] == HEADER and batch[8] == REGIONS.vip_status and len(batch) == 9
+               for batch in hud.batches)
 
 
 @pytest.mark.parametrize("resolution", RESOLUTIONS, ids=("720p", "1080p", "1440p"))

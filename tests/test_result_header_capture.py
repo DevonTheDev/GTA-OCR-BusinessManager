@@ -99,7 +99,13 @@ def test_capture_accepts_missing_optional_header_image_and_propagates_evidence(a
     app._perf_monitor = PerformanceMonitor()
     result = app._do_capture_cycle()
     assert "result_header_image" in observed_kwargs[0] and observed_kwargs[0]["result_header_image"] is None
-    assert batches[0][-1] == regions.result_header and len(batches[0]) == 8
+    assert "vip_status_image" in observed_kwargs[0] and observed_kwargs[0]["vip_status_image"] is None
+    assert batches == [[regions.full_screen, regions.money_display, regions.mission_text,
+                        regions.center_prompt, regions.timer_bottom_right, regions.mission_banner,
+                        regions.bottom_objective, regions.result_header, regions.vip_status]]
+    assert len(batches[0]) == 9
+    assert batches[0][7] == regions.result_header
+    assert batches[0][8] == regions.vip_status
     assert result.result_header_text == result.result_header_evidence == HEADER
     assert app._activity_tracker.current_activity is None
     assert result.money is None and result.money_change == 0

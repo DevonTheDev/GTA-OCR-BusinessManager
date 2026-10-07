@@ -18,6 +18,13 @@ from .parsers.mission_parser import MissionParser, MissionReading, MissionType
 
 logger = get_logger("detection.state")
 
+# Only this fixed category marker may leave the footer admission boundary.
+VIP_STATUS_MARKER = "VIP WORK"
+_VIP_STATUS_ROW = re.compile(
+    r"[ \t]*VIP[ \t]+WORK[ \t]+END(?:[ \t]+[0-9][0-9:.]{0,15})?[ \t]*",
+    re.IGNORECASE | re.ASCII,
+)
+
 
 def is_qualified_result_header(reading: MissionReading) -> bool:
     """Require the independent header to prove both heist success and family."""
@@ -46,6 +53,8 @@ class StateDetectionResult:
     bottom_objective_command: str = ""
     result_header_text: str = ""
     result_header_evidence: str = ""
+    vip_status_text: str = ""
+    vip_status_evidence: str = ""
 
 
 @dataclass
@@ -157,6 +166,7 @@ class StateDetector:
         mission_banner_image: Optional[np.ndarray] = None,
         bottom_objective_image: Optional[np.ndarray] = None,
         result_header_image: Optional[np.ndarray] = None,
+        vip_status_image: Optional[np.ndarray] = None,
     ) -> StateDetectionResult:
         """Detect current game state from screen capture.
 
@@ -167,6 +177,7 @@ class StateDetector:
             mission_banner_image: Optional cropped mission name/result banner
             bottom_objective_image: Optional independent bottom objective crop
             result_header_image: Optional independent result-only heist header
+            vip_status_image: Optional independent identity-only VIP status crop
 
         Returns:
             StateDetectionResult with detected state
@@ -237,12 +248,64 @@ class StateDetector:
                         quick_result, objective_result, template_result,
                     )
 
+        # A stronger generic template may win the primary combination. It must
+        # not let the footer override independently observed business fields.
+        if ocr_result is None or ocr_result.state != GameState.BUSINESS_COMPUTER:
+            final_result = self._vip_status_observation(final_result, vip_status_image)
+        # Keep this last: an unqualified HEIST PASSED must veto status activity.
         final_result = self._result_header_observation(final_result, result_header_image)
 
         # Update context exactly once, after every independent source is resolved.
         self._update_context(final_result)
 
         return final_result
+
+    @staticmethod
+    def _vip_status_marker(raw: str) -> str:
+        """Accept a complete bounded row; its numeric suffix has no semantics.
+
+        Keep the raw OCR separately. Never repair spelling, concatenate lines,
+        extract a title/command, or interpret the suffix as a timer or result.
+        """
+        if len(raw) > 512:
+            return ""
+        try:
+            if len(raw.encode("utf-8")) > 512:
+                return ""
+        except UnicodeEncodeError:
+            return ""
+        lines = raw.splitlines()
+        if len(lines) > 8 or any(len(line.encode("utf-8")) > 128 for line in lines):
+            return ""
+        return VIP_STATUS_MARKER if any(_VIP_STATUS_ROW.fullmatch(line) for line in lines) else ""
+
+    def _vip_status_observation(self, result, image):
+        """Enrich only unprotected identity using the separately admitted marker."""
+        reading = result.mission
+        protected = reading is not None and (
+            reading.outcome is not None or reading.outcome_scope is not None
+            or reading.identity_status == "ambiguous"
+        )
+        if (image is None or not self._ocr.is_available or protected
+                or result.state in (GameState.BUSINESS_COMPUTER, GameState.MISSION_COMPLETE,
+                                    GameState.MISSION_FAILED)):
+            return result
+        raw = self._ocr.recognize_preprocessed(
+            image, threshold=False, invert=True, scale=2.0,
+        ).text
+        marker = self._vip_status_marker(raw)
+        result = replace(result, vip_status_text=raw, vip_status_evidence=marker)
+        if not marker:
+            return result
+        reading = self._mission_parser.parse_regions((
+            result.mission_text, result.objective_text, result.banner_text,
+            result.bottom_objective_command, marker,
+        ))
+        if reading.identity_status == "ambiguous":
+            return replace(result, state=GameState.UNKNOWN, confidence=0.0,
+                           reason="VIP status conflicts with independent mission identity", mission=reading)
+        return replace(result, state=GameState.MISSION_ACTIVE, confidence=0.8,
+                       reason="Complete VIP status row supplies category identity", mission=reading)
 
     def _result_header_observation(self, result, image):
         """Admit only a self-qualified result, retaining primary source priority."""
@@ -267,7 +330,7 @@ class StateDetector:
                            reason="Heist result header lacks compatible independent identity")
         merged = self._mission_parser.parse_regions((
             result.mission_text, result.objective_text, result.banner_text,
-            result.bottom_objective_command, raw,
+            result.bottom_objective_command, result.vip_status_evidence, raw,
         ))
         if not is_qualified_result_header(merged):
             return replace(result, state=GameState.UNKNOWN, confidence=0.0,
@@ -606,6 +669,9 @@ class StateDetector:
                                         else best.result_header_text),
                     result_header_evidence=(ocr.result_header_evidence if ocr is not None
                                             else best.result_header_evidence),
+                    vip_status_text=(ocr.vip_status_text if ocr is not None else best.vip_status_text),
+                    vip_status_evidence=(ocr.vip_status_evidence if ocr is not None
+                                         else best.vip_status_evidence),
                     hud_visible=best.hud_visible,
                 )
 
@@ -616,7 +682,9 @@ class StateDetector:
                            bottom_objective_text=ocr.bottom_objective_text,
                            bottom_objective_command=ocr.bottom_objective_command,
                            result_header_text=ocr.result_header_text,
-                           result_header_evidence=ocr.result_header_evidence)
+                           result_header_evidence=ocr.result_header_evidence,
+                           vip_status_text=ocr.vip_status_text,
+                           vip_status_evidence=ocr.vip_status_evidence)
         return best
 
     def _update_context(self, result: StateDetectionResult) -> None:

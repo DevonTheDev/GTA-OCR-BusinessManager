@@ -61,9 +61,13 @@ def test_regular_detection_cycle_rate_limits_once_for_all_hud_regions(tmp_path, 
         regions.mission_banner,
         regions.bottom_objective,
         regions.result_header,
+        regions.vip_status,
     ]
     assert grabs == [regions.full_screen.to_mss_monitor(200, 100, 10, 20)]
     assert batches == [expected]
+    assert len(batches[0]) == 9
+    assert batches[0][7] == regions.result_header
+    assert batches[0][8] == regions.vip_status
     assert result.game_state == GameState.UNKNOWN
     assert app._data.total_captures == 1
 

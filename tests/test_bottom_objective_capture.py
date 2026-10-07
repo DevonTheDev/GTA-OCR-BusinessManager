@@ -24,7 +24,8 @@ from tests.test_mission_result_accounting import clock as clock  # noqa: PLC0414
 REGIONS = ScreenRegions()
 BOTTOM = Region(.25, .90, .50, .10)
 BATCH = [REGIONS.full_screen, REGIONS.money_display, REGIONS.mission_text,
-         REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner, BOTTOM, REGIONS.result_header]
+         REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner,
+         BOTTOM, REGIONS.result_header, REGIONS.vip_status]
 CAYO_COMMAND = "Escape Cayo Perico"
 
 
@@ -148,6 +149,9 @@ def test_bottom_crop_remains_in_same_grab_with_exact_geometry(app, monkeypatch, 
     hud.frame[:, :, 1] = (np.arange(height, dtype=np.uint16) % 256)[:, None]
     hud.observe()
     assert hud.batches == [BATCH]
+    assert len(hud.batches[0]) == 9
+    assert hud.batches[0][7] == REGIONS.result_header
+    assert hud.batches[0][8] == REGIONS.vip_status
     assert hud.grabs == [{"left": -200, "top": 30, "width": width, "height": height}]
     assert hud.waits == [True]
     for index, region in enumerate(BATCH):

@@ -198,7 +198,7 @@ def run_frames(app, monkeypatch, frames):
     assert capture.requested_regions == [(
         REGIONS.full_screen, REGIONS.money_display, REGIONS.mission_text,
         REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner,
-        REGIONS.bottom_objective, REGIONS.result_header,
+        REGIONS.bottom_objective, REGIONS.result_header, REGIONS.vip_status,
     )] * len(frames)
     return checkpoints, backend
 

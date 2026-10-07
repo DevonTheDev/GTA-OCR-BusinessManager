@@ -25,7 +25,7 @@ from tests.test_mission_result_accounting import clock as clock
 REGIONS = ScreenRegions()
 BATCH = [REGIONS.full_screen, REGIONS.money_display, REGIONS.mission_text,
          REGIONS.center_prompt, REGIONS.timer_bottom_right, REGIONS.mission_banner,
-         REGIONS.bottom_objective, REGIONS.result_header]
+         REGIONS.bottom_objective, REGIONS.result_header, REGIONS.vip_status]
 
 
 def banner_frame(app, top="", center="", banner="", template=None):
@@ -87,6 +87,9 @@ def test_banner_identity_reaches_real_capture_and_tracker(app, top, title, kind,
     assert result.objective_text == "Go to the location"
     assert result.banner_text == title
     assert requested == [BATCH]
+    assert len(requested[0]) == 9
+    assert requested[0][7] == REGIONS.result_header
+    assert requested[0][8] == REGIONS.vip_status
     assert activity_rows(app) == []
 
 
@@ -278,7 +281,7 @@ def test_banner_delivery_keeps_generic_category_unresolved_and_refinable(app, ba
     assert (current.name, current.activity_type) == ("Hostile Takeover", ActivityType.VIP_WORK)
 
 
-def test_seven_region_app_batch_preserves_order_and_waits_once(capture_clock, app, monkeypatch):
+def test_nine_region_app_batch_preserves_order_and_waits_once(capture_clock, app, monkeypatch):
     capture, clock = capture_clock
     capture._scaler.width, capture._scaler.height = 200, 120
     monitors = []

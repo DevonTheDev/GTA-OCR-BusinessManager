@@ -14,7 +14,9 @@ from .config.settings import Settings, get_settings
 from .capture.screen_capture import ScreenCapture
 from .capture.regions import ScreenRegions
 from .detection.ocr_engine import OCREngine
-from .detection.state_detector import StateDetector, StateDetectionResult, is_qualified_result_header
+from .detection.state_detector import (
+    StateDetector, StateDetectionResult, VIP_STATUS_MARKER, is_qualified_result_header,
+)
 from .detection.mission_episode import (
     MissionIdentity, ObjectiveEvidence, TerminalMissionEpisode, objective_evidence,
 )
@@ -81,6 +83,8 @@ class CaptureResult:
     bottom_objective_command: str = ""
     result_header_text: str = ""
     result_header_evidence: str = ""
+    vip_status_text: str = ""
+    vip_status_evidence: str = ""
 
 
 @dataclass
@@ -582,7 +586,7 @@ class GTABusinessManager:
             with self._perf_monitor.time_operation("capture"):
                 # Visual checks and all HUD text share one captured screenshot.
                 regions = self._capture.regions
-                images = self._capture.capture_multiple_regions([
+                capture_regions = [
                     regions.full_screen,
                     regions.money_display,
                     regions.mission_text,
@@ -591,10 +595,16 @@ class GTABusinessManager:
                     regions.mission_banner,
                     regions.bottom_objective,
                     regions.result_header,
-                ])
+                ]
+                # Older/custom region providers may omit this optional source.
+                status_region = getattr(regions, "vip_status", None)
+                if status_region is not None:
+                    capture_regions.append(status_region)
+                images = self._capture.capture_multiple_regions(capture_regions)
                 full_screen, money_img, mission_img, center_img, timer_img, banner_img, bottom_img, header_img = (
                     images[index] for index in range(8)
                 )
+                status_img = images[8] if status_region is not None else None
 
             self._data.total_captures += 1
 
@@ -609,6 +619,7 @@ class GTABusinessManager:
                 mission_banner_image=banner_img,
                 bottom_objective_image=bottom_img,
                 result_header_image=header_img,
+                vip_status_image=status_img,
             )
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
@@ -624,6 +635,8 @@ class GTABusinessManager:
             result.bottom_objective_command = getattr(state_result, "bottom_objective_command", "")
             result.result_header_text = getattr(state_result, "result_header_text", "")
             result.result_header_evidence = getattr(state_result, "result_header_evidence", "")
+            result.vip_status_text = getattr(state_result, "vip_status_text", "")
+            result.vip_status_evidence = getattr(state_result, "vip_status_evidence", "")
             result.mission = getattr(state_result, "mission", None)
 
             # Update state machine
@@ -792,6 +805,8 @@ class GTABusinessManager:
         """Process state-specific logic."""
         capture_result.result_header_text = getattr(state_result, "result_header_text", "")
         capture_result.result_header_evidence = getattr(state_result, "result_header_evidence", "")
+        capture_result.vip_status_text = getattr(state_result, "vip_status_text", "")
+        capture_result.vip_status_evidence = getattr(state_result, "vip_status_evidence", "")
         guarded_result = self._guard_mission_observation(state_result)
         if guarded_result is not state_result:
             # Direct callers receive the same conservative observation as a
@@ -806,6 +821,8 @@ class GTABusinessManager:
             capture_result.bottom_objective_command = guarded_result.bottom_objective_command
             capture_result.result_header_text = guarded_result.result_header_text
             capture_result.result_header_evidence = guarded_result.result_header_evidence
+            capture_result.vip_status_text = guarded_result.vip_status_text
+            capture_result.vip_status_evidence = guarded_result.vip_status_evidence
             capture_result.mission = guarded_result.mission
             return
         state = state_result.state
@@ -959,18 +976,30 @@ class GTABusinessManager:
                 header = self._mission_parser.parse(header_evidence)
                 if not is_qualified_result_header(header):
                     return header
-            reading = self._mission_parser.parse_regions((
+            sources = (
                 state_result.mission_text, state_result.objective_text,
                 getattr(state_result, "banner_text", ""),
                 getattr(state_result, "bottom_objective_command", ""),
                 header_evidence,
-            ))
+            )
+            reading = self._mission_parser.parse_regions(sources)
+            # Footer identity cannot qualify an outcome from another source.
+            if (getattr(state_result, "vip_status_evidence", "") == VIP_STATUS_MARKER
+                    and state_result.state not in (GameState.BUSINESS_COMPUTER,
+                                                   GameState.MISSION_COMPLETE,
+                                                   GameState.MISSION_FAILED)
+                    and reading.outcome is None and reading.outcome_scope is None
+                    and reading.identity_status != "ambiguous"):
+                reading = self._mission_parser.parse_regions((*sources, VIP_STATUS_MARKER))
         return reading
 
     @staticmethod
     def _mission_display_name(state_result, reading):
         if reading.identity_status == "known_name":
             return reading.mission_name
+        if (reading.identity_status == "type_only" and reading.mission_type == MissionType.VIP_WORK
+                and getattr(state_result, "vip_status_evidence", "") == VIP_STATUS_MARKER):
+            return "VIP Work"
         command = getattr(state_result, "bottom_objective_command", "")
         if reading.identity_status == "type_only" and command:
             return command
