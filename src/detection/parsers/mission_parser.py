@@ -1,7 +1,7 @@
 """Conservative, shared mission identity and result parsing for OCR text.
 
-Names and explicit category labels are evidence; ordinary objective vocabulary
-is not. These rules use the repository's catalog, without guessing OCR typos.
+Names, explicit category labels and allowlisted complete distinctive objectives
+are evidence; ordinary objective vocabulary is not. No OCR typos are guessed.
 """
 
 import re
@@ -174,7 +174,7 @@ def classify_mission_outcome(text: str) -> Optional[Literal["complete", "failed"
 
 
 class MissionParser:
-    """Identify supported names and explicit categories without forced guesses."""
+    """Resolve explicit identities and complete distinctive objective evidence."""
 
     # Canonical catalog names are authoritative; supplemental names below were
     # specific named entries in this parser's original MISSION_KEYWORDS.
@@ -226,6 +226,11 @@ class MissionParser:
         MissionType.CASINO_HEIST: ("casino heist",),
         MissionType.DOOMSDAY: ("doomsday",),
         MissionType.FREEMODE_EVENT: ("freemode event",),
+    }
+    # Source-backed family associations require the entire independent crop.
+    # These are semantic evidence, not OCR titles or generic landmark aliases.
+    DISTINCTIVE_OBJECTIVES = {
+        "go to el rubio's compound": MissionType.CAYO_PERICO,
     }
     HEIST_FAMILIES = {MissionType.CAYO_PERICO, MissionType.CASINO_HEIST, MissionType.DOOMSDAY}
     PHASE_KEYWORDS = {
@@ -279,6 +284,12 @@ class MissionParser:
                     if _contains(normalized, phrase):
                         region_categories.add(kind)
                         keywords.add(phrase)
+            # Match the bottom admission policy's terminal punctuation folding,
+            # without extracting fragments or adding invented words to the text.
+            command = normalized.rstrip(".!?").strip()
+            if kind := self.DISTINCTIVE_OBJECTIVES.get(command):
+                region_categories.add(kind)
+                keywords.add(command)
 
             region_kinds = region_categories | set(region_names.values())
             for phase, phrases in self.PHASE_KEYWORDS.items():

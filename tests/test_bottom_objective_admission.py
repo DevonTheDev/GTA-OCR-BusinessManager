@@ -62,6 +62,7 @@ def test_bottom_region_is_configured_without_widening_existing_crops():
     ("Escape Cayo Perico.", "Escape Cayo Perico", MissionType.CAYO_PERICO),
     ("  EsCape  Cayo\nPerico!?  ", "EsCape Cayo Perico", MissionType.CAYO_PERICO),
     ("Go to the Casino Heist", "Go to the Casino Heist", MissionType.CASINO_HEIST),
+    ("Go to El Rubio's compound.", "Go to El Rubio's compound", MissionType.CAYO_PERICO),
 ])
 def test_entire_concrete_family_objective_has_bounded_authority(monkeypatch, raw, command, family):
     result, calls = observation(monkeypatch, raw, top="unrecognized top noise")
@@ -82,7 +83,7 @@ def test_entire_concrete_family_objective_has_bounded_authority(monkeypatch, raw
 
 @pytest.mark.parametrize("raw", [
     "", " \n ", "Agency", "Cayo Perico", "Headhunter", "Go to the location",
-    "Go to El Rubio's compound.", "Retrieve the package.", "Escape", "Take out",
+    "Retrieve the package.", "Escape", "Take out",
     "Go to heist prep", "Go to heist finale", "Escape Cayo Perico and Casino Heist",
     "Escape Cayo Perico.\nPlayer Take\nAlex $25000",
     "Player Take\nAlex $25000\nEscape Cayo Perico.",

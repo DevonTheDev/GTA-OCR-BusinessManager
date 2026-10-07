@@ -803,10 +803,10 @@ local Tesseract diagnostic dependencies:
 GTA_RUN_OCR_TESTS=1 python -m pytest -q tests/test_bottom_objective_ocr_images.py
 ```
 
-The five supplemental guide stills were replayed through the actual capture,
-preprocessing, detector and application path. The escape instruction now starts
-a Cayo-family activity; the other four isolated frames still start no activity.
-In that earlier bottom-only evaluation, playing the escape frame followed by the
+In the earlier bottom-only evaluation, the five supplemental guide stills were
+replayed through the actual capture, preprocessing, detector and application
+path. The escape instruction started a Cayo-family activity; the other four
+isolated frames started no activity. Playing the escape frame followed by the
 real summary left the activity unfinished because the result heading remained
 unread. No completion or payout was fabricated. Those observations are retained in
 [the bottom-objective evaluation](validation/bottom-objective-evaluation.json).
@@ -839,7 +839,7 @@ result evidence and never becomes a fresh objective or payout estimate.
 The retained real Cayo summary is now readable through this dedicated pass.
 In a manually arranged replay of the guide's escape and summary stills, the
 actual app completes that same Cayo owner exactly once, with no inferred payout.
-The other original images retain their prior activity behavior. Generated
+At that evaluation stage, the other original images retained their prior activity behavior. Generated
 controls cover mismatched owners, title dropout, contradictory evidence and
 business readings; they are not additional gameplay screenshots. Exact source
 hashes, OCR observations and limits are recorded in
@@ -850,6 +850,42 @@ It does not establish general recall across heists, languages, HUD safe zones or
 aspect ratios, and it does not validate Windows OCR, live gameplay or YouTube
 capture. The original guide images and their derivatives remain outside the
 repository because redistribution rights are unestablished.
+
+#### Recognize the distinctive El Rubio objective
+
+The complete instruction **Go to El Rubio's compound.** can identify the Cayo
+Perico family even when no literal Cayo title is readable. This is one explicit
+objective-to-family association supported by the retained Cayo guide image and
+its context. The pixels do not print a Cayo title, and the parser does not insert
+one into the OCR text. It keeps the observed instruction, reports family-only
+identity, and leaves the mission title and heist phase unknown.
+
+The command must occupy an entire independent OCR crop, apart from case,
+whitespace and terminal sentence punctuation. Bare landmark words, generic
+navigation, fragments, surrounding prose and unrelated trailing text do not gain
+this authority. Existing bottom-region number, currency and result/footer vetoes
+still apply. Conflicting identities remain uncertain, primary business/results
+keep their priority, and an unqualified result header cannot borrow this family
+from the objective. No capture geometry, preprocessing or OCR pass was added.
+
+The five unchanged retained guide originals were evaluated again through the
+local Tesseract, capture, detector and application path. The start objective now
+starts a Cayo-family activity; the other four isolated images retain their prior
+behavior. In an explicitly arranged escape → summary → start → escape → summary
+still-image replay, the distinct start command establishes a second activity
+owner. Its later summary completes that same owner once, preserving its start
+time and producing no inferred earnings, money rows, cooldowns or business data.
+This arrangement is not evidence of actual two-heist gameplay chronology.
+
+Exact provenance, OCR observations, ownership and accounting checks are recorded
+in [the distinctive-objective evaluation](validation/distinctive-objective-evaluation.json).
+Generated images and injected text remain separate regression evidence. In the
+unchanged synthetic 720p fixture, local Tesseract reads **El** as **EI]** and the
+exact rule leaves it unidentified. The corresponding 1080p and 1440p fixtures
+are readable; this is a measured fixture limit, not a resolution guarantee.
+This single signature does not establish wider precision or recall, other languages,
+OCR substitutions, HUD settings, non-game scenes, Windows OCR, live gameplay or
+YouTube capture. The original images and derivatives remain outside the repo.
 
 #### Recover an unfinished detection
 
