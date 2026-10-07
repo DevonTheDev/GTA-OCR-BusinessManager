@@ -1526,6 +1526,51 @@ On Windows, separately run `python test_capture.py` with the runtime dependencie
 installed to diagnose screen capture and OCR. This interactive script requires a
 display and Windows OCR; it is not collected by the automated unit suite.
 
+### Diagnose one saved screenshot
+
+Use an existing local PNG or JPEG to inspect the current mission detector without
+starting capture or a tracking session:
+
+```bash
+python test_capture.py --image screenshot.png
+# Explicit optional diagnostic backend; Tesseract and its English data must already be installed
+python test_capture.py --image screenshot.jpg --backend tesseract
+```
+
+Windows OCR is the default. An unavailable backend or failed recognition returns
+a nonzero exit code; the tool never chooses a replacement backend automatically.
+Tesseract is only a diagnostic option for this command, not an application OCR
+fallback or a test of Windows OCR.
+
+The command prints one JSON report containing the input hash and dimensions,
+default production crop coordinates, actual requested preprocessing and OCR text,
+and a fresh detector's state/mission candidate. Sources skipped by the detector
+are identified separately from successful empty text. Native Windows OCR does
+not provide confidence, so its OCR confidence is `null`; the detector's heuristic
+score is a different measure and is not an accuracy estimate. Exit zero means
+the diagnostic ran, including when its candidate is unknown or incorrect.
+
+This reads one stored canvas with no rotation, crop correction, custom regions
+or loaded templates. Inputs must be single-frame PNG/JPEG files of at most
+32 MiB, 100–8192 pixels on each axis and at most 16,777,216 pixels in total;
+nontrivial orientation metadata is unsupported. It does not load settings or
+write images, history, cooldowns or financial records. The report is isolated
+detector evidence, not proof that the application would start or complete an
+activity. Still images cannot validate episode continuity, live capture, native
+Windows behavior, or general gameplay accuracy.
+
+[Five guide-image controls](validation/screenshot-diagnostic-evaluation.json)
+record exact input hashes and the new command's parity with the existing
+diagnostic adapter across all 30 requested crop readings. The Sightseer still
+remains a miss, and the Headhunter still supplies VIP-work category evidence
+without a mission name. These are public-guide stills, not YouTube frames or a
+continuous session. The image files remain outside this repository.
+
+The no-argument live self-check remains available. Missing required captures,
+unavailable/failed OCR and incomplete five-cycle checks now fail explicitly;
+successful native OCR with unknown confidence is supported, and captures are
+closed on return and error paths.
+
 ### Building an Executable
 
 ```bash

@@ -1,7 +1,15 @@
-"""Test script to verify the capture-to-OCR pipeline."""
+"""Live Windows pipeline checks or a bounded single-image OCR diagnostic."""
 
+import argparse
+from contextlib import closing, redirect_stdout
+import json
 import sys
 import time
+
+
+def _native_ocr_failed(result):
+    """Recognize the production native failure sentinel, not valid empty text."""
+    return result.text == "" and result.confidence == 0.0 and not result.words
 
 
 def test_screen_capture():
@@ -10,30 +18,26 @@ def test_screen_capture():
 
     try:
         from src.capture.screen_capture import ScreenCapture
-        from src.capture.regions import ScreenRegions
 
-        capture = ScreenCapture()
-        print(f"  Resolution: {capture.resolution}")
-        print(f"  Scale factor: {capture.scale_factor}")
+        with closing(ScreenCapture()) as capture:
+            print(f"  Resolution: {capture.resolution}")
+            print(f"  Scale factor: {capture.scale_factor}")
 
-        # Test full screen capture
-        print("  Capturing full screen...")
-        img = capture.capture_full_screen()
-        if img is not None:
+            # Both captures are required for this check to pass.
+            print("  Capturing full screen...")
+            img = capture.capture_full_screen()
+            if img is None:
+                print("  Failed to capture")
+                return False
             print(f"  Success! Shape: {img.shape}")
-        else:
-            print("  Failed to capture")
-            return False
 
-        # Test region capture
-        print("  Capturing money region...")
-        money_img = capture.capture_money_display()
-        if money_img is not None:
+            print("  Capturing money region...")
+            money_img = capture.capture_money_display()
+            if money_img is None:
+                print("  Failed to capture money region")
+                return False
             print(f"  Success! Shape: {money_img.shape}")
-        else:
-            print("  Failed to capture money region")
 
-        capture.close()
         print("  Screen capture test PASSED")
         return True
 
@@ -54,21 +58,25 @@ def test_ocr():
 
         if not ocr.is_available:
             print("  OCR not available - install winocr: pip install winocr")
-            return True  # Not a failure, just not available
+            return False
 
         # Test OCR on screen capture
         from src.capture.screen_capture import ScreenCapture
 
-        capture = ScreenCapture()
-        img = capture.capture_money_display()
-
-        if img is not None:
+        with closing(ScreenCapture()) as capture:
+            img = capture.capture_money_display()
+            if img is None:
+                print("  Failed to capture money region")
+                return False
             print("  Running OCR on money region...")
             result = ocr.recognize_preprocessed(img, invert=True, scale=2.0)
+            if _native_ocr_failed(result):
+                print("  Native OCR failed")
+                return False
             print(f"  OCR text: '{result.text}'")
-            print(f"  Confidence: {result.confidence:.2f}")
+            confidence = "unknown" if result.confidence is None else f"{result.confidence:.2f}"
+            print(f"  Confidence: {confidence}")
 
-        capture.close()
         print("  OCR test PASSED")
         return True
 
@@ -125,53 +133,68 @@ def test_full_pipeline():
         from src.detection.ocr_engine import OCREngine
         from src.detection.parsers.money_parser import MoneyParser
 
-        capture = ScreenCapture()
-        ocr = OCREngine()
-        parser = MoneyParser()
+        with closing(ScreenCapture()) as capture:
+            ocr = OCREngine()
+            parser = MoneyParser()
 
-        if not ocr.is_available:
-            print("  Skipping - OCR not available")
-            return True
+            if not ocr.is_available:
+                print("  Full pipeline test incomplete - OCR not available")
+                return False
 
-        print("  Running 5 capture cycles...")
+            required_cycles = 5
+            completed = 0
+            capture_failures = 0
+            ocr_failures = 0
+            print(f"  Running {required_cycles} capture cycles...")
 
-        for i in range(5):
-            start = time.perf_counter()
+            for i in range(required_cycles):
+                start = time.perf_counter()
 
-            # Capture
-            img = capture.capture_money_display()
-            capture_time = (time.perf_counter() - start) * 1000
+                # Capture
+                img = capture.capture_money_display()
+                capture_time = (time.perf_counter() - start) * 1000
 
-            if img is None:
-                print(f"  Cycle {i+1}: Capture failed")
-                continue
+                if img is None:
+                    capture_failures += 1
+                    print(f"  Cycle {i+1}: Capture failed")
+                    continue
 
-            # OCR
-            ocr_start = time.perf_counter()
-            ocr_result = ocr.recognize_preprocessed(img, invert=True, scale=2.0)
-            ocr_time = (time.perf_counter() - ocr_start) * 1000
+                # OCR
+                ocr_start = time.perf_counter()
+                ocr_result = ocr.recognize_preprocessed(img, invert=True, scale=2.0)
+                ocr_time = (time.perf_counter() - ocr_start) * 1000
+                if _native_ocr_failed(ocr_result):
+                    ocr_failures += 1
+                    print(f"  Cycle {i+1}: Native OCR failed")
+                    continue
 
-            # Parse
-            money = parser.parse(ocr_result.text)
+                # An empty successful OCR reading can legitimately contain no money.
+                money = parser.parse(ocr_result.text)
 
-            total_time = (time.perf_counter() - start) * 1000
+                total_time = (time.perf_counter() - start) * 1000
 
-            if money.has_value:
-                print(
-                    f"  Cycle {i+1}: ${money.display_value:,} "
-                    f"(capture: {capture_time:.1f}ms, ocr: {ocr_time:.1f}ms, total: {total_time:.1f}ms)"
-                )
-            else:
-                print(
-                    f"  Cycle {i+1}: No money detected - raw: '{ocr_result.text[:50]}...' "
-                    f"(total: {total_time:.1f}ms)"
-                )
+                if money.has_value:
+                    print(
+                        f"  Cycle {i+1}: ${money.display_value:,} "
+                        f"(capture: {capture_time:.1f}ms, ocr: {ocr_time:.1f}ms, "
+                        f"total: {total_time:.1f}ms)"
+                    )
+                else:
+                    print(
+                        f"  Cycle {i+1}: No money detected - raw: '{ocr_result.text[:50]}...' "
+                        f"(total: {total_time:.1f}ms)"
+                    )
 
-            time.sleep(0.5)  # Brief pause between captures
+                completed += 1
+                time.sleep(0.5)  # Brief pause between captures
 
-        capture.close()
-        print("  Full pipeline test PASSED")
-        return True
+        print(
+            f"  Completed {completed}/{required_cycles} cycles "
+            f"(capture failures: {capture_failures}, OCR failures: {ocr_failures})"
+        )
+        passed = completed == required_cycles
+        print("  Full pipeline test " + ("PASSED" if passed else "FAILED"))
+        return passed
 
     except Exception as e:
         print(f"  Full pipeline test FAILED: {e}")
@@ -180,8 +203,45 @@ def test_full_pipeline():
         return False
 
 
-def main():
-    """Run all tests."""
+def _run_image_diagnostic(path, backend):
+    """Keep image mode isolated from live checks and stdout machine-readable."""
+    try:
+        # Imports and dependencies may print. Image mode must not initialize
+        # application logging/settings, capture a desktop, or write output files.
+        with redirect_stdout(sys.stderr):
+            from src.detection.screenshot_diagnostic import diagnose_image
+
+            report = diagnose_image(path, backend=backend)
+            output = json.dumps(report, allow_nan=False)
+    except Exception as error:
+        report = {
+            "schema_version": 1,
+            "mode": "single_image_diagnostic",
+            "status": "error",
+            "backend": {"name": backend},
+            "error": {"type": type(error).__name__, "message": str(error)},
+        }
+        print(json.dumps(report, allow_nan=False))
+        return 1
+    print(output)
+    return 0
+
+
+def main(argv=None):
+    """Dispatch one local image diagnostic or run all four live checks."""
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--image", metavar="PATH", help="diagnose one local PNG or JPEG")
+    parser.add_argument(
+        "--backend",
+        choices=("windows", "tesseract"),
+        help="image OCR backend (default: windows; tesseract is diagnostic-only)",
+    )
+    args = parser.parse_args(argv)
+    if args.image is not None:
+        return _run_image_diagnostic(args.image, args.backend or "windows")
+    if args.backend is not None:
+        parser.error("--backend requires --image")
+
     print("=" * 50)
     print("GTA Business Manager - Pipeline Test")
     print("=" * 50)

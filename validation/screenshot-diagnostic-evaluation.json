@@ -1,0 +1,250 @@
+{
+  "schema_version": 1,
+  "evaluated_at_utc": "2026-10-07T23:41:11.358009+00:00",
+  "purpose": "Reproducible one-image diagnostic parity with the unchanged production detector, not recognition accuracy",
+  "baseline_commit": "545992999252141e448950882410c66e100c17f6",
+  "method": {
+    "backend": "Explicit diagnostic-only Tesseract 5.5.0 with eng and PSM 6",
+    "images": "Five exact original public-guide images at their stored dimensions; no resizing, rotation or crop search",
+    "detector": "One fresh StateDetector per image, six default production mission regions, unchanged production preprocessing and no templates",
+    "baseline_adapter_source": "tests/test_mission_ocr_images.py:TesseractDiagnostic (AST extracted without importing app/test fixtures)",
+    "baseline_adapter_file_sha256": "0214562203d4340eeea2d01ab274065e5c5dbc1d7f57c9673c8b4a5ef1db5742",
+    "baseline_adapter_class_sha256": "eb2b59b023f086cf00f2fa55c05c1e7448f815327d271868610f7005abb8e753",
+    "candidate_command": "python test_capture.py --image <local-original.jpg> --backend tesseract",
+    "source_sha256": {
+      "test_capture.py": "58e2f19be014c55938338ff596e0cfff4a57c0d9a78d45edbc308599152a1ba5",
+      "src/detection/screenshot_diagnostic.py": "27e10440d9fc839af8afe81c9d5074bdc17e8e30524097bd7a87c77040b6d693",
+      "src/detection/ocr_engine.py": "3db644687a607b64cfa15638265f447cd3b9d9d07e4fd05c7e4ee36ed7a5685d",
+      "src/detection/state_detector.py": "da709406ce9c5ce0f1cc3c70fd04b7e53c004504f7d51fbf26f2e95cf68515bc",
+      "src/capture/regions.py": "0e6380977da7fb1ead4aa10dc3cde4b889d41d37b60595dd5b2de1d1c716120c"
+    }
+  },
+  "verification": {
+    "cli_images": 5,
+    "requested_ocr_sources": 30,
+    "exact_comparison": [
+      "input metadata/hash",
+      "all crop boxes",
+      "effective preprocessing",
+      "literal OCR text",
+      "unrounded OCR confidence",
+      "fresh-context fields",
+      "candidate state, heuristic score, reason and identity"
+    ],
+    "baseline_candidate_differences": 0,
+    "cli_exit_codes": [
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "cli_stderr_empty": true,
+    "default_native_on_linux": "Structured unavailable error, exit 1; no fallback"
+  },
+  "observations": [
+    {
+      "input": {
+        "name": "headhunter-2.jpg",
+        "sha256": "b01c78aa3a7b78f4bb78b6ca20cf71968c1c23da18d2e329766e56b4b121cc7e",
+        "bytes": 117170,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 795
+      },
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d0/27/Headhunter-2.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:20.635138+00:00",
+      "detector_candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "requested_ocr_sources": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "result_header",
+        "vip_status"
+      ],
+      "all_sources_requested": true,
+      "exact_baseline_parity": true
+    },
+    {
+      "input": {
+        "name": "sightseer-package.jpg",
+        "sha256": "c50c8fe3a4005bd2b71096fc0c298d0ebcffff6accde37d5b650bc9bdfdaa04e",
+        "bytes": 76558,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 794
+      },
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/69/Package.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:31.298482+00:00",
+      "detector_candidate": {
+        "state": "MENU",
+        "heuristic_score": 0.7,
+        "reason": "Menu overlay detected",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "requested_ocr_sources": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "result_header",
+        "vip_status"
+      ],
+      "all_sources_requested": true,
+      "exact_baseline_parity": true
+    },
+    {
+      "input": {
+        "name": "cayo-finale-start.jpg",
+        "sha256": "59a05cd96f32b1ee7c389744cc7c520ce144cf4261b9239b621384e566922e68",
+        "bytes": 26719,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/c4/40/Cayo-Perico-Finale-1.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:41.265026+00:00",
+      "detector_candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "requested_ocr_sources": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "result_header",
+        "vip_status"
+      ],
+      "all_sources_requested": true,
+      "exact_baseline_parity": true
+    },
+    {
+      "input": {
+        "name": "cayo-finale-escape.jpg",
+        "sha256": "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+        "bytes": 56541,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/6c/e8/Cayo-Perico-Finale-42.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:50.394553+00:00",
+      "detector_candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "requested_ocr_sources": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "result_header",
+        "vip_status"
+      ],
+      "all_sources_requested": true,
+      "exact_baseline_parity": true
+    },
+    {
+      "input": {
+        "name": "cayo-finale-summary.jpg",
+        "sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+        "bytes": 104362,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+      "acquired_at_utc": "2026-10-07T23:24:00.564257+00:00",
+      "detector_candidate": {
+        "state": "MISSION_COMPLETE",
+        "heuristic_score": 0.85,
+        "reason": "Independent family-qualified heist result header",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": "complete",
+          "outcome_scope": "heist"
+        }
+      },
+      "requested_ocr_sources": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "result_header",
+        "vip_status"
+      ],
+      "all_sources_requested": true,
+      "exact_baseline_parity": true
+    }
+  ],
+  "limits": [
+    "Tesseract diagnostic only; native Windows OCR and live capture were not exercised",
+    "Guide images are local validation inputs, not committed or uploaded assets; original capture bounds and safe-zone settings remain unknown",
+    "Guide filenames and prose do not establish identity printed in pixels or gameplay chronology",
+    "Headhunter control has category-only VIP_WORK evidence and a garbled objective; no named-mission recognition is claimed",
+    "Sightseer control remains a genuine MENU/unknown miss; concatenated VIPWORKEND OCR is not repaired",
+    "All five images requested all six sources; skipped-source behavior is covered separately by synthetic unit tests",
+    "Cayo summary produces an isolated completion candidate; application episode, activity and financial paths were not run",
+    "No parser or region rules changed; no gameplay accuracy, YouTube acquisition or session correctness claim"
+  ]
+}
