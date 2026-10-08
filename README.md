@@ -789,6 +789,14 @@ results retain their original processing, and conflicting mission identities
 remain uncertain. Bottom text is never used as a business reading, balance or
 result source.
 
+Supplemental admission also retains the original primary business-screen
+observation when a stronger configured generic template wins the combined state.
+In that case the bottom objective, VIP footer and result header are skipped;
+they cannot lend a mission identity or completion to that generic template result.
+The template's existing unresolved state is preserved. This is a conditional
+custom-template boundary; default startup loads no templates, and controlled
+OCR/template tests do not establish gameplay accuracy or how often it occurs.
+
 The extra read uses one fixed grayscale, inverted, 2× preprocessing pass. It
 does not expand the upper crops or change their preprocessing. This conservative
 rule can miss valid objectives containing counters, numeric destinations or

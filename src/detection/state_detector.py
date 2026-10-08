@@ -202,6 +202,7 @@ class StateDetector:
 
         # Combine results with priority
         final_result = self._combine_results(quick_result, ocr_result, template_result)
+        primary_business = ocr_result is not None and ocr_result.state == GameState.BUSINESS_COMPUTER
 
         # First preserve the existing decision and its source ownership. Bottom
         # text cannot displace a business screen or lend identity to a result.
@@ -210,7 +211,8 @@ class StateDetector:
             main_reading.outcome is not None or main_reading.outcome_scope is not None
             or main_reading.identity_status == "ambiguous"
         )
-        if (bottom_objective_image is not None and self._ocr_available(observation, ("bottom",))
+        if (bottom_objective_image is not None and not primary_business
+                and self._ocr_available(observation, ("bottom",))
                 and not protected
                 and final_result.state not in (GameState.BUSINESS_COMPUTER,
                                                GameState.MISSION_COMPLETE,
@@ -254,13 +256,13 @@ class StateDetector:
                     )
 
         # A stronger generic template may win the primary combination. It must
-        # not let the footer override independently observed business fields.
-        if ocr_result is None or ocr_result.state != GameState.BUSINESS_COMPUTER:
+        # not let supplemental sources override independently observed business fields.
+        if not primary_business:
             final_result = self._call_observed_helper(observation, ("vip_status",),
                 self._vip_status_observation, final_result, vip_status_image)
-        # Keep this last: an unqualified HEIST PASSED must veto status activity.
-        final_result = self._call_observed_helper(observation, ("header",),
-            self._result_header_observation, final_result, result_header_image)
+            # Keep this last: an unqualified HEIST PASSED must veto status activity.
+            final_result = self._call_observed_helper(observation, ("header",),
+                self._result_header_observation, final_result, result_header_image)
 
         # Update context exactly once, after every independent source is resolved.
         self._update_context(final_result)
