@@ -1,0 +1,129 @@
+{
+  "baseline_commit": "92ce26d5394dd4af9b26d6e9841a747378d71339",
+  "images": [
+    {
+      "image": "headhunter-2.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d0/27/Headhunter-2.jpg",
+      "original_sha256": "b01c78aa3a7b78f4bb78b6ca20cf71968c1c23da18d2e329766e56b4b121cc7e",
+      "dimensions": [
+        1600,
+        795
+      ],
+      "replayed_grabs_per_cycle": 1,
+      "ocr_calls_per_cycle": 8,
+      "recorded_mission_sources": 6,
+      "state": "MISSION_ACTIVE",
+      "selected_activity": "VIP Work",
+      "identity_status": "type_only",
+      "mission_type": "VIP_WORK",
+      "mission_name": "",
+      "sample_png_sha256": "5eef3a66b18275e5b019310c8425aba1ac3579b5bed203e5e2069e647140b095",
+      "sample_png_bytes": 953093,
+      "sample_json_bytes": 7803,
+      "exact_decoded_frame_and_six_crop_hashes_match": true,
+      "all_normalized_state_storage_callbacks_and_ocr_calls_match": true
+    },
+    {
+      "image": "sightseer-package.jpg",
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/69/Package.jpg",
+      "original_sha256": "c50c8fe3a4005bd2b71096fc0c298d0ebcffff6accde37d5b650bc9bdfdaa04e",
+      "dimensions": [
+        1600,
+        794
+      ],
+      "replayed_grabs_per_cycle": 1,
+      "ocr_calls_per_cycle": 8,
+      "recorded_mission_sources": 6,
+      "state": "MISSION_ACTIVE",
+      "selected_activity": "VIP Work",
+      "identity_status": "type_only",
+      "mission_type": "VIP_WORK",
+      "mission_name": "",
+      "sample_png_sha256": "e60c8af375ec023d1e7784dcee3c283676ddc606468ab2c898672e26e9746fc1",
+      "sample_png_bytes": 769674,
+      "sample_json_bytes": 9886,
+      "exact_decoded_frame_and_six_crop_hashes_match": true,
+      "all_normalized_state_storage_callbacks_and_ocr_calls_match": true
+    },
+    {
+      "image": "cayo-finale-start.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/c4/40/Cayo-Perico-Finale-1.jpg",
+      "original_sha256": "59a05cd96f32b1ee7c389744cc7c520ce144cf4261b9239b621384e566922e68",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "replayed_grabs_per_cycle": 1,
+      "ocr_calls_per_cycle": 8,
+      "recorded_mission_sources": 6,
+      "state": "MISSION_ACTIVE",
+      "selected_activity": "Go to El Rubio's compound",
+      "identity_status": "type_only",
+      "mission_type": "CAYO_PERICO",
+      "mission_name": "",
+      "sample_png_sha256": "f4b74aac77392543b936b56fbbfd76db4c55416ffd6db3737eaf756144096705",
+      "sample_png_bytes": 169714,
+      "sample_json_bytes": 7324,
+      "exact_decoded_frame_and_six_crop_hashes_match": true,
+      "all_normalized_state_storage_callbacks_and_ocr_calls_match": true
+    },
+    {
+      "image": "cayo-finale-escape.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/6c/e8/Cayo-Perico-Finale-42.jpg",
+      "original_sha256": "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "replayed_grabs_per_cycle": 1,
+      "ocr_calls_per_cycle": 8,
+      "recorded_mission_sources": 6,
+      "state": "MISSION_ACTIVE",
+      "selected_activity": "Escape Cayo Perico",
+      "identity_status": "type_only",
+      "mission_type": "CAYO_PERICO",
+      "mission_name": "",
+      "sample_png_sha256": "d3c3f4e6accb757441f64896757cb09c6051d8a8af5f97b16c378db0d5fc6912",
+      "sample_png_bytes": 463034,
+      "sample_json_bytes": 7906,
+      "exact_decoded_frame_and_six_crop_hashes_match": true,
+      "all_normalized_state_storage_callbacks_and_ocr_calls_match": true
+    },
+    {
+      "image": "cayo-finale-summary.jpg",
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+      "original_sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "replayed_grabs_per_cycle": 1,
+      "ocr_calls_per_cycle": 7,
+      "recorded_mission_sources": 6,
+      "state": "MISSION_COMPLETE",
+      "selected_activity": "",
+      "identity_status": "unknown",
+      "mission_type": "CAYO_PERICO",
+      "mission_name": "",
+      "sample_png_sha256": "e1823418a38ff30a1180eee88da0838700902f430aaef2be16034f6ae7794318",
+      "sample_png_bytes": 707983,
+      "sample_json_bytes": 8642,
+      "exact_decoded_frame_and_six_crop_hashes_match": true,
+      "all_normalized_state_storage_callbacks_and_ocr_calls_match": true
+    }
+  ],
+  "limits": [
+    "Five unrelated public-guide stills; no newly acquired screenshots or YouTube footage",
+    "Actual installed diagnostic Tesseract and production preprocessing/capture slicing/app processing",
+    "Native acquisition supplies stored pixels; custom-provider provenance is explicit",
+    "Independent single-frame cycles; no chronological gameplay or Windows OCR validation",
+    "Wall-clock timestamps and performance durations excluded from state parity; timestamp presence retained",
+    "No recognition-rule change, calibrated accuracy or improved detection accuracy claim",
+    "Original images and derived samples remain local; no image redistribution"
+  ]
+}

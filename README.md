@@ -1548,6 +1548,71 @@ On Windows, separately run `python test_capture.py` with the runtime dependencie
 installed to diagnose screen capture and OCR. This interactive script requires a
 display and Windows OCR; it is not collected by the automated unit suite.
 
+### Save one detection-cycle sample
+
+When an activity is selected incorrectly, **File → Save next detection sample…**
+can retain the next normal capture for local inspection. It cannot recover an
+earlier screenshot or join a capture already in progress. Only one request or
+save can be pending at a time. A ready sample stays in memory until you choose
+to save or cancel it; readiness does not open a dialog over the game.
+
+On one monitor, pause capture first, request the sample, return to GTA, and resume
+using the registered tracking shortcut shown by the app. The configured default
+is Ctrl+Shift+T, but a shortcut is shown as usable only when it is actually
+registered and the hotkey manager is running. If no tracking shortcut is
+registered, resuming with on-screen controls can capture the manager window.
+After the requested cycle finishes, return to the manager and choose
+**Save captured sample…**. Review the full-screen disclosure and select an
+existing destination directory. The full captured screen can include other
+visible content. Nothing is uploaded.
+
+The new exclusive `gta-detection-…` directory contains `frame.png`, `sample.json`,
+and a final `COMPLETE.json` with payload sizes and SHA-256 hashes. Existing files
+are never overwritten. A failed write can leave a partial directory; the UI
+reports this as a failure with its path. Treat a directory as complete only when
+the completion marker exists and both payload sizes and hashes match.
+Publishing the final marker requires hard-link support in the chosen filesystem;
+an unsupported destination reports a failed export. A leftover `COMPLETE.pending`
+after a successful marker publication is reported separately.
+
+The PNG preserves the original detector-frame pixels without annotations,
+resizing or a second screenshot. The JSON records actual same-call crop geometry
+when available, source presence, requested OCR options/text and confidence
+provenance. Geometry unavailable from a legacy/custom provider, and unavailable
+backend confidence, remain explicitly unknown.
+The timestamp provenance identifies the same-call grab start when available;
+otherwise it identifies receipt of the supplied frame, not its acquisition time.
+The detector candidate, first application guard,
+postprocessing result and selected activity are separate observations; the first
+guard need not be the final selection. Source text admitted by the bottom
+objective, VIP footer and result-header boundaries remains distinct from raw OCR.
+
+The sample observes existing calls without another capture, OCR pass or fresh
+classification. Normal business-screen processing can make its existing later
+grabs; those business readings and financial histories are outside this initial
+detector-frame artifact. Save/encoding failures affect only the sample, and
+ordinary cycles retain no sample pixels. Stopping/restarting tracking or
+cancelling retires the exact pending request. A save already admitted before
+Stop can finish its immutable earlier sample; it cannot replace a new request.
+
+Samples are bounded to one uint8 BGR frame of 1–8192 pixels per axis and at most
+16,777,216 pixels, a 64 MiB PNG, 256 KiB JSON and 16 KiB UTF-8 text per OCR source.
+Oversized or invalid evidence fails the sample without truncating it or changing
+the original recognition result. Samples are observations, not ground truth,
+calibrated accuracy estimates, resumable application state or proof of a mission
+completion. Native Windows capture/OCR and live gameplay remain unverified.
+
+Local tests cover paired sampled/ordinary tracking, event-controlled request and
+run ownership, real offscreen Qt controls, bounded byte encoding and injected
+disk failures. The native folder chooser is substituted in tests.
+[Five retained guide-image replays](validation/detection-sample-evaluation.json)
+also compare the published detector/app with the sampled and ordinary paths:
+all 39 OCR calls, 30 mission-source readings and normalized tracking/storage
+results match, while each sample PNG and its crop geometry preserve the exact
+decoded source pixels. These use diagnostic Tesseract and stored pixels at the
+acquisition boundary. They add no YouTube footage or continuous gameplay
+evidence; the original images and derived PNGs remain outside the repository.
+
 ### Diagnose one saved screenshot
 
 Use an existing local PNG or JPEG to inspect the current mission detector without

@@ -1,6 +1,8 @@
 """Screen capture functionality for GTA Business Manager."""
 
 import time
+from dataclasses import dataclass
+from datetime import datetime, timezone
 from typing import Optional
 
 import mss
@@ -14,6 +16,76 @@ from .resolution import ResolutionScaler
 
 
 logger = get_logger("capture")
+
+
+@dataclass(frozen=True)
+class CaptureRectangle:
+    left: int
+    top: int
+    width: int
+    height: int
+
+
+@dataclass(frozen=True)
+class CapturedRegionGeometry:
+    index: int
+    status: str
+    rectangle: Optional[CaptureRectangle]
+
+
+@dataclass(frozen=True)
+class CaptureGeometry:
+    resolution: tuple[int, int]
+    offset: tuple[int, int]
+    regions: tuple[CapturedRegionGeometry, ...]
+    bounds: Optional[CaptureRectangle]
+    grab_started_at: Optional[str]
+    grab_ended_at: Optional[str]
+    grab_duration_ns: Optional[int]
+
+
+class CapturedRegions(dict):
+    """Normal crop dictionary plus frame-free, immutable invocation metadata."""
+
+    def __init__(self, *args, geometry=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._geometry = geometry
+
+    @property
+    def geometry(self):
+        return self._geometry
+
+
+def _capture_stamp():
+    # Diagnostics must never manufacture an acquisition failure. Use a separate
+    # monotonic clock so existing rate-limit pacing is completely unchanged.
+    try:
+        return datetime.now(timezone.utc).isoformat(), time.perf_counter_ns()
+    except Exception:
+        return None, None
+
+
+def _capture_geometry(*, count, width, height, offset, rectangles, bounds,
+                      started, ended, captured):
+    if count > 64:
+        return None
+
+    def rectangle(value):
+        if value is None:
+            return None
+        parts = tuple(value[key] for key in ("left", "top", "width", "height"))
+        if any(type(part) is not int for part in parts):
+            raise ValueError("Unknown rectangle metadata")
+        return CaptureRectangle(*parts)
+
+    duration = None if started[1] is None or ended[1] is None else ended[1] - started[1]
+    return CaptureGeometry(
+        (width, height), tuple(offset), tuple(
+            CapturedRegionGeometry(index,
+                "captured" if index in captured else "capture_unavailable" if index in rectangles else "invalid_region",
+                rectangle(rectangles.get(index))) for index in range(count)
+        ), rectangle(bounds), started[0], ended[0], duration,
+    )
 
 
 class ScreenCapture:
@@ -149,7 +221,7 @@ class ScreenCapture:
         Returns:
             Dict mapping region index to captured image
         """
-        results: dict[int, Optional[np.ndarray]] = dict.fromkeys(range(len(regions)))
+        results = CapturedRegions.fromkeys(range(len(regions)))
         if not regions:
             return results
 
@@ -174,7 +246,12 @@ class ScreenCapture:
             right = max(rect["left"] + rect["width"] for rect in rectangles.values())
             bottom = max(rect["top"] + rect["height"] for rect in rectangles.values())
             bounds = {"left": left, "top": top, "width": right - left, "height": bottom - top}
-            image = np.array(self._ensure_mss().grab(bounds))
+            sct = self._ensure_mss()
+            started = _capture_stamp()
+            screenshot = sct.grab(bounds)
+            ended = _capture_stamp()
+            image = np.array(screenshot)
+            del screenshot
             if (image.ndim != 3 or image.shape[:2] != (bounds["height"], bounds["width"])
                     or image.shape[2] < 3):
                 raise ValueError("Captured image does not match requested bounds")
@@ -186,10 +263,19 @@ class ScreenCapture:
                 results[index] = image[
                     y:y + rectangle["height"], x:x + rectangle["width"], :3
                 ].copy()
+            # Metadata failure cannot enter the acquisition exception branch.
+            try:
+                results._geometry = _capture_geometry(
+                    count=len(regions), width=width, height=height,
+                    offset=(offset_x, offset_y), rectangles=rectangles, bounds=bounds,
+                    started=started, ended=ended, captured=rectangles,
+                )
+            except Exception:
+                pass
             return results
         except Exception as error:
             logger.error(f"Failed to capture region batch: {error}")
-            return dict.fromkeys(results)
+            return CapturedRegions.fromkeys(results)
         finally:
             self._last_capture_time = time.monotonic()
 

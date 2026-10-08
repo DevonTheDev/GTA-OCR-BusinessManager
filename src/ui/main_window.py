@@ -1,5 +1,9 @@
 """Main application window for GTA Business Manager."""
 
+from dataclasses import dataclass
+from html import escape
+from queue import Empty, Queue
+from threading import Thread
 from typing import TYPE_CHECKING, Optional
 
 from PyQt6.QtWidgets import (
@@ -36,6 +40,32 @@ if TYPE_CHECKING:
 logger = get_logger("ui.main_window")
 
 
+def export_detection_sample(sample, destination_directory):
+    """Import the detached local writer only when an explicit save is admitted."""
+    from ..detection.detection_sample import export_detection_sample as export
+
+    return export(sample, destination_directory)
+
+
+def _write_detection_sample(sample, destination_directory, results: Queue) -> None:
+    """One bounded disk job. This function has no application or Qt access."""
+    try:
+        results.put(export_detection_sample(sample, destination_directory))
+    except Exception:
+        # Never pass arbitrary backend exceptions or OCR text to the UI.
+        results.put(None)
+
+
+@dataclass
+class _DetectionSampleSaveJob:
+    token: object
+    sample_id: str
+    captured_at: str
+    destination_directory: str
+    results: Queue
+    thread: Optional[Thread] = None
+
+
 class MainWindow(QMainWindow):
     """Main dashboard window."""
 
@@ -50,6 +80,8 @@ class MainWindow(QMainWindow):
         super().__init__(parent)
         self._app = app
         self._overlay = overlay
+        self._sample_dialog = None
+        self._sample_export_job = None
 
         self.setWindowTitle(f"GTA Business Manager v{__version__}")
         self.setMinimumSize(900, 650)
@@ -74,11 +106,17 @@ class MainWindow(QMainWindow):
 
         # File menu
         file_menu = menubar.addMenu("&File")
+        file_menu.setToolTipsVisible(True)
 
         reset_action = QAction("&Reset Session", self)
         reset_action.setShortcut("Ctrl+R")
         reset_action.triggered.connect(self._reset_session)
         file_menu.addAction(reset_action)
+
+        self._sample_action = QAction("Save next detection sample…", self)
+        self._sample_action.setObjectName("save_detection_sample")
+        self._sample_action.triggered.connect(self._on_detection_sample_action)
+        file_menu.addAction(self._sample_action)
 
         file_menu.addSeparator()
 
@@ -113,6 +151,7 @@ class MainWindow(QMainWindow):
 
         # Top info bar
         self._setup_info_bar(layout)
+        self._setup_detection_sample_bar(layout)
 
         # Tab widget for different views
         self._tabs = QTabWidget()
@@ -212,6 +251,270 @@ class MainWindow(QMainWindow):
 
         self._status_bar.showMessage("Ready")
 
+    def _setup_detection_sample_bar(self, parent_layout: QVBoxLayout) -> None:
+        """Keep sample readiness local; polling never opens a dialog."""
+        from PyQt6.QtWidgets import QPlainTextEdit, QSizePolicy
+
+        bar = self._sample_bar = QWidget(self)
+        bar.setObjectName("detection_sample_bar")
+        layout = QVBoxLayout(bar)
+        layout.setContentsMargins(16, 4, 16, 4)
+        layout.setSpacing(3)
+        self._sample_status = QLabel("Detection sample: not armed")
+        self._sample_status.setObjectName("detection_sample_status")
+        self._sample_guidance = QLabel("")
+        self._sample_guidance.setObjectName("detection_sample_guidance")
+        for label in (self._sample_status, self._sample_guidance):
+            label.setTextFormat(Qt.TextFormat.PlainText)
+            label.setWordWrap(True)
+            label.setSizePolicy(QSizePolicy.Policy.Ignored, QSizePolicy.Policy.Preferred)
+            label.setMaximumHeight(48)
+            layout.addWidget(label)
+        self._sample_export_result = QPlainTextEdit()
+        self._sample_export_result.setObjectName("detection_sample_export_result")
+        self._sample_export_result.setReadOnly(True)
+        self._sample_export_result.setMaximumHeight(76)
+        self._sample_export_result.hide()
+        layout.addWidget(self._sample_export_result)
+        parent_layout.addWidget(bar)
+        bar.hide()
+
+    def _detection_sample_status(self):
+        getter = getattr(self._app, "get_detection_sample_status", None)
+        if not callable(getter):
+            return None
+        status = getter()
+        # Older embedders and panel test doubles need not implement this feature.
+        if not isinstance(getattr(status, "state", None), str):
+            return None
+        return status
+
+    def _detection_sample_guidance(self) -> str:
+        from .. import hotkeys
+
+        # Do not construct a manager or register a new hook for these instructions.
+        manager = hotkeys._hotkey_manager
+        binding = None
+        if manager is not None and manager.is_running:
+            bindings = manager.registered_hotkeys
+            if isinstance(bindings, dict):
+                binding = bindings.get("toggle_tracking")
+        if isinstance(binding, str) and binding:
+            return (
+                "On one monitor: pause capture in Activities, arm the sample, return to GTA, "
+                f"then press {binding} to resume capture. Return here to save."
+            )
+        return (
+            "On one monitor: pause capture in Activities, arm the sample, then return to GTA. "
+            "No registered resume shortcut is active; on-screen Resume may capture the "
+            "foreground manager. Return here to save."
+        )
+
+    def _update_detection_sample_ui(self) -> None:
+        self._poll_detection_sample_export()
+        guidance = self._detection_sample_guidance()
+        self._sample_guidance.setText(guidance)
+        # Tooltips have no PlainText switch: escape every displayed character.
+        self._sample_action.setToolTip(f"<qt>{escape(guidance)}</qt>")
+        self._sample_action.setStatusTip(guidance)
+        status = self._detection_sample_status()
+        self._sample_bar.setVisible(
+            bool(self._sample_export_result.toPlainText())
+            or (status is not None and status.state not in {"idle", "unavailable"})
+        )
+        if status is None:
+            self._sample_action.setEnabled(False)
+            self._sample_status.setText("Detection samples unavailable")
+            return
+        state = status.state
+        occupied = self._sample_export_job is not None or self._sample_dialog is not None
+        eligible = self._app.state.name in {"RUNNING", "PAUSED"}
+        if state in {"armed", "collecting"}:
+            self._sample_action.setText("Cancel detection sample")
+            self._sample_action.setEnabled(not occupied)
+        elif state == "ready":
+            self._sample_action.setText("Save captured sample…")
+            self._sample_action.setEnabled(not occupied)
+        elif state == "saving":
+            self._sample_action.setText("Saving detection sample…")
+            self._sample_action.setEnabled(False)
+        else:
+            self._sample_action.setText("Save next detection sample…")
+            self._sample_action.setEnabled(eligible and not occupied and state != "unavailable")
+        identity = f"Sample {status.sample_id}" if status.sample_id else "Detection sample"
+        if state == "armed":
+            text = f"{identity}: armed for the next normal capture; paused capture waits for Resume."
+        elif state == "collecting":
+            text = f"{identity}: collecting its admitted capture."
+        elif state == "ready":
+            text = f"{identity}: captured {status.captured_at}. Ready to save from File."
+        elif state == "saving":
+            text = f"{identity}: captured {status.captured_at}. Saving locally; this write cannot be cancelled."
+        elif state == "saved":
+            text = f"{identity}: captured {status.captured_at}. Saved locally."
+        elif state == "failed":
+            text = f"{identity}: failed. {status.message}"
+        elif state == "unavailable":
+            text = f"Detection sample unavailable. {status.message}"
+        else:
+            text = "Detection sample: not armed. File → Save next detection sample…"
+        self._sample_status.setText(text)
+
+    def _on_detection_sample_action(self) -> None:
+        if self._sample_dialog is not None or self._sample_export_job is not None:
+            return
+        status = self._detection_sample_status()
+        if status is None:
+            return
+        if status.state in {"armed", "collecting"}:
+            self._app.cancel_detection_sample(status.token)
+        elif status.state == "ready":
+            self._open_detection_sample_save(status)
+        elif status.state not in {"saving", "unavailable"} and self._app.state.name in {"RUNNING", "PAUSED"}:
+            self._app.request_detection_sample()
+        self._update_detection_sample_ui()
+
+    def _open_detection_sample_save(self, status) -> None:
+        from PyQt6.QtWidgets import QDialog, QPlainTextEdit, QPushButton
+
+        dialog = QDialog(self)
+        dialog.setObjectName("detection_sample_save")
+        dialog.setWindowTitle("Save captured detection sample")
+        dialog.setWindowModality(Qt.WindowModality.WindowModal)
+        dialog.resize(560, 280)
+        layout = QVBoxLayout(dialog)
+        disclosure = QLabel(
+            "Saves the full captured screen, which can include other visible content. "
+            "Saved locally; nothing is uploaded. Choose an existing parent folder; "
+            "a new sample folder will be created inside it."
+        )
+        disclosure.setObjectName("detection_sample_disclosure")
+        disclosure.setTextFormat(Qt.TextFormat.PlainText)
+        disclosure.setWordWrap(True)
+        layout.addWidget(disclosure)
+        identity = QPlainTextEdit()
+        identity.setObjectName("detection_sample_identity")
+        identity.setReadOnly(True)
+        identity.setPlainText(f"Sample ID: {status.sample_id}\nCaptured at: {status.captured_at}")
+        identity.setMaximumHeight(110)
+        layout.addWidget(identity)
+        error = QLabel("")
+        error.setObjectName("detection_sample_save_error")
+        error.setTextFormat(Qt.TextFormat.PlainText)
+        error.setWordWrap(True)
+        error.hide()
+        layout.addWidget(error)
+        buttons = QHBoxLayout()
+        cancel = QPushButton("Cancel sample")
+        cancel.setObjectName("detection_sample_cancel")
+        cancel.setDefault(True)
+        choose = QPushButton("Choose folder and save")
+        choose.setObjectName("detection_sample_save_choose")
+        choose.setAutoDefault(False)
+        buttons.addStretch()
+        buttons.addWidget(choose)
+        buttons.addWidget(cancel)
+        layout.addLayout(buttons)
+        cancel.clicked.connect(dialog.reject)
+        choose.clicked.connect(lambda: self._choose_detection_sample_destination(dialog, status, choose))
+        dialog.finished.connect(lambda result: self._finish_detection_sample_dialog(dialog, status.token, result))
+        self._sample_dialog = dialog
+        dialog.open()
+        cancel.setFocus()
+
+    def _finish_detection_sample_dialog(self, dialog, token, result: int) -> None:
+        from PyQt6.QtWidgets import QDialog
+
+        if self._sample_dialog is dialog:
+            self._sample_dialog = None
+        if result != QDialog.DialogCode.Accepted:
+            self._app.cancel_detection_sample(token)
+        dialog.deleteLater()
+        self._update_detection_sample_ui()
+
+    def _choose_detection_sample_destination(self, dialog, status, button) -> None:
+        from PyQt6.QtWidgets import QFileDialog
+
+        if self._sample_dialog is not dialog or not button.isEnabled():
+            return
+        button.setEnabled(False)
+        try:
+            directory = QFileDialog.getExistingDirectory(
+                dialog, "Choose existing parent folder for this sample", "",
+                QFileDialog.Option.ShowDirsOnly,
+            )
+        except Exception:
+            if self._sample_dialog is dialog:
+                button.setEnabled(True)
+                error = dialog.findChild(QLabel, "detection_sample_save_error")
+                error.setText("Could not open the folder chooser. Try again or cancel this sample.")
+                error.show()
+            return
+        # The nested dialog can outlive cancellation, Stop or a new run.
+        if self._sample_dialog is not dialog:
+            return
+        if not directory:
+            dialog.reject()
+            return
+        sample = self._app.claim_detection_sample_for_save(status.token)
+        if sample is None:
+            dialog.reject()
+            return
+        self._start_detection_sample_export(status.token, sample, directory)
+        dialog.accept()
+
+    def _start_detection_sample_export(self, token, sample, directory) -> None:
+        results = Queue(maxsize=1)
+        job = _DetectionSampleSaveJob(
+            token, sample.sample_id, sample.captured_at, directory, results,
+        )
+        self._sample_export_job = job
+        self._sample_export_result.setPlainText(
+            f"Saving sample {sample.sample_id}\nCaptured at: {sample.captured_at}\n"
+            "A started write cannot be cancelled."
+        )
+        self._sample_export_result.show()
+        try:
+            job.thread = Thread(target=_write_detection_sample, args=(sample, directory, results),
+                                name="detection-sample-export", daemon=True)
+            job.thread.start()
+        except Exception:
+            from ..detection.detection_sample import DetectionSampleExport
+
+            results.put(DetectionSampleExport(False, None, (), (),
+                                               "Could not start the save worker; no files were written."))
+
+    def _poll_detection_sample_export(self) -> None:
+        job = self._sample_export_job
+        if job is None or (job.thread is not None and job.thread.is_alive()):
+            return
+        try:
+            result = job.results.get_nowait()
+        except Empty:
+            return
+        unknown_output = result is None
+        if unknown_output:
+            from ..detection.detection_sample import DetectionSampleExport
+
+            result = DetectionSampleExport(False, None, (), (),
+                                           "Export outcome unknown; inspect the chosen folder for incomplete output.")
+        self._sample_export_job = None
+        self._app.complete_detection_sample_save(job.token, result)
+        heading = "Saved sample" if result.success else "Sample not saved"
+        lines = [f"{heading}: {job.sample_id}", f"Captured at: {job.captured_at}"]
+        if result.path:
+            lines.append(f"Folder: {result.path}")
+        if unknown_output:
+            lines.extend((f"Chosen parent: {job.destination_directory}",
+                          "Completed and partial files: unknown"))
+        elif not result.success:
+            lines.extend((f"Completed files: {', '.join(result.completed_files) or 'none'}",
+                          f"Partial files: {', '.join(result.partial_files) or 'none reported'}"))
+        if result.message:
+            lines.append(result.message)
+        self._sample_export_result.setPlainText("\n".join(lines))
+        self._sample_export_result.show()
+
     def _setup_update_timer(self) -> None:
         """Setup timer for UI updates."""
         self._update_timer = QTimer()
@@ -222,6 +525,8 @@ class MainWindow(QMainWindow):
         """Update UI with current data."""
         if not self._app:
             return
+
+        self._update_detection_sample_ui()
 
         # App-side Stop/reset changes should appear on the normal UI cadence.
         self._business_panel._sync_business_screen_target()

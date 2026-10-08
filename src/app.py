@@ -9,6 +9,7 @@ from typing import Optional, Callable, List
 from dataclasses import dataclass, field, replace
 from datetime import datetime, timezone
 from enum import Enum, auto
+from uuid import uuid4
 
 from .config.settings import Settings, get_settings
 from .capture.screen_capture import ScreenCapture
@@ -19,6 +20,9 @@ from .detection.state_detector import (
 )
 from .detection.mission_episode import (
     MissionIdentity, ObjectiveEvidence, TerminalMissionEpisode, objective_evidence,
+)
+from .detection.detection_sample import (
+    DetectionSample, DetectionSampleCollector, DetectionSampleExport,
 )
 from .detection.parsers.money_parser import MoneyParser, MoneyReading
 from .detection.parsers.timer_parser import TimerParser, TimerReading
@@ -151,6 +155,55 @@ class DetectionRecoveryStatus:
     snapshot: Optional[DetectionRecoverySnapshot] = None
 
 
+@dataclass(frozen=True, eq=False)
+class _DetectionSampleToken:
+    """Identity-only request target; keep the originating run alive privately."""
+
+    sample_id: str
+    run_id: str
+    requested_at: str
+    _run: AppData = field(repr=False)
+
+
+@dataclass(frozen=True)
+class DetectionSampleStatus:
+    """Detached display fields and an opaque exact-request confirmation token."""
+
+    state: str
+    token: Optional[object] = None
+    sample_id: str = ""
+    run_id: str = ""
+    requested_at: str = ""
+    captured_at: str = ""
+    message: str = ""
+
+
+@dataclass
+class _DetectionSampleSlot:
+    status: DetectionSampleStatus
+    sample: Optional[DetectionSample] = None
+
+
+@dataclass
+class _DetectionSampleCollection:
+    """An iteration-local observer; its failures cannot alter normal tracking."""
+
+    token: _DetectionSampleToken
+    recorder: DetectionSampleCollector
+    failed: bool = False
+
+    def call(self, method: str, *args) -> None:
+        if self.failed:
+            return
+        try:
+            getattr(self.recorder, method)(*args)
+        except Exception:
+            self.failed = True
+
+    def observe_ocr(self, source, event, payload) -> None:
+        self.call("observe_ocr", source, event, payload)
+
+
 class GTABusinessManager:
     """Main application class that orchestrates all components."""
 
@@ -169,6 +222,8 @@ class GTABusinessManager:
         self._lifecycle_lock = threading.RLock()
         self._capture_busy = False
         self._recovery_revision = 0
+        self._detection_sample_run_id = uuid4().hex
+        self._detection_sample_slot: Optional[_DetectionSampleSlot] = None
 
         # Core components (initialized lazily)
         self._capture: Optional[ScreenCapture] = None
@@ -330,6 +385,8 @@ class GTABusinessManager:
                 return False
 
             self._state = AppState.STARTING
+            self._detection_sample_slot = None
+            self._detection_sample_run_id = uuid4().hex
             logger.info("Starting GTA Business Manager...")
             try:
                 # Business observations and completed activity history outlive a
@@ -365,6 +422,7 @@ class GTABusinessManager:
     def stop(self) -> None:
         """Signal shutdown; a timed-out worker retains its resources until exit."""
         with self._lifecycle_lock:
+            self._detection_sample_slot = None
             with self._data_lock:
                 self._business_screen_target = None
                 # Stop also retires Automatic batches and stopped preselection.
@@ -391,6 +449,7 @@ class GTABusinessManager:
         with self._lifecycle_lock:
             if worker is not self._capture_thread or self._state == AppState.STOPPED:
                 return
+            self._detection_sample_slot = None
             self._state = AppState.STOPPING
             self._stop_event.set()
             try:
@@ -458,6 +517,117 @@ class GTABusinessManager:
         if self._capture_busy:
             return "Paused; waiting for the current capture to finish."
         return ""
+
+    def _detection_sample_available(self) -> bool:
+        """Called under lifecycle lock; PAUSED may arm without any acquisition."""
+        return (self._state in (AppState.RUNNING, AppState.PAUSED)
+                and not self._stop_event.is_set())
+
+    def get_detection_sample_status(self) -> DetectionSampleStatus:
+        with self._lifecycle_lock:
+            slot = self._detection_sample_slot
+            if slot is not None and slot.status.token._run is self._data:
+                return slot.status
+            if self._detection_sample_available():
+                return DetectionSampleStatus("idle", message="No detection sample requested.")
+            return DetectionSampleStatus(
+                "unavailable", message="Start tracking before requesting a detection sample."
+            )
+
+    def request_detection_sample(self) -> DetectionSampleStatus:
+        """Arm exactly one upcoming admission, never join an in-flight cycle."""
+        with self._lifecycle_lock:
+            if not self._detection_sample_available():
+                return self.get_detection_sample_status()
+            current = self.get_detection_sample_status()
+            if current.state in ("armed", "collecting", "ready", "saving"):
+                return current
+            token = _DetectionSampleToken(
+                uuid4().hex, self._detection_sample_run_id,
+                datetime.now(timezone.utc).isoformat(), self._data,
+            )
+            status = DetectionSampleStatus(
+                "armed", token, token.sample_id, token.run_id, token.requested_at,
+                message="Waiting for the next capture after tracking resumes.",
+            )
+            self._detection_sample_slot = _DetectionSampleSlot(status)
+            return status
+
+    def _detection_sample_matches(self, token, state: str) -> bool:
+        slot = self._detection_sample_slot
+        return (slot is not None and slot.status.token is token
+                and isinstance(token, _DetectionSampleToken)
+                and token._run is self._data and slot.status.state == state)
+
+    def cancel_detection_sample(self, token) -> bool:
+        """Retire only the requested token; an admitted disk write is reserved."""
+        with self._lifecycle_lock:
+            slot = self._detection_sample_slot
+            if (slot is None or slot.status.token is not token
+                    or slot.status.state == "saving"):
+                return False
+            self._detection_sample_slot = None
+            return True
+
+    def claim_detection_sample_for_save(self, token) -> Optional[DetectionSample]:
+        """Reserve one immutable export, without holding a lock during writing."""
+        with self._lifecycle_lock:
+            if (not self._detection_sample_available()
+                    or not self._detection_sample_matches(token, "ready")):
+                return None
+            slot = self._detection_sample_slot
+            sample, slot.sample = slot.sample, None
+            slot.status = replace(slot.status, state="saving", message="Saving detection sample…")
+            return sample
+
+    def complete_detection_sample_save(self, token, result: DetectionSampleExport) -> bool:
+        """An old export may finish, but cannot update a replacement request."""
+        with self._lifecycle_lock:
+            if not self._detection_sample_matches(token, "saving"):
+                return False
+            slot = self._detection_sample_slot
+            slot.status = replace(
+                slot.status, state="saved" if result.success else "failed",
+                message=("Detection sample saved locally." if result.success
+                         else "Detection sample could not be saved."),
+            )
+            return True
+
+    def _fail_detection_sample(self, token, message: str) -> None:
+        with self._lifecycle_lock:
+            if self._detection_sample_matches(token, "collecting"):
+                slot = self._detection_sample_slot
+                slot.sample = None
+                slot.status = replace(slot.status, state="failed", message=message)
+
+    def _finish_detection_sample(self, collection, cycle_failed: bool) -> None:
+        if collection is None:
+            return
+        token = collection.token
+        if cycle_failed:
+            self._fail_detection_sample(token, "Detection cycle failed; no sample was retained.")
+            return
+        if collection.failed:
+            self._fail_detection_sample(token, "Detection sample collection failed.")
+            return
+        with self._lifecycle_lock:
+            if not self._detection_sample_matches(token, "collecting"):
+                return
+        try:
+            # Encode in the existing worker, outside application locks.
+            sample = collection.recorder.finish()
+        except Exception:
+            self._fail_detection_sample(token, "Detection sample encoding failed.")
+            return
+        with self._lifecycle_lock:
+            if (self._detection_sample_available()
+                    and self._detection_sample_matches(token, "collecting")):
+                slot = self._detection_sample_slot
+                slot.sample = sample
+                slot.status = replace(
+                    slot.status, state="ready", captured_at=sample.captured_at,
+                    message="Detection sample ready to save locally.",
+                )
 
     def _mission_recovery_fields(self) -> tuple:
         """Immutable ownership values, read only at the paused/drained boundary."""
@@ -542,16 +712,39 @@ class GTABusinessManager:
                 # Admission and Pause share one lock: a paused worker is either
                 # already busy or cannot start another iteration.
                 with self._lifecycle_lock:
+                    sample_token = None
+                    sample_admitted_at = None
                     admitted = self._state == AppState.RUNNING and not self._stop_event.is_set()
                     if admitted:
                         self._capture_busy = True
                         self._recovery_revision += 1
+                        slot = self._detection_sample_slot
+                        if (slot is not None
+                                and self._detection_sample_matches(slot.status.token, "armed")):
+                            sample_token = slot.status.token
+                            sample_admitted_at = datetime.now(timezone.utc).isoformat()
+                            slot.status = replace(
+                                slot.status, state="collecting", message="Collecting detection sample…"
+                            )
                 if not admitted:
                     self._stop_event.wait(0.1)
                     continue
                 failed = False
+                collection = None
+                if sample_token is not None:
+                    try:
+                        collection = _DetectionSampleCollection(
+                            sample_token, DetectionSampleCollector(
+                                sample_token.sample_id, sample_token.run_id,
+                                sample_token.requested_at, sample_admitted_at,
+                            ),
+                        )
+                    except Exception:
+                        self._fail_detection_sample(sample_token, "Detection sample collection failed.")
                 try:
-                    result = self._do_capture_cycle()
+                    # Preserve legacy/custom unarmed call shape exactly.
+                    result = (self._do_capture_cycle(collection) if collection is not None
+                              else self._do_capture_cycle())
                     self._last_capture_result = result
                     for callback in self._on_capture:
                         if self._stop_event.is_set():
@@ -566,6 +759,8 @@ class GTABusinessManager:
                     logger.error(f"Capture cycle error: {e}")
                     failed = True
                 finally:
+                    self._finish_detection_sample(collection, failed)
+                    collection = None
                     # Publication, synchronous callbacks and rate adjustment all
                     # belong to the admitted iteration, including on exceptions.
                     with self._lifecycle_lock:
@@ -576,7 +771,7 @@ class GTABusinessManager:
             self._finish_stop(worker)
             logger.debug("Capture loop ended")
 
-    def _do_capture_cycle(self) -> CaptureResult:
+    def _do_capture_cycle(self, sample: Optional[_DetectionSampleCollection] = None) -> CaptureResult:
         """Perform one capture and detection cycle."""
         result = CaptureResult()
         total_start = time.perf_counter()
@@ -600,7 +795,18 @@ class GTABusinessManager:
                 status_region = getattr(regions, "vip_status", None)
                 if status_region is not None:
                     capture_regions.append(status_region)
+                if sample is not None:
+                    # Freeze presence from this exact request before the provider
+                    # can change its configured regions during acquisition.
+                    sample_region_presence = {
+                        source: capture_regions[index] is not None
+                        for source, index in (("mission", 2), ("center", 3),
+                                              ("banner", 5), ("bottom", 6), ("header", 7))
+                    }
+                    sample_region_presence["vip_status"] = status_region is not None
                 images = self._capture.capture_multiple_regions(capture_regions)
+                if sample is not None:
+                    sample.call("capture", images, sample_region_presence, self._capture)
                 full_screen, money_img, mission_img, center_img, timer_img, banner_img, bottom_img, header_img = (
                     images[index] for index in range(8)
                 )
@@ -611,7 +817,18 @@ class GTABusinessManager:
             if full_screen is None:
                 return result
 
+            if sample is not None:
+                sample.call(
+                    "selection", "before", self._activity_tracker.current_activity,
+                    self._data.mission_identity_status, self._data.recovery_waiting_for_balance,
+                )
             # Detect game state
+            detection_options = {}
+            if sample is not None:
+                if getattr(self._state_detector.detect, "supports_detection_sample_observation", False) is True:
+                    detection_options["observation"] = sample.observe_ocr
+                else:
+                    sample.call("mission_observation_unavailable")
             state_result = self._state_detector.detect(
                 full_screen,
                 mission_text_image=mission_img,
@@ -620,10 +837,15 @@ class GTABusinessManager:
                 bottom_objective_image=bottom_img,
                 result_header_image=header_img,
                 vip_status_image=status_img,
+                **detection_options,
             )
+            if sample is not None:
+                sample.call("stage", "candidate", state_result)
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
             state_result = self._guard_mission_observation(state_result)
+            if sample is not None:
+                sample.call("stage", "first_guarded", state_result)
 
             result.game_state = state_result.state
             result.state_confidence = state_result.confidence
@@ -674,6 +896,12 @@ class GTABusinessManager:
                 result.activity_name = current_activity.name
                 result.activity_type = current_activity.activity_type
                 result.activity_identity_status = self._data.mission_identity_status
+            if sample is not None:
+                sample.call("stage", "processed", result)
+                sample.call(
+                    "selection", "after", current_activity,
+                    self._data.mission_identity_status, self._data.recovery_waiting_for_balance,
+                )
 
         # Record timing
         metrics = self._perf_monitor.get_metrics()

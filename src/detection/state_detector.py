@@ -168,6 +168,8 @@ class StateDetector:
         bottom_objective_image: Optional[np.ndarray] = None,
         result_header_image: Optional[np.ndarray] = None,
         vip_status_image: Optional[np.ndarray] = None,
+        *,
+        observation=None,
     ) -> StateDetectionResult:
         """Detect current game state from screen capture.
 
@@ -184,6 +186,7 @@ class StateDetector:
             StateDetectionResult with detected state
         """
         height, width = image.shape[:2]
+        self._observe(observation, None, "backend", {"engine": self._ocr})
 
         # Layer 1: Quick visual checks
         quick_result = self._quick_state_check(image)
@@ -191,7 +194,8 @@ class StateDetector:
         # Layer 2: OCR-based detection if we have the regions
         ocr_result = None
         if any(region is not None for region in (mission_text_image, center_text_image, mission_banner_image)):
-            ocr_result = self._ocr_state_check(mission_text_image, center_text_image, mission_banner_image)
+            ocr_result = self._call_observed_helper(observation, ("mission", "center", "banner"),
+                self._ocr_state_check, mission_text_image, center_text_image, mission_banner_image)
 
         # Layer 3: Template matching
         template_result = self._check_templates(image)
@@ -206,12 +210,12 @@ class StateDetector:
             main_reading.outcome is not None or main_reading.outcome_scope is not None
             or main_reading.identity_status == "ambiguous"
         )
-        if (bottom_objective_image is not None and self._ocr.is_available
+        if (bottom_objective_image is not None and self._ocr_available(observation, ("bottom",))
                 and not protected
                 and final_result.state not in (GameState.BUSINESS_COMPUTER,
                                                GameState.MISSION_COMPLETE,
                                                GameState.MISSION_FAILED)):
-            raw = self._ocr.recognize_preprocessed(
+            raw = self._mission_ocr(observation, "bottom",
                 bottom_objective_image, threshold=False, invert=True, scale=2.0,
             ).text
             final_result = replace(final_result, bottom_objective_text=raw)
@@ -252,14 +256,55 @@ class StateDetector:
         # A stronger generic template may win the primary combination. It must
         # not let the footer override independently observed business fields.
         if ocr_result is None or ocr_result.state != GameState.BUSINESS_COMPUTER:
-            final_result = self._vip_status_observation(final_result, vip_status_image)
+            final_result = self._call_observed_helper(observation, ("vip_status",),
+                self._vip_status_observation, final_result, vip_status_image)
         # Keep this last: an unqualified HEIST PASSED must veto status activity.
-        final_result = self._result_header_observation(final_result, result_header_image)
+        final_result = self._call_observed_helper(observation, ("header",),
+            self._result_header_observation, final_result, result_header_image)
 
         # Update context exactly once, after every independent source is resolved.
         self._update_context(final_result)
 
         return final_result
+
+    # A marker on this function (rather than its class) cannot accidentally
+    # opt an overriding custom detector into this keyword argument.
+    detect.supports_detection_sample_observation = True
+
+    @staticmethod
+    def _observe(observation, source, event, payload):
+        if observation is not None:
+            try:
+                observation(source, event, payload)
+            except Exception:
+                pass
+
+    def _ocr_available(self, observation, sources):
+        available = self._ocr.is_available
+        if observation is not None:
+            for source in sources:
+                self._observe(observation, source, "availability", {"available": available})
+        return available
+
+    def _call_observed_helper(self, observation, sources, helper, *args):
+        if observation is not None:
+            if getattr(helper, "supports_detection_sample_observation", False) is True:
+                return helper(*args, observation=observation)
+            for source in sources:
+                self._observe(observation, source, "unavailable", {})
+        return helper(*args)
+
+    def _mission_ocr(self, observation, source, image, **kwargs):
+        if observation is None:
+            return self._ocr.recognize_preprocessed(image, **kwargs)
+        self._observe(observation, source, "request", {"kwargs": kwargs.copy()})
+        try:
+            result = self._ocr.recognize_preprocessed(image, **kwargs)
+        except Exception:
+            self._observe(observation, source, "error", {})
+            raise
+        self._observe(observation, source, "result", {"result": result})
+        return result
 
     @staticmethod
     def _vip_status_marker(raw: str) -> str:
@@ -280,18 +325,18 @@ class StateDetector:
             return ""
         return VIP_STATUS_MARKER if any(_VIP_STATUS_ROW.fullmatch(line) for line in lines) else ""
 
-    def _vip_status_observation(self, result, image):
+    def _vip_status_observation(self, result, image, *, observation=None):
         """Enrich only unprotected identity using the separately admitted marker."""
         reading = result.mission
         protected = reading is not None and (
             reading.outcome is not None or reading.outcome_scope is not None
             or reading.identity_status == "ambiguous"
         )
-        if (image is None or not self._ocr.is_available or protected
+        if (image is None or not self._ocr_available(observation, ("vip_status",)) or protected
                 or result.state in (GameState.BUSINESS_COMPUTER, GameState.MISSION_COMPLETE,
                                     GameState.MISSION_FAILED)):
             return result
-        raw = self._ocr.recognize_preprocessed(
+        raw = self._mission_ocr(observation, "vip_status",
             image, threshold=False, invert=True, scale=2.0,
         ).text
         marker = self._vip_status_marker(raw)
@@ -308,18 +353,18 @@ class StateDetector:
         return replace(result, state=GameState.MISSION_ACTIVE, confidence=0.8,
                        reason="Complete VIP status row supplies category identity", mission=reading)
 
-    def _result_header_observation(self, result, image):
+    def _result_header_observation(self, result, image, *, observation=None):
         """Admit only a self-qualified result, retaining primary source priority."""
         reading = result.mission
         protected = reading is not None and (
             reading.outcome is not None or reading.outcome_scope is not None
             or reading.identity_status == "ambiguous"
         )
-        if (image is None or not self._ocr.is_available or protected
+        if (image is None or not self._ocr_available(observation, ("header",)) or protected
                 or result.state in (GameState.BUSINESS_COMPUTER, GameState.MISSION_COMPLETE,
                                     GameState.MISSION_FAILED)):
             return result
-        raw = self._ocr.recognize_preprocessed(
+        raw = self._mission_ocr(observation, "header",
             image, threshold=False, invert=False, scale=2.0,
         ).text
         result = replace(result, result_header_text=raw)
@@ -490,9 +535,10 @@ class StateDetector:
         mission_text_image: Optional[np.ndarray],
         center_text_image: Optional[np.ndarray],
         mission_banner_image: Optional[np.ndarray] = None,
+        *, observation=None,
     ) -> Optional[StateDetectionResult]:
         """Check state using OCR on text regions."""
-        if not self._ocr.is_available:
+        if not self._ocr_available(observation, ("mission", "center", "banner")):
             return None
 
         # Keep all original crops; identity and objectives must survive whichever
@@ -501,15 +547,15 @@ class StateDetector:
         center_text = ""
         banner_text = ""
         if mission_text_image is not None:
-            mission_text = self._ocr.recognize_preprocessed(
+            mission_text = self._mission_ocr(observation, "mission",
                 mission_text_image, invert=True, scale=2.0,
             ).text
         if center_text_image is not None:
-            center_text = self._ocr.recognize_preprocessed(
+            center_text = self._mission_ocr(observation, "center",
                 center_text_image, invert=True, scale=2.0,
             ).text
         if mission_banner_image is not None:
-            banner_text = self._ocr.recognize_preprocessed(
+            banner_text = self._mission_ocr(observation, "banner",
                 mission_banner_image, invert=True, scale=2.0,
             ).text
         text_regions = (mission_text, center_text, banner_text)
@@ -761,3 +807,9 @@ class StateDetector:
     def reset_context(self) -> None:
         """Reset detection context."""
         self._context = DetectionContext()
+
+
+for _sample_helper in (StateDetector._ocr_state_check, StateDetector._vip_status_observation,
+                       StateDetector._result_header_observation):
+    _sample_helper.supports_detection_sample_observation = True
+del _sample_helper
