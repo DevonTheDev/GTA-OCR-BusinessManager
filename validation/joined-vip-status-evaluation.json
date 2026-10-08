@@ -1,0 +1,1232 @@
+{
+  "schema_version": 1,
+  "evaluated_at_utc": "2026-10-08T04:54:45.394448+00:00",
+  "purpose": "Fresh actual image-to-Tesseract-to-detector evaluation of one exact joined VIP footer admission alternative",
+  "baseline_commit": "f6ab79ef57f4ed20bdb2f378e0edc80fe340129c",
+  "baseline_git_tree": "2afb52788ca2798a6c4a7fbca677664f48788c79",
+  "method": {
+    "command": "python test_capture.py --image <existing-local-original.jpg> --backend tesseract",
+    "baseline": "Exact git archive; every one of 284 archived files checked against its base git object",
+    "candidate": "Separate exact base snapshot plus the frozen state_detector.py; no other runtime file changed",
+    "observer": "Local observation-only startup hook delegates the original CLI, preprocessing, detector and Tesseract subprocess unchanged; retains bytes from the actual six requests",
+    "plain_cli_parity": {
+      "image": "sightseer-package.jpg",
+      "candidate_stdout_bytes_exact": true,
+      "normalization": "none",
+      "stdout_sha256": "4d60bab06a47d18b82b91d54cdb4ace345d4bd3dd9ecbeec9abad66b061e650d"
+    },
+    "image_policy": "Original stored dimensions, default production regions, no transform search or additional source lanes",
+    "detector": "One fresh detector and one detect call per CLI invocation, no loaded templates",
+    "source_sha256": {
+      "baseline": {
+        "test_capture.py": "58e2f19be014c55938338ff596e0cfff4a57c0d9a78d45edbc308599152a1ba5",
+        "src/detection/screenshot_diagnostic.py": "27e10440d9fc839af8afe81c9d5074bdc17e8e30524097bd7a87c77040b6d693",
+        "src/detection/state_detector.py": "da709406ce9c5ce0f1cc3c70fd04b7e53c004504f7d51fbf26f2e95cf68515bc",
+        "src/capture/regions.py": "0e6380977da7fb1ead4aa10dc3cde4b889d41d37b60595dd5b2de1d1c716120c",
+        "src/detection/ocr_engine.py": "3db644687a607b64cfa15638265f447cd3b9d9d07e4fd05c7e4ee36ed7a5685d",
+        "src/detection/parsers/mission_parser.py": "f1cbb06c638923955006cd3a0e949482b08235c98a46b3dc90c6232380b5a34c",
+        "src/detection/mission_episode.py": "89612333232f212cd704fced079a52393b0383b84af353ecd14cecdaa79e7252",
+        "src/detection/template_matcher.py": "a96b9797432363f4ea56141597067a6ae275bafb3639a37b0e2a284e9bfc9f9d",
+        "src/game/state_machine.py": "016f47579df8fd3192f2f28b0a218b5512b23d571f1cd5af485b264ff59f23a1"
+      },
+      "candidate": {
+        "test_capture.py": "58e2f19be014c55938338ff596e0cfff4a57c0d9a78d45edbc308599152a1ba5",
+        "src/detection/screenshot_diagnostic.py": "27e10440d9fc839af8afe81c9d5074bdc17e8e30524097bd7a87c77040b6d693",
+        "src/detection/state_detector.py": "1505f1029a40f012df5f293a993405a0510844fa551417cfc8629ed253e34318",
+        "src/capture/regions.py": "0e6380977da7fb1ead4aa10dc3cde4b889d41d37b60595dd5b2de1d1c716120c",
+        "src/detection/ocr_engine.py": "3db644687a607b64cfa15638265f447cd3b9d9d07e4fd05c7e4ee36ed7a5685d",
+        "src/detection/parsers/mission_parser.py": "f1cbb06c638923955006cd3a0e949482b08235c98a46b3dc90c6232380b5a34c",
+        "src/detection/mission_episode.py": "89612333232f212cd704fced079a52393b0383b84af353ecd14cecdaa79e7252",
+        "src/detection/template_matcher.py": "a96b9797432363f4ea56141597067a6ae275bafb3639a37b0e2a284e9bfc9f9d",
+        "src/game/state_machine.py": "016f47579df8fd3192f2f28b0a218b5512b23d571f1cd5af485b264ff59f23a1"
+      }
+    },
+    "array_hash_format": "SHA-256 over C-order uint8 bytes: crop BGR; preprocessed grayscale. Full byte counts/shapes and bytes are retained locally.",
+    "observation_hook_sha256": "55a27f429f53d7d39103cc4788b40bedacbdc984e328b1b75d60c518e2811c6e",
+    "runner_sha256": "144cfe84d54a18f8692c01cd3347bdc736b68de3bd1aef2e6f3e66233bb2dd81",
+    "comparator_sha256": "ba359be20ca0a57fafc8063866945d9403b92cff931e4cf17f04e192bc0e7c9b"
+  },
+  "backend": {
+    "name": "tesseract",
+    "diagnostic_only": true,
+    "version": "tesseract 5.5.0",
+    "language": "eng",
+    "psm": 6,
+    "format": "tsv",
+    "python": "3.12.14",
+    "numpy": "2.5.3",
+    "pillow": "12.3.0",
+    "opencv": "5.0.0",
+    "tesseract_binary_sha256": "74b76a5b994adcc18be362bf64ed5118082b2401d5d9a35242e92fc4c62e2b4b",
+    "english_traineddata_sha256": "7d4322bd2a7749724879683fc3912cb542f19906c83bcc1a52132556427170b2"
+  },
+  "verification": {
+    "paired_images": 5,
+    "paired_source_observations": 30,
+    "paired_cli_invocations": 10,
+    "paired_actual_ocr_calls": 60,
+    "additional_plain_parity_invocations": 1,
+    "additional_plain_parity_ocr_calls": 6,
+    "same_six_calls_per_image": true,
+    "all_pair_cli_exit_codes_zero": true,
+    "all_pair_cli_stderr_empty": true,
+    "all_30_sources_crop_pixels_preprocessed_pixels_backend_png_tsv_ocr_text_confidence_exact": true,
+    "all_5_fresh_baselines_match_historical_cli": true,
+    "all_5_candidate_dataclasses_match_prior_shadow_probe": true,
+    "changed_candidate_images": [
+      "sightseer-package.jpg"
+    ],
+    "other_4_full_detector_dataclasses_exact": true,
+    "source_snapshots_stable_during_runs": true,
+    "original_image_hashes_stable": true,
+    "historical_vip_status_evaluation_unchanged": true,
+    "historical_vip_status_evaluation_sha256": "784da65de6b730105dab232230418f65f06de560483923acc05944a7bee18ad2"
+  },
+  "observations": [
+    {
+      "input": {
+        "name": "headhunter-2.jpg",
+        "sha256": "b01c78aa3a7b78f4bb78b6ca20cf71968c1c23da18d2e329766e56b4b121cc7e",
+        "bytes": 117170,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 795
+      },
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d0/27/Headhunter-2.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:20.635138+00:00",
+      "pixel_inspection": {
+        "method": "view_image, original detail, on exact original local bytes",
+        "inspected_at_utc": "2026-10-08T04:47:17Z",
+        "notes": [
+          "Full lower-right VIP WORK END label and bottom objective Assassinate the final target. are visible.",
+          "The mission title Headhunter is not printed in pixels."
+        ]
+      },
+      "layout_limit": "1600x795 wide image, approximately 2.013:1. HUD sits close to lower and side edges. Original capture bounds, crop history and safe-zone settings cannot be established from this file.",
+      "baseline_candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate_projection_changed": false,
+      "sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            15,
+            1200,
+            79
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "57bb4078346ed32cbe82eab549ae6ce683fd375455854ce0887e96e620457372",
+          "ocr_confidence": 0.31249576749999997,
+          "crop_bgr_sha256": "022b6487cd2982db8cfc17c6ed8932dc5aeed903f4133888b1c7c2625baba6f7",
+          "preprocessed_grayscale_sha256": "33cba5b944741f233651ce0536927bb8f3a22d00f0cb1b19dbc3e1675f4c59ed",
+          "preprocessed_shape_hw": [
+            128,
+            1600
+          ],
+          "backend_png_sha256": "a3498cbb368a315f7c9bcc372c7d4ebfdcb956a2e8f7e89026f8eaa737c06c93",
+          "backend_tsv_sha256": "6c595b2292229195bc4d7ca745fe29d491486035317f69a1ad1a072d17816c59",
+          "baseline_candidate_exact": true
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            357,
+            1200,
+            477
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "2a1d7245b8e184d4e5c8d13c67b7137d893f759a53c96efd73f1f9bca5c4150c",
+          "ocr_confidence": 0.22271424551724137,
+          "crop_bgr_sha256": "edb0a5dd70fec8f7d523360fdc7538ab3a0da90c07c2b4fa4e771222a348a861",
+          "preprocessed_grayscale_sha256": "6f7fb10422266fda3b2279cc56828f07ea18e9879ba4ff1a0b06d3c78d6509f0",
+          "preprocessed_shape_hw": [
+            240,
+            1600
+          ],
+          "backend_png_sha256": "9ef4ca19f55093bcd571db484d0907e20528e0da7ee40d7b24d4dc0c82347f98",
+          "backend_tsv_sha256": "936936e4fd63627f7de2939405af6518c135cfb64330265d5c3080f8c7d85439",
+          "baseline_candidate_exact": true
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            278,
+            1280,
+            397
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized_empty",
+          "ocr_text_sha256_utf8": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ocr_confidence": 0.0,
+          "crop_bgr_sha256": "4f2a9d9803d711ee1bcebc174ddd8b76ae0471aaab1118422b8c7c6cafbceb28",
+          "preprocessed_grayscale_sha256": "4ae0a7ed2acb4d197b3fbd057ebce6b85584bd39936d7bdf26c00822589c1de9",
+          "preprocessed_shape_hw": [
+            238,
+            1920
+          ],
+          "backend_png_sha256": "5156cc0952dc6a0e85bce53c016d925e45dad5ba3c2382605b2f13706b354a45",
+          "backend_tsv_sha256": "6b70f4772cd556515d7387f54f5e8284ea37ca6eb073077fbfdf645a40594892",
+          "baseline_candidate_exact": true
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            715,
+            1200,
+            795
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "ddce6259fbeafde05fa603c468c5d5ed802ae99221eb682c28b2a8054acab4d4",
+          "ocr_confidence": 0.390818602,
+          "crop_bgr_sha256": "f65108a9d3a6203cc743f115150c5a907f91cd9d2955b84c8ce0e59912584907",
+          "preprocessed_grayscale_sha256": "d38c16b5c1809ed73c2a8eabd0445fb432b05c6d90d313863e7220a2ee85467b",
+          "preprocessed_shape_hw": [
+            160,
+            1600
+          ],
+          "backend_png_sha256": "11931174cb00b4e5a42fc13b5f26c1f9654aaa6869c1a30589fb8049430e7c55",
+          "backend_tsv_sha256": "4cc233d431bafcc84585488a8a8e5a84114afc6cddc781fcdf07b7ec468ac5a2",
+          "baseline_candidate_exact": true
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            95,
+            1280,
+            254
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "924be30cb1f0b7e05d885423955a5c5f8750add621bda9be87f94fbc2aaf23f0",
+          "ocr_confidence": 0.33276200857142857,
+          "crop_bgr_sha256": "9ecbd7e7b99a32394e5eef946069337de34b5394d1fd9ddc0748eb5dd84b2245",
+          "preprocessed_grayscale_sha256": "32481094d2a0d6ff94247164885ce46177f1ccff5ac5b642e7ff64cc461c8109",
+          "preprocessed_shape_hw": [
+            318,
+            1920
+          ],
+          "backend_png_sha256": "ff74c07ccc7522b8421684c7b05380885790748c3e82a98024fdb8293e718245",
+          "backend_tsv_sha256": "dfe31f817e85d2521d246024f523d600d8c93a2d8994939926a3c206362ae765",
+          "baseline_candidate_exact": true
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            699,
+            1584,
+            795
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "694e67cd7683f83b0b5a4538838e5673220140ae13982c3db263814b0451a3d3",
+          "ocr_confidence": 0.5168764880000001,
+          "crop_bgr_sha256": "ab5ff87c83597006445d055fe7fb273e21f70291318930f5308608f439ec3ac4",
+          "preprocessed_grayscale_sha256": "dd15934b1f8f63255c9037f0bda1168352708a456e14dc2b6d180364d4a14012",
+          "preprocessed_shape_hw": [
+            192,
+            544
+          ],
+          "backend_png_sha256": "54dc92190e242c6d8f581223004d86b72af00a6b833a321029ec4555670023ee",
+          "backend_tsv_sha256": "0099f81551bcaebba27f8eed7ec428d0bd81973a7e7f980f604208cdb68b3412",
+          "baseline_candidate_exact": true
+        }
+      },
+      "selected_literal_ocr": {
+        "bottom_objective": "Assassinate tis fine! target. |",
+        "vip_status": "TARGETS REMAINING 1\nvip woRK END 1273.\n<_< i ~"
+      },
+      "ocr_call_order": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "vip_status",
+        "result_header"
+      ],
+      "full_detector_shadow_parity": true
+    },
+    {
+      "input": {
+        "name": "sightseer-package.jpg",
+        "sha256": "c50c8fe3a4005bd2b71096fc0c298d0ebcffff6accde37d5b650bc9bdfdaa04e",
+        "bytes": 76558,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 794
+      },
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/69/Package.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:31.298482+00:00",
+      "pixel_inspection": {
+        "method": "view_image, original detail, on exact original local bytes",
+        "inspected_at_utc": "2026-10-08T04:47:17Z",
+        "notes": [
+          "Full lower-right VIP WORK END label, PACKAGES REMAINING 1 and bottom objective Retrieve the package. are visible.",
+          "Production footer crop includes the complete label; the mission title Sightseer is not printed in pixels."
+        ]
+      },
+      "layout_limit": "1600x794 wide image, approximately 2.015:1. HUD sits close to lower and side edges. Original capture bounds, crop history and safe-zone settings cannot be established from this file.",
+      "baseline_candidate": {
+        "state": "MENU",
+        "heuristic_score": 0.7,
+        "reason": "Menu overlay detected",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate_projection_changed": true,
+      "sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            15,
+            1200,
+            79
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "0eda1d15f0ef6339c82cdac95da7d4ea8af51bed713ef080ff1630028e6e56b2",
+          "ocr_confidence": 0.2511235874390244,
+          "crop_bgr_sha256": "0539143fb5da873d7f80b197b5b8c87a716d8cf5956e2e9badbad0cd5bd13766",
+          "preprocessed_grayscale_sha256": "9291d4b3926713d9978dc2d8e56955855b2347ade408cccfdd324a967f1975a7",
+          "preprocessed_shape_hw": [
+            128,
+            1600
+          ],
+          "backend_png_sha256": "71b506483d46930b6a7616170eebde43c3decb97a8ef85c2d84b385c11c72666",
+          "backend_tsv_sha256": "02680ca1163fa6b06eb74fe22c9a4c4f3cab3a72228a0ac937ced721cc298a6b",
+          "baseline_candidate_exact": true
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            357,
+            1200,
+            476
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "2902638c545165176e05a5a810aa22eb2dc99f87e8d2e94e65582ba952d4e846",
+          "ocr_confidence": 0.3577603118181818,
+          "crop_bgr_sha256": "db4ea520294bee546cf92ace1429daf270fd8ca52c2ebec1846be9d593ae2126",
+          "preprocessed_grayscale_sha256": "64b3b411a8bed834b710d273f4740c6dc6a9e3361f1dde1fc34bfc7f7f16ebeb",
+          "preprocessed_shape_hw": [
+            238,
+            1600
+          ],
+          "backend_png_sha256": "7c4d1c79e12fd6d98b90792e36ea441ece33a14eafdbe98f0781667bd5fa7448",
+          "backend_tsv_sha256": "19d7ac43078b6dfef797590c252aad56bc27e5ffcf35fac98ea55167e4be6d7d",
+          "baseline_candidate_exact": true
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            277,
+            1280,
+            397
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized_empty",
+          "ocr_text_sha256_utf8": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ocr_confidence": 0.0,
+          "crop_bgr_sha256": "1d43a096f87827fa26b7358aac7daeee71af980c240df377ec1b33a119296282",
+          "preprocessed_grayscale_sha256": "cfac1f119edf85c1836b50fbc57df41e5e475ac932cf24a4329e4292312940de",
+          "preprocessed_shape_hw": [
+            240,
+            1920
+          ],
+          "backend_png_sha256": "8a1d4b86a9a49dc6cd57c4ea205ae9750449d246389458757adafa741179a127",
+          "backend_tsv_sha256": "ffde579c17c328b003ab9f3e34d4caba6c9bd12a0a7cadc25286053a78bf7ce5",
+          "baseline_candidate_exact": true
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            714,
+            1200,
+            794
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "d11fa8f29c6bb3c1ee541df2d536c0af053f0dfa11044a8ee881534d675315bf",
+          "ocr_confidence": 0.9663981633333334,
+          "crop_bgr_sha256": "929e12b7db88d5a958b951b2ec7502964c7dc1f5ca3a3f1628bd8dee0343841e",
+          "preprocessed_grayscale_sha256": "a3f883bad9f2cfb6f91469c929241b0a1ee7fad3b12a207bd7b0ccea077cb8c3",
+          "preprocessed_shape_hw": [
+            160,
+            1600
+          ],
+          "backend_png_sha256": "dacc01b0d776eec5f9698dd916e1b07a90bfbe47ac4e459d46b5b233f77e234f",
+          "backend_tsv_sha256": "dedccec9cd1c85656598f69dcf6c28350d9c5b48bc0b9d742093791f01e661ec",
+          "baseline_candidate_exact": true
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            95,
+            1280,
+            254
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "5de47d6f71e9cdff2f1c5a72578a969a5beec50fd974fa0e26bcd82b6babe19a",
+          "ocr_confidence": 0.33456513296875,
+          "crop_bgr_sha256": "81fe476419378399b2f59f23d82a0e108b2b62db73a89635986048a52fb59ad8",
+          "preprocessed_grayscale_sha256": "e3006db5cbcb7d02607e9125701ef2699c03cdfadf772963279ac8a90e24b09d",
+          "preprocessed_shape_hw": [
+            318,
+            1920
+          ],
+          "backend_png_sha256": "ba491fb6b965ae3f89871472873e7198e12e40c6ae0c7a071eb23d4bc889d1f2",
+          "backend_tsv_sha256": "562f15859d10f9f84bc725bdf35d52dbca20ebfde9a4987c50804e372769016f",
+          "baseline_candidate_exact": true
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            698,
+            1584,
+            794
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "816f9de6058942b0cf5050aaffb5ccbeeb015fbefb29eab6f798b421bd6b7e91",
+          "ocr_confidence": 0.8617127466666666,
+          "crop_bgr_sha256": "2d310ba6294439aafb7f9f181bfef6f392f7769c908e3e3becf05d205d447b54",
+          "preprocessed_grayscale_sha256": "4d0d3d9464bf1d19ded266d850666ed30985332b510ab42d4f8424f28bd92b4d",
+          "preprocessed_shape_hw": [
+            192,
+            544
+          ],
+          "backend_png_sha256": "e4e6a551b402a724bbf849831f8aeed333630f14a0ea236553c2a9a1dc15a504",
+          "backend_tsv_sha256": "b0660304f29f258c38e471d58408298cc4bf6c0003572813a0106fb1016e21b1",
+          "baseline_candidate_exact": true
+        }
+      },
+      "selected_literal_ocr": {
+        "bottom_objective": "Retrieve the package.",
+        "vip_status": "PACKAGES REMAINING 1\ne\nVIPWORKEND 11:324"
+      },
+      "ocr_call_order": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "vip_status",
+        "result_header"
+      ],
+      "full_detector_shadow_parity": true
+    },
+    {
+      "input": {
+        "name": "cayo-finale-start.jpg",
+        "sha256": "59a05cd96f32b1ee7c389744cc7c520ce144cf4261b9239b621384e566922e68",
+        "bytes": 26719,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/c4/40/Cayo-Perico-Finale-1.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:41.265026+00:00",
+      "pixel_inspection": {
+        "method": "view_image, original detail, on exact original local bytes",
+        "inspected_at_utc": "2026-10-08T04:47:17Z",
+        "notes": [
+          "The bottom objective Go to El Rubio's compound. is visible in the dark underwater scene.",
+          "No named finale phase is printed."
+        ]
+      },
+      "layout_limit": "1600x900, 16:9, with all image edges visible. Dark low-contrast scene. Original capture bounds, crop history and safe-zone settings are unknown.",
+      "baseline_candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate_projection_changed": false,
+      "sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized_empty",
+          "ocr_text_sha256_utf8": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ocr_confidence": 0.0,
+          "crop_bgr_sha256": "782c21541d630ddea855a5ee9279c3459183a9010e94b7c137cb23b40c983762",
+          "preprocessed_grayscale_sha256": "e65c1d8d6359a431d6ee96b4964b870a9b9e097ff9b38ff01df310feaaadcb0a",
+          "preprocessed_shape_hw": [
+            144,
+            1600
+          ],
+          "backend_png_sha256": "6c1b8ad2192737ba207654c8f4fd087bdc1a70f7e9eb796e64668174ba6fbbdc",
+          "backend_tsv_sha256": "a8214565f000356fe2a0a85242923456387b50e604e2c7028b5e47f8cbb4e282",
+          "baseline_candidate_exact": true
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "5cdee8025811dd1d860921fb049ee389d7e9ac1c2615469d75de3378612a44c8",
+          "ocr_confidence": 0.29335184166666667,
+          "crop_bgr_sha256": "607241286ede6021ecfbeed1690417a14db16adb48ad607451960ae46bd319d1",
+          "preprocessed_grayscale_sha256": "b36ccc276b0a5174e6a7ac822390232f9a869a1c3b860e8054b7ed4c58a55506",
+          "preprocessed_shape_hw": [
+            270,
+            1600
+          ],
+          "backend_png_sha256": "c451bac756bba7f264f1c3be25c520334ff0fe648b4a32876cd4ad28ffcf5ae8",
+          "backend_tsv_sha256": "58695600a76de1dc0d54084f5c317f62ce50be3a27d6e77056493f0ab996b92a",
+          "baseline_candidate_exact": true
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized_empty",
+          "ocr_text_sha256_utf8": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ocr_confidence": 0.0,
+          "crop_bgr_sha256": "db8ffc563f47a553bec509d786dcb475cb289ced9d6f480d69b596dc905827ce",
+          "preprocessed_grayscale_sha256": "12d429b93ae7fc42c14208735b72c4e7093de5f8a7d400309608688567356176",
+          "preprocessed_shape_hw": [
+            270,
+            1920
+          ],
+          "backend_png_sha256": "f384627fc8d006d0b700d45846cfae20e44cde0b68db955104d9180dac300e34",
+          "backend_tsv_sha256": "6b16901f2295fe0e98e21696bc9d06380131a7d816ba1f6728262adb411e2299",
+          "baseline_candidate_exact": true
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "53e28f93bea6bbe27be649d1ea9769c21898550d12f59fdc79b6fbe9eba5f7bb",
+          "ocr_confidence": 0.9594539799999999,
+          "crop_bgr_sha256": "546afc784817e66dfea1c350d9e0cbf12a41d417389bb5d66d90a9c3a56434ae",
+          "preprocessed_grayscale_sha256": "50b50067d0276936b10b11885511a6e24539e9e1d27a83f8e0ae6bd46cf8bcef",
+          "preprocessed_shape_hw": [
+            180,
+            1600
+          ],
+          "backend_png_sha256": "476a4874d44a163fd09683954aa66b72355ad0c8ee34dd3a8e8c4e359fdda346",
+          "backend_tsv_sha256": "20d9569113bb38305a39ff3a19ce5a5847a0d7a9cf52a674412c922adc041e7a",
+          "baseline_candidate_exact": true
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "09879faa2ea53e6e448070e7eedd16032c307d5ddd2412a70e346c36ec86cff2",
+          "ocr_confidence": 0.29622057181818184,
+          "crop_bgr_sha256": "08d15d70e4fdd3ed55912b08185995eda50f0da950fc31140cbde443c77c4107",
+          "preprocessed_grayscale_sha256": "cb5390d4270dea14fc486a00f36d6dc2a8f7453a2a9c70cb039ec67875d92403",
+          "preprocessed_shape_hw": [
+            360,
+            1920
+          ],
+          "backend_png_sha256": "3d71f9d7baaa236e8d2da24beda17f82ec914ea30a4f297193ffcbf4b6fe5fef",
+          "backend_tsv_sha256": "c98590ebcd61e6f3d93e8fe60789d402182fb46c539b46d77391ad6de6ae29a7",
+          "baseline_candidate_exact": true
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "3c9b0cc02e12d43397348de0e2f8af7e02bee25f53b0f33da94e81b9532cfb3c",
+          "ocr_confidence": 0.6940890875,
+          "crop_bgr_sha256": "2501c55ab6df8f3c0b422edf4036e0f3d03e1b0c1e56ab08cccee0465d4b1cc5",
+          "preprocessed_grayscale_sha256": "88d6a6eb7137fcd6361d32cb5a38f925ccce75c5b87630353f5b4f6eb91d29a3",
+          "preprocessed_shape_hw": [
+            216,
+            544
+          ],
+          "backend_png_sha256": "b89e00d0e41c03410fc3d9fd4fc21ea6384e47d4a1613da1e4c60d9785ea9b1e",
+          "backend_tsv_sha256": "bcf17e8716acc6a497fc3c5c0101a577ebbfe1090131a4aa5ec701cf19d826c4",
+          "baseline_candidate_exact": true
+        }
+      },
+      "selected_literal_ocr": {
+        "bottom_objective": "Go to El Rubio's compound."
+      },
+      "ocr_call_order": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "vip_status",
+        "result_header"
+      ],
+      "full_detector_shadow_parity": true
+    },
+    {
+      "input": {
+        "name": "cayo-finale-escape.jpg",
+        "sha256": "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+        "bytes": 56541,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/6c/e8/Cayo-Perico-Finale-42.jpg",
+      "acquired_at_utc": "2026-10-07T23:23:50.394553+00:00",
+      "pixel_inspection": {
+        "method": "view_image, original detail, on exact original local bytes",
+        "inspected_at_utc": "2026-10-08T04:47:17Z",
+        "notes": [
+          "The bottom objective Escape Cayo Perico. is visible in the boat scene.",
+          "The objective names the family, not a named finale phase."
+        ]
+      },
+      "layout_limit": "1600x900, 16:9, with all image edges visible. Dark low-contrast scene. Original capture bounds, crop history and safe-zone settings are unknown.",
+      "baseline_candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "candidate_projection_changed": false,
+      "sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized_empty",
+          "ocr_text_sha256_utf8": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ocr_confidence": 0.0,
+          "crop_bgr_sha256": "9c30415a69e28f6b696f30d6b8dd50ac1a988af74289ce5aeeae207518ae34e3",
+          "preprocessed_grayscale_sha256": "8a0c4e982bbd9811c1dfb5bfc5150f0f38f9fe063dcdfeb8e429fb3a75cdd2b8",
+          "preprocessed_shape_hw": [
+            144,
+            1600
+          ],
+          "backend_png_sha256": "6478c21babcde4c029a8c2c9c0cffec36bef64a5a0d5f7d3007f3a2068581b1f",
+          "backend_tsv_sha256": "a8214565f000356fe2a0a85242923456387b50e604e2c7028b5e47f8cbb4e282",
+          "baseline_candidate_exact": true
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "ceb6b33d9d51ad3e2929e4f95b94d19dcdefd02a827e4df672441efe51097b59",
+          "ocr_confidence": 0.4647870353333333,
+          "crop_bgr_sha256": "2d94bd1eb607369ae52c889caf2e688b5176930448d14b0250f1704b72c5e23f",
+          "preprocessed_grayscale_sha256": "c7e6249a29867583a649e173a5812eaf4a54e81175eaa222bcd75af228c0754a",
+          "preprocessed_shape_hw": [
+            270,
+            1600
+          ],
+          "backend_png_sha256": "2bd6044a5067785ac2fd162da9907ca87176b413445e2a82a076c02a667e76d3",
+          "backend_tsv_sha256": "1a9e6114a27f20589bb84c881589e973c490e2156ae647346392e5ab789a71fb",
+          "baseline_candidate_exact": true
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "57a0ad0fea46039791e1b95736eead9265f47830d1cf08b7d8115ce749584d82",
+          "ocr_confidence": 0.3715940842857143,
+          "crop_bgr_sha256": "eb4929ef7fea71db140d4acb94ba88d0c6c3f4877b7b125a386f2a51ed848dd1",
+          "preprocessed_grayscale_sha256": "5b4fb0656a1f9a19ead9738a95fcc9b879c801dd15e56cf5499c7d0212357284",
+          "preprocessed_shape_hw": [
+            270,
+            1920
+          ],
+          "backend_png_sha256": "8bab504e0a92b15428c497cc0e8818321554185e076d9ebc78503edfefe6d629",
+          "backend_tsv_sha256": "c08815beed5721fe0dda7c0439378c6a0b87f61dca3225ebd1281146af2a0ada",
+          "baseline_candidate_exact": true
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "0d4a817e51ae0831c614e2b53c3acd9b1116640453efa5d0220180c156241714",
+          "ocr_confidence": 0.8032006233333333,
+          "crop_bgr_sha256": "6fa15c68786153df2891352ec1389e0a657ca48d386f7ac53be2a30adb49f6ff",
+          "preprocessed_grayscale_sha256": "2bda40371d6a0186d086f9298062b288fde7e87fa3996df9385aeb74f0b1d463",
+          "preprocessed_shape_hw": [
+            180,
+            1600
+          ],
+          "backend_png_sha256": "6aaad6919a6a183a385920eef557e765f990c5bf0ca97246d61a6afd28842cb9",
+          "backend_tsv_sha256": "7e73d841d6270f132123f8d7c79d8b2583a4a61ceb2aeb0cd1a8b35a324db9de",
+          "baseline_candidate_exact": true
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "7c3bf2cdfd3240290bd2aadc3e87a5b00119f2de052b860224c890fb32073462",
+          "ocr_confidence": 0.25744915611111113,
+          "crop_bgr_sha256": "a71d76046070b9d1ea3b04291fc38d9ff1e6c7ecf313ebb0085b0a0850752725",
+          "preprocessed_grayscale_sha256": "f277c474daba77da7b5b5aa4310e7c64c73937bfd85069d2bdb61972be92644d",
+          "preprocessed_shape_hw": [
+            360,
+            1920
+          ],
+          "backend_png_sha256": "6de85317328199807d4049a8c4faa4bf1699e8ed11cc072f47ce6dfdc0297d44",
+          "backend_tsv_sha256": "d064c935a794e4a204e7ed03852421807eadf1d130e6c246541e9db3b18a39d0",
+          "baseline_candidate_exact": true
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "12ab7893ab3321a728466ea26dd2f6a3ad2fb206ef95d9f6bcdc302f3e931885",
+          "ocr_confidence": 0.746705842,
+          "crop_bgr_sha256": "edb23bcbf18de6f837c3b4ef52065e79d0fa61f3dd64767687f3a928f939cf04",
+          "preprocessed_grayscale_sha256": "a87b90699a0b429a398f62612127bb3f8efc74419cb8dfc18d258dc0e222a5a1",
+          "preprocessed_shape_hw": [
+            216,
+            544
+          ],
+          "backend_png_sha256": "a35fb89472482e022a8587718391907a56eadc694a691a96da4ebeeb394be12a",
+          "backend_tsv_sha256": "efa8aed023970290608ee700b0ab14d6d9f89d64fd76ad51dc5ace171d05c332",
+          "baseline_candidate_exact": true
+        }
+      },
+      "selected_literal_ocr": {
+        "bottom_objective": "Escape Cayo Perico."
+      },
+      "ocr_call_order": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "vip_status",
+        "result_header"
+      ],
+      "full_detector_shadow_parity": true
+    },
+    {
+      "input": {
+        "name": "cayo-finale-summary.jpg",
+        "sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+        "bytes": 104362,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+      "acquired_at_utc": "2026-10-07T23:24:00.564257+00:00",
+      "pixel_inspection": {
+        "method": "view_image, original detail, on exact original local bytes",
+        "inspected_at_utc": "2026-10-08T04:47:17Z",
+        "notes": [
+          "The central overlay explicitly reads heist passed and The Cayo Perico Heist.",
+          "This independent result header is distinct from the active VIP footer labels."
+        ]
+      },
+      "layout_limit": "1600x900, 16:9, with all image edges visible. This is a central results overlay rather than an active objective HUD. Original capture bounds, crop history and safe-zone settings are unknown.",
+      "baseline_candidate": {
+        "state": "MISSION_COMPLETE",
+        "heuristic_score": 0.85,
+        "reason": "Independent family-qualified heist result header",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": "complete",
+          "outcome_scope": "heist"
+        }
+      },
+      "candidate": {
+        "state": "MISSION_COMPLETE",
+        "heuristic_score": 0.85,
+        "reason": "Independent family-qualified heist result header",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": "complete",
+          "outcome_scope": "heist"
+        }
+      },
+      "candidate_projection_changed": false,
+      "sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized_empty",
+          "ocr_text_sha256_utf8": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+          "ocr_confidence": 0.0,
+          "crop_bgr_sha256": "b17db9fd83e09d1180686aa5a17bf8acca0f424f8f203bc9a97b1f1796ddda35",
+          "preprocessed_grayscale_sha256": "78af73bb3d33b15ba6894a36e01f5ff6f26998e4d748bfdadfba73243d037af9",
+          "preprocessed_shape_hw": [
+            144,
+            1600
+          ],
+          "backend_png_sha256": "af0ea443647dba2e183680fac010a83923cd5b9b4adc3379c2e550488f6db04c",
+          "backend_tsv_sha256": "a8214565f000356fe2a0a85242923456387b50e604e2c7028b5e47f8cbb4e282",
+          "baseline_candidate_exact": true
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "4faead7b810593fc3162cae37f603c3a400f03200d10ca25832c5646623455e5",
+          "ocr_confidence": 0.09608476807692308,
+          "crop_bgr_sha256": "f10112e495ca1f357dc288f47efaefa8ff85e112c0e073cafb6813d594b56577",
+          "preprocessed_grayscale_sha256": "0f965f8ab2c9dbec2cc8ae445cf04b351991806bbbf995a7f20d9b3485ea46a9",
+          "preprocessed_shape_hw": [
+            270,
+            1600
+          ],
+          "backend_png_sha256": "b01f520d6ff9c8b2b3f139410ffc232c01d739a1481d293a6a152127b19ed2cf",
+          "backend_tsv_sha256": "9b0e961f97da5263fb24dec773e700c6583c9146d7e4fc049f505b784f41ac87",
+          "baseline_candidate_exact": true
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "746fa69837e6ac1e471a609c62418e1966de1e50247dc1eec5d19a2247890027",
+          "ocr_confidence": 0.40554674333333335,
+          "crop_bgr_sha256": "aed26f5ac593729d0185bbd970674c188ca4fdfc70fa266ab76823ccd7f05c29",
+          "preprocessed_grayscale_sha256": "ca4d25d096a2b3b9fcd960cbf4888dbfbed80d146e401adfab88f1cfdaf65f91",
+          "preprocessed_shape_hw": [
+            270,
+            1920
+          ],
+          "backend_png_sha256": "c9b789abba2feaa00a93f212d13d853c2f77fb64b212873e7ff00bd761470378",
+          "backend_tsv_sha256": "ed586806401a42f38fd5348d591073633d1ca9d83a0d5f0272f008890f2274d0",
+          "baseline_candidate_exact": true
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "bc29057bd45e579e3fe065b24dcc41535d250c46289065a2be4dacd16d439395",
+          "ocr_confidence": 0.17923706333333334,
+          "crop_bgr_sha256": "34e36c7cf2748b69b664e092c32e22fc4b25b4dee66a9ccee45dccaf3bbabd5f",
+          "preprocessed_grayscale_sha256": "a70d9c2a434f7884f08bf1ceb5ffa726c7928ecb459aeea04758ee43afa75b4c",
+          "preprocessed_shape_hw": [
+            180,
+            1600
+          ],
+          "backend_png_sha256": "ec9f027133e9c5e41a09133ad639f41dc3e1f82b9dc2520f2a92e81ce9ef5ae8",
+          "backend_tsv_sha256": "e1a71c31731795a24229913baff12ed8ffa0b75f817c146f3884189b5f8d51bc",
+          "baseline_candidate_exact": true
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "2adf1d69551b0da7db484933b7f10629dde4394c1fc64ad08488a04c3609acd1",
+          "ocr_confidence": 0.9476802966666668,
+          "crop_bgr_sha256": "3dfadfd57b0bbac3d0cfcfb056f5c8409b38bcec30023e05a7b2664fee4fbc91",
+          "preprocessed_grayscale_sha256": "70cdae46021e30e55d3ccf7e312aae32a9525ee0b4d4d402f988c3412f084d06",
+          "preprocessed_shape_hw": [
+            360,
+            1920
+          ],
+          "backend_png_sha256": "fa12008b5037b04c3d8a217ce1db9171f32d56bb258197a6a60dc06e6dc4f430",
+          "backend_tsv_sha256": "eec5fa9bfbacfafafa8b507d08e93794178b490377aab7e581697124f1ee40eb",
+          "baseline_candidate_exact": true
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "status": "recognized",
+          "ocr_text_sha256_utf8": "38c444327d1553ca29fa1f28ddd10f8c07ff050526c77e2c19c86097afe5f077",
+          "ocr_confidence": 0.2533403388888889,
+          "crop_bgr_sha256": "f7be83df91a003ad80aeb9f549f0af6fba6b6463c31a4b004974341c6d25b470",
+          "preprocessed_grayscale_sha256": "0c8e5e344086cd695d8409be9be01281ee149a13e2246dc3298c540f68252cdf",
+          "preprocessed_shape_hw": [
+            216,
+            544
+          ],
+          "backend_png_sha256": "0e415061ee5a144480a3b1484f311f69048b97603ac337e81f5c0f6b30e40d1d",
+          "backend_tsv_sha256": "44e72419aef85a3840e50799df7fe1f0bf89582083c2be21a3932ad7725cf849",
+          "baseline_candidate_exact": true
+        }
+      },
+      "selected_literal_ocr": {
+        "bottom_objective": "oT | ey",
+        "result_header": "heist Passed\nThe Cayo Perico Heist"
+      },
+      "ocr_call_order": [
+        "mission_text",
+        "center_prompt",
+        "mission_banner",
+        "bottom_objective",
+        "vip_status",
+        "result_header"
+      ],
+      "full_detector_shadow_parity": true
+    }
+  ],
+  "prior_evidence": {
+    "historical_vip_status_evaluation": "validation/vip-status-evaluation.json",
+    "historical_cli_evaluation": "validation/screenshot-diagnostic-evaluation.json",
+    "local_acquisition_manifest": {
+      "artifact": "gta-guide-controls-restored/acquisition-manifest.json",
+      "sha256": "3a70dfd5a92323d57947a6e06adf03552301dd1c6fac1a605372291d49ad2685",
+      "committed": false
+    },
+    "source_untouched_shadow_audit": {
+      "artifact": "gta-footer-evidence-audit-20261008/audit.json",
+      "sha256": "fb3e8c27745b27c0b04b41c78068642c9f4bc8b371c75fda488afef20da797fe",
+      "report_sha256": "2bcf218e43a5aeda68045060e8a5f8311a12d9a0f4bf9457b0bab6b8160ec093",
+      "committed": false,
+      "new_ocr_calls_in_that_audit": 0,
+      "existing_positive_vectors": 12,
+      "existing_negative_vectors": 49,
+      "only_existing_negative_change": [
+        "PACKAGES REMAINING 1\ne\nVIPWORKEND 11:324"
+      ],
+      "additional_rejected_joined_vectors": 34,
+      "detector_guard_records": 15,
+      "scope": "Prior text-admission controls retained unchanged; not represented as newly rerun image or app tests"
+    },
+    "local_byte_evidence": {
+      "artifact": "gta-joined-vip-status-evaluation",
+      "committed": false,
+      "contents": "Exact snapshots, stdout/stderr/process records, all literal OCR, crop/preprocessed/PNG/TSV bytes and hashes, comparisons",
+      "portability": "Local evidence names identify retained artifacts, not downloadable or repository-relative image paths"
+    }
+  },
+  "unexpected_attempt": {
+    "kind": "Plain parity command initially used the resolved global Python executable instead of the existing venv entry point",
+    "exit_code": 1,
+    "error": "ModuleNotFoundError: No module named 'mss'",
+    "ocr_calls": 0,
+    "corrective_action": "Reran the identical candidate CLI via engineering/gta-venv/bin/python; exact observed/plain report parity established",
+    "failed_stdout_sha256": "c153113055a8136638286411e50dc05b789dd5908a23791590c5842c47b826f8"
+  },
+  "limits": [
+    "One evidence-backed category recovery on five independent public-guide stills is not a gameplay accuracy estimate.",
+    "Guide names and captions provide provenance, not mission titles printed in pixels or gameplay chronology.",
+    "Recovered Sightseer-labelled guide frame remains unnamed VIP_WORK/type_only with UNKNOWN phase and no outcome.",
+    "Literal 11:324 is an opaque OCR suffix, not a validated countdown, completion, or monetary reading.",
+    "Cayo summary retains a fresh detector completion candidate only; this evaluation does not run application episode, rearming, timer, accounting, persistence or cooldown paths.",
+    "The diagnostic makes the same six requests per image; this does not establish unchanged whole-application OCR cost after active-state recovery.",
+    "Native Windows OCR, live screen capture, GUI, actual gameplay, YouTube/video validation and other HUD layouts remain unverified.",
+    "No image, derived crop, raw pixel data or local private file path is included in this committed JSON; full bytes remain local.",
+    "No dependencies installed, network requests, browser/media retries, models or GitHub Actions used."
+  ]
+}

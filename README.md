@@ -890,38 +890,60 @@ YouTube capture. The original images and derivatives remain outside the repo.
 #### Recognize the VIP work status label
 
 An additional lower-right HUD crop can identify **VIP Work** from a complete,
-spaced **VIP WORK END** status row. This supplies activity type only: it does not
-name Headhunter or Sightseer, infer a mission phase, or interpret the optional
-numeric suffix as a timer. **END** beside a live countdown does not mean the
+spaced **VIP WORK END** status row. It also accepts the exact joined label
+**VIPWORKEND** when followed by a separate, bounded numeric-like suffix, as in
+**VIPWORKEND 11:324**. This supplies activity type only: it does not name
+Headhunter or Sightseer, infer a mission phase, or interpret the suffix as a
+valid timer. **END** beside a live countdown does not mean the
 mission has ended. A later independently readable title can refine the same
 activity without restarting it.
 
-Admission is bounded and requires the whole label row. Concatenated words,
-clipped labels and surrounding prose are rejected. Only the fixed **VIP WORK**
+Admission is bounded and requires the whole label row. The joined form requires
+at least one space or tab before the suffix; a bare joined label, partially
+joined words, clipped labels, letter substitutions and surrounding prose remain
+rejected. Only the fixed **VIP WORK**
 marker enters identity matching; other footer text cannot supply objectives,
 outcomes, balances or earnings. Conflicting families remain uncertain, business
 and qualified result evidence retain priority, and an unqualified result header
 cannot borrow this activity type. A changing or disappearing countdown does not
 complete or rearm an activity.
 
-The five retained guide originals were compared through the actual local
-Tesseract, capture, detector and application path. The Headhunter screenshot now
-starts a type-only **VIP Work** activity where the prior detector selected
+The original five-guide evaluation used the actual local Tesseract, capture,
+detector and application path. It recovered a type-only **VIP Work** activity
+from the Headhunter screenshot where the earlier detector selected
 **PHONE**. Its actual OCR suffix is **1273.**, which remains uninterpreted.
-Sightseer's **VIPWORKEND 11:324** stays rejected, so that screenshot remains a
-miss. All three Cayo observations and a separately arranged start → escape →
-summary replay retain their prior behavior, including one completion and no
+At that baseline, Sightseer's **VIPWORKEND 11:324** remained rejected. All three
+Cayo observations and a separately arranged start → escape →
+summary replay retained their prior behavior, including one completion and no
 inferred accounting.
 
-The standard capture adds one OCR pass from the same captured frame. Across the
-eight evaluated observations, calls increased from 52 to 61: eight status reads
+That original status-crop addition used one extra OCR pass from the same frame.
+Across its eight evaluated observations, calls increased from 52 to 61: eight status reads
 plus an existing timer read newly enabled by the recovered active mission.
 [The VIP status evaluation](validation/vip-status-evaluation.json) records exact
-source hashes, raw OCR, source isolation, ownership and costs. This is one
-observed category recovery using cropped guide images, not general recognition
+source hashes, raw OCR, source isolation, ownership and costs. It remains the
+historical baseline rather than being rewritten for the joined-label rule.
+These are bounded observations using cropped guide images, not general recognition
 accuracy. Windows OCR, live gameplay, other HUD layouts and the requested
 YouTube-frame validation remain unverified. The originals and derived images
 remain outside the repository.
+
+The [joined-label evaluation](validation/joined-vip-status-evaluation.json)
+freshly compares the actual diagnostic CLI on all five originals before and
+after the narrow row change. Sightseer's guide frame changes from **MENU** with
+unknown identity to **MISSION_ACTIVE**, unnamed **VIP_WORK**, with an unknown
+phase and no outcome. The other four detector candidates stay identical.
+All 30 crop observations match exactly, including crop/preprocessed bytes,
+Tesseract inputs and outputs, text and confidence. A plain CLI run matches the
+recorded run byte-for-byte. No image or derived crop is included in the repo.
+The detector adds no OCR request; recognizing an active mission can enable the
+application's existing conditional timer read. In the isolated capture/application
+check, the formerly missed joined row changes from seven to eight OCR calls;
+both accepted label forms use the same single frame grab and nine crops.
+Episode/ownership checks keep footer text from creating a named mission,
+completion or financial entry, including when the suffix is **0:00**.
+Native Windows OCR and the
+requested YouTube evidence remain unverified.
 
 #### Recover an unfinished detection
 
@@ -1561,8 +1583,8 @@ Windows behavior, or general gameplay accuracy.
 
 [Five guide-image controls](validation/screenshot-diagnostic-evaluation.json)
 record exact input hashes and the new command's parity with the existing
-diagnostic adapter across all 30 requested crop readings. The Sightseer still
-remains a miss, and the Headhunter still supplies VIP-work category evidence
+diagnostic adapter across all 30 requested crop readings. At that baseline,
+Sightseer remained a miss and Headhunter supplied VIP-work category evidence
 without a mission name. These are public-guide stills, not YouTube frames or a
 continuous session. The image files remain outside this repository.
 

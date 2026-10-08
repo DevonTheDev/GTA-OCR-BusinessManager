@@ -71,6 +71,7 @@ def test_optional_status_provenance_and_fixed_region_are_declared():
     "VIP WORK END", "vip work end", " \tVIP\tWORK  END\t ",
     "VIP WORK END 12:30", "VIP WORK END 0:00", "VIP WORK END 1273.",
     "VIP WORK END 11:324", "VIP WORK END 1234567890123456", ACTUAL_HEADHUNTER,
+    ACTUAL_SIGHTSEER,
     "TARGETS REMAINING 1\r\nVIP WORK END 12:30\r\n",
     "\n".join(["x" * 128] * 3 + ["x" * 112, "VIP WORK END"]),
     "\n".join(["noise"] * 7 + ["VIP WORK END"]),
@@ -92,7 +93,7 @@ def test_complete_status_row_admits_only_fixed_category(raw):
 
 @pytest.mark.parametrize("raw", [
     "", "END", "END 0:00", "0:00", "TARGETS REMAINING 1", "PACKAGES REMAINING 1",
-    ACTUAL_SIGHTSEER, "VIPWORKEND", "V1P WORK END", "VIP W0RK END", "VIP WORK EN",
+    "VIPWORKEND", "V1P WORK END", "VIP W0RK END", "VIP WORK EN",
     "IP WORK END", "VIP WORK", "VIP WORK ENDING", "VIP WORK ENDS", "VIP WORK END abc",
     "VIP WORK END 12:30abc", "VIP WORK END $5000", "VIP WORK END +$5000",
     "VIP WORK END 5,000", "VIP WORK END 5000 dollars", "VIP WORK END Take 5000",

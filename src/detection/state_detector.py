@@ -21,7 +21,8 @@ logger = get_logger("detection.state")
 # Only this fixed category marker may leave the footer admission boundary.
 VIP_STATUS_MARKER = "VIP WORK"
 _VIP_STATUS_ROW = re.compile(
-    r"[ \t]*VIP[ \t]+WORK[ \t]+END(?:[ \t]+[0-9][0-9:.]{0,15})?[ \t]*",
+    r"[ \t]*VIP[ \t]+WORK[ \t]+END(?:[ \t]+[0-9][0-9:.]{0,15})?[ \t]*"
+    r"|[ \t]*VIPWORKEND[ \t]+[0-9][0-9:.]{0,15}[ \t]*",
     re.IGNORECASE | re.ASCII,
 )
 
