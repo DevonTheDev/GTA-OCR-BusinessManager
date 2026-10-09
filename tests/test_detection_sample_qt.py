@@ -280,7 +280,7 @@ def test_single_monitor_guidance_uses_only_running_registered_toggle(view, monke
         assert "ctrl+alt+f9" not in text.lower()
 
 
-def test_hostile_identity_is_literal_and_fits_minimum_window(view, native_qt_application):
+def test_hostile_identity_is_literal_and_fits_minimum_window(view, native_qt_application, tmp_path):
     app, window, slot = view
     hostile = '<b>Mission & 雪</b> <img src=x> "literal" ' * 30 + "W" * 2000
     status, dialog = open_save(window, slot, native_qt_application, sample_id=hostile)
@@ -293,7 +293,7 @@ def test_hostile_identity_is_literal_and_fits_minimum_window(view, native_qt_app
         button = control(dialog, name, QtWidgets.QPushButton)
         assert dialog.rect().contains(button.mapTo(dialog, QPoint(0, 0)))
         assert dialog.rect().contains(button.mapTo(dialog, button.rect().bottomRight()))
-    assert dialog.grab().save("../evidence/gta-detection-sample-ui/disclosure-literal.png")
+    assert dialog.grab().save(str(tmp_path / "disclosure-literal.png"))
 
 
 @pytest.mark.parametrize("success", [True, False])

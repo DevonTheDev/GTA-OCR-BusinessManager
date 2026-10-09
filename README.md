@@ -554,6 +554,25 @@ keeps the source URL, fixed pipeline and bounded result without including pixels
 This diagnostic used no loaded templates. It does not establish native Windows
 OCR performance or accuracy across gameplay sequences.
 
+**Sightseer app** identifies a shared phone app, not the Sightseer VIP mission:
+the app is also used during Cayo Perico's Gather Intel, as documented in
+[this original walkthrough](https://www.gtaboom.com/go-to-cayo-perico-island-and-explore-in-free-roam-a075).
+App-qualified occurrences no longer supply that mission name or falsely conflict
+with Cayo evidence. A separate **Sightseer** title still counts, including when
+another line mentions the app. This rule stays within each independent OCR crop
+and does not guess synonyms or damaged OCR. Generic package instructions do not
+establish Sightseer. An unresolved app-only observation after a recorded result
+keeps the previous result's fence unless it supplies a new complete objective;
+dropping the false name must not rearm a duplicate result, activity row or cooldown.
+This uses the existing objective-evidence rules, including their conservative
+handling of repeated, partial and overflowing observations. An active mission
+keeps its owner; an independent new title/category or complete objective still
+can start tracking. With no prior result, existing generic objective cues may
+start an unresolved activity. This is a narrow shared-app replay guard, not a
+general guarantee against unnamed replays. Parser and capture/tracker/SQLite
+regressions use controlled OCR text, not new gameplay screenshots or Windows
+OCR measurements.
+
 Conflicting names/categories remain ambiguous. Unknown objectives no longer
 default to a contact mission; a generic delivery classification remains
 unresolved until stronger identity evidence arrives. A visual-only result at

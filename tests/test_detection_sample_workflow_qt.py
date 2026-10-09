@@ -119,7 +119,7 @@ def collect_ready(p, window, qt):
     return ready
 
 
-def test_ready_and_disclosure_render_without_clipping_at_minimum_size(actual_view, native_qt_application):
+def test_ready_and_disclosure_render_without_clipping_at_minimum_size(actual_view, native_qt_application, tmp_path):
     p, window = actual_view
     ready = collect_ready(p, window, native_qt_application)
     window._tabs.setCurrentWidget(window._activity_panel)
@@ -134,7 +134,7 @@ def test_ready_and_disclosure_render_without_clipping_at_minimum_size(actual_vie
         assert content.height() >= needed.height(), (label.text(), content, needed)
         assert content.width() >= needed.width(), (label.text(), content, needed)
         assert label.visibleRegion().contains(content)
-    assert window.grab().save("../evidence/gta-detection-sample-ui/main-ready-900x650.png")
+    assert window.grab().save(str(tmp_path / "main-ready-900x650.png"))
     window.findChild(QAction, "save_detection_sample").trigger()
     native_qt_application.processEvents()
     dialog = window.findChild(QtWidgets.QDialog, "detection_sample_save")
@@ -144,7 +144,7 @@ def test_ready_and_disclosure_render_without_clipping_at_minimum_size(actual_vie
     for child in dialog.findChildren(QtWidgets.QPushButton):
         assert dialog.rect().contains(child.mapTo(dialog, QPoint(0, 0)))
         assert dialog.rect().contains(child.mapTo(dialog, child.rect().bottomRight()))
-    assert dialog.grab().save("../evidence/gta-detection-sample-ui/save-disclosure.png")
+    assert dialog.grab().save(str(tmp_path / "save-disclosure.png"))
 
 
 @pytest.mark.parametrize("partial_failure", [False, True])

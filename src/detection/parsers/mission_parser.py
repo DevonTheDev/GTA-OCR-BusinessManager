@@ -56,6 +56,8 @@ class MissionReading:
     # A scoped result label is independent of identity/phase. Keep its scope
     # even when unqualified, so a template cannot promote it to an activity.
     outcome_scope: Optional[Literal["heist"]] = None
+    # Shared phone-app text is observation metadata, never mission identity.
+    sightseer_app_reference: bool = False
 
     @property
     def has_mission(self) -> bool:
@@ -70,6 +72,12 @@ def _normalize(text: str) -> str:
 def _contains(text: str, phrase: str) -> bool:
     """Match complete words in normalized text, never substrings of words."""
     return re.search(rf"(?<!\w){re.escape(phrase)}(?!\w)", text) is not None
+
+
+# The same exact qualifier distinguishes app metadata from mission-name evidence.
+_SIGHTSEER_REFERENCE = re.compile(
+    r"""(?<!\w)sightseer(?!\w)(?P<app>["'’”]?\s+app(?!\w))?"""
+)
 
 
 # Status banners may wrap across OCR lines. A phrase must start a line or a
@@ -273,6 +281,8 @@ class MissionParser:
             if not reading.objective:
                 reading.objective = self._extract_objective(text)
             normalized = _normalize(text)
+            if any(match["app"] is not None for match in _SIGHTSEER_REFERENCE.finditer(normalized)):
+                reading.sightseer_app_reference = True
             region_names = {
                 name: kind for name, kind in self.MISSION_NAMES.items()
                 if self._contains_name(text, normalized, name)
@@ -354,6 +364,13 @@ class MissionParser:
     def _contains_name(text: str, normalized: str, name: str) -> bool:
         if not _contains(normalized, _normalize(name)):
             return False
+        if name == "Sightseer":
+            # The phone app is shared with other activities. Exclude only its
+            # app-qualified occurrences, retaining any independent title in
+            # this crop, including when the app qualifier wraps across lines.
+            return any(
+                match["app"] is None for match in _SIGHTSEER_REFERENCE.finditer(normalized)
+            )
         if name == "Blow Up":
             # This catalog title is also an ordinary imperative. Require its
             # end to look like a title, not "blow up the delivery vehicle".

@@ -1302,11 +1302,16 @@ class GTABusinessManager:
                                            GameState.HEIST_PREP, GameState.HEIST_FINALE)
                 and self._confident_detection(state_result)):
             reading = self._mission_reading(state_result)
-            if (episode.identity.shares_identity(self._reading_identity(state_result, reading))
+            shared_identity = episode.identity.shares_identity(self._reading_identity(state_result, reading))
+            unresolved_shared_app = (reading.identity_status == "unknown"
+                                     and getattr(reading, "sightseer_app_reference", False))
+            if ((shared_identity or unresolved_shared_app)
                     and not episode.objectives.has_new(self._objective_evidence(state_result))):
                 return replace(
                     state_result, state=GameState.UNKNOWN, confidence=0.0,
-                    reason="Mission identity repeats the previous result without new objective evidence",
+                    reason=("Unresolved shared-app replay lacks new objective evidence"
+                            if unresolved_shared_app else
+                            "Mission identity repeats the previous result without new objective evidence"),
                     mission=reading,
                 )
         return state_result
