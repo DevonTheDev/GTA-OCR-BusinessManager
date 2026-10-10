@@ -1696,6 +1696,13 @@ a nonzero exit code; the tool never chooses a replacement backend automatically.
 Tesseract is only a diagnostic option for this command, not an application OCR
 fallback or a test of Windows OCR.
 
+OCR failure messages identify the availability check or recognition stage and,
+when recognition was requested, the production source crop. Tesseract timeouts,
+nonzero child exits, operating-system/subprocess errors and invalid TSV output
+are distinguished without including the command, captured output or exception
+details. The availability and recognition limits remain 10 and 15 seconds.
+Failures return only an error report, never partial OCR or a detector candidate.
+
 The command prints one JSON report containing the input hash and dimensions,
 default production crop coordinates, actual requested preprocessing and OCR text,
 and a fresh detector's state/mission candidate. Sources skipped by the detector

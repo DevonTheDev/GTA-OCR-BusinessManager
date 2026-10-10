@@ -402,18 +402,21 @@ TSV_HEADER = "level\tpage_num\tblock_num\tpar_num\tline_num\tword_num\tleft\ttop
 def tesseract(monkeypatch, diagnostic):
     calls = []
 
-    def configure(tsv=TSV_HEADER, *, languages="List of available languages (1):\neng\n", probe_error=None, recognition_error=None):
+    def configure(tsv=TSV_HEADER, *, languages="List of available languages (1):\neng\n", probe_error=None, recognition_error=None, failure_at=1):
         monkeypatch.setattr(diagnostic.shutil, "which", lambda binary: "/installed/tesseract")
+        recognition_calls = 0
 
         def run(arguments, **kwargs):
+            nonlocal recognition_calls
             calls.append((arguments, kwargs))
             if arguments[1] == "--list-langs":
                 if probe_error:
                     raise probe_error
                 return SimpleNamespace(stdout=languages)
-            if recognition_error:
+            recognition_calls += 1
+            if recognition_error and recognition_calls == failure_at:
                 raise recognition_error
-            return SimpleNamespace(stdout=tsv.encode("utf-8"))
+            return SimpleNamespace(stdout=tsv if isinstance(tsv, bytes) else tsv.encode("utf-8"))
 
         monkeypatch.setattr(diagnostic.subprocess, "run", run)
         return calls
@@ -476,3 +479,220 @@ def test_invalid_tesseract_output_never_returns_success(diagnostic, image_path, 
     tesseract(tsv)
     with pytest.raises(diagnostic.DiagnosticError):
         diagnostic.diagnose_image(image_path, backend="tesseract")
+
+
+PRIVATE = "/private/image.png secret-command private-output private-stderr"
+SUBPROCESS_FAILURES = [
+    pytest.param(
+        subprocess.TimeoutExpired(PRIVATE, 987, output=PRIVATE, stderr=PRIVATE),
+        "timed out", id="timeout",
+    ),
+    pytest.param(
+        subprocess.CalledProcessError(23, PRIVATE, output=PRIVATE, stderr=PRIVATE),
+        "failed: child exited with status 23", id="nonzero-exit",
+    ),
+    pytest.param(OSError(PRIVATE), "failed: operating system error", id="os-error"),
+    pytest.param(
+        subprocess.SubprocessError(PRIVATE), "failed: subprocess error", id="subprocess-error",
+    ),
+]
+
+
+@pytest.mark.parametrize("failure,description", SUBPROCESS_FAILURES)
+@pytest.mark.parametrize("stage", ["probe_error", "recognition_error"])
+def test_tesseract_failures_identify_stage_and_cause_without_private_details(
+    diagnostic, image_path, tesseract, stage, failure, description,
+):
+    calls = tesseract(**{stage: failure})
+    with pytest.raises(diagnostic.DiagnosticError) as caught:
+        diagnostic.diagnose_image(image_path, backend="tesseract")
+    probing = stage == "probe_error"
+    label = "availability check" if probing else "recognition"
+    if isinstance(failure, subprocess.TimeoutExpired):
+        description += f" ({10 if probing else 15}-second limit)"
+    expected = f"Tesseract {label} {description}"
+    if not probing:
+        expected += " (source: mission_text)"
+    assert str(caught.value) == expected
+    assert type(caught.value).__name__ == "DiagnosticError"
+    assert len(calls) == (1 if probing else 2)
+    assert PRIVATE not in str(caught.value)
+    assert "987" not in str(caught.value)
+
+
+@pytest.mark.parametrize("source", REQUEST_ORDER)
+def test_tesseract_failure_names_the_actual_crop_and_stops_immediately(
+    diagnostic, image_path, tesseract, source,
+):
+    failure_at = REQUEST_ORDER.index(source) + 1
+    calls = tesseract(
+        recognition_error=subprocess.TimeoutExpired(PRIVATE, 15), failure_at=failure_at,
+    )
+    with pytest.raises(diagnostic.DiagnosticError) as caught:
+        diagnostic.diagnose_image(image_path, backend="tesseract")
+    assert str(caught.value) == (
+        f"Tesseract recognition timed out (15-second limit) (source: {source})"
+    )
+    assert len(calls) == failure_at + 1
+    assert calls[0] == (
+        ["/installed/tesseract", "--list-langs"],
+        {"capture_output": True, "check": True, "timeout": 10, "shell": False, "text": True},
+    )
+    for arguments, options in calls[1:]:
+        assert arguments == [
+            "/installed/tesseract", "stdin", "stdout", "-l", "eng", "--psm", "6", "tsv",
+        ]
+        assert set(options) == {"input", "capture_output", "check", "timeout", "shell"}
+        assert options["capture_output"] is options["check"] is True
+        assert options["timeout"] == 15
+        assert options["shell"] is False
+
+
+@pytest.mark.parametrize("payload", [PRIVATE, b"\xff" + PRIVATE.encode(), TSV_HEADER + "5\t1\n"])
+def test_invalid_tesseract_output_has_safe_recognition_source(
+    diagnostic, image_path, tesseract, payload,
+):
+    calls = tesseract(payload)
+    with pytest.raises(diagnostic.DiagnosticError) as caught:
+        diagnostic.diagnose_image(image_path, backend="tesseract")
+    assert str(caught.value) == (
+        "Tesseract recognition failed: invalid TSV output (source: mission_text)"
+    )
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("failure_at", [1, 6])
+def test_unexpected_native_backend_exception_is_safe_and_identifies_source(
+    diagnostic, image_path, native, monkeypatch, failure_at,
+):
+    native()
+    original = OCREngine.recognize_preprocessed
+    calls = 0
+
+    def recognize(self, *args, **kwargs):
+        nonlocal calls
+        calls += 1
+        if calls == failure_at:
+            raise RuntimeError(PRIVATE)
+        return original(self, *args, **kwargs)
+
+    monkeypatch.setattr(OCREngine, "recognize_preprocessed", recognize)
+    with pytest.raises(diagnostic.DiagnosticError) as caught:
+        diagnostic.diagnose_image(image_path)
+    assert str(caught.value) == (
+        "Windows OCR recognition failed: unexpected backend error "
+        f"(source: {REQUEST_ORDER[failure_at - 1]})"
+    )
+    assert calls == failure_at
+
+
+@pytest.mark.parametrize("failure_at", [1, 4, 6])
+def test_actual_image_cli_serializes_safe_failure_without_partial_candidate(
+    diagnostic, image_path, tesseract, capsys, failure_at,
+):
+    import test_capture
+
+    calls = tesseract(
+        recognition_error=subprocess.CalledProcessError(23, PRIVATE, output=PRIVATE, stderr=PRIVATE),
+        failure_at=failure_at,
+    )
+    assert test_capture.main(["--image", str(image_path), "--backend", "tesseract"]) == 1
+    output = capsys.readouterr()
+    expected = {
+        "schema_version": 1, "mode": "single_image_diagnostic", "status": "error",
+        "backend": {"name": "tesseract"},
+        "error": {
+            "type": "DiagnosticError",
+            "message": "Tesseract recognition failed: child exited with status 23 "
+            f"(source: {REQUEST_ORDER[failure_at - 1]})",
+        },
+    }
+    assert output.out == json.dumps(expected, allow_nan=False) + "\n"
+    assert output.err == ""
+    assert len(calls) == failure_at + 1
+
+
+def test_actual_image_cli_probe_failure_does_not_invent_source(
+    diagnostic, image_path, tesseract, capsys,
+):
+    import test_capture
+
+    calls = tesseract(probe_error=subprocess.TimeoutExpired(PRIVATE, 987))
+    assert test_capture.main(["--image", str(image_path), "--backend", "tesseract"]) == 1
+    output = capsys.readouterr()
+    assert json.loads(output.out)["error"] == {
+        "type": "DiagnosticError",
+        "message": "Tesseract availability check timed out (10-second limit)",
+    }
+    assert "source" not in output.out
+    assert output.err == ""
+    assert len(calls) == 1
+
+
+def test_actual_image_cli_generic_input_error_is_unchanged(diagnostic, capsys):
+    import test_capture
+
+    assert test_capture.main(["--image", "https://example.com/private.png"]) == 1
+    output = capsys.readouterr()
+    assert json.loads(output.out) == {
+        "schema_version": 1, "mode": "single_image_diagnostic", "status": "error",
+        "backend": {"name": "windows"},
+        "error": {
+            "type": "DiagnosticError",
+            "message": "Supply one existing regular local PNG or JPEG file",
+        },
+    }
+
+
+@pytest.mark.parametrize("metadata", ["noninteger", "unreadable", "oversized"])
+def test_tesseract_nonzero_exit_with_unusable_returncode_stays_safe(
+    diagnostic, image_path, tesseract, metadata,
+):
+    class UnreadableExit(subprocess.CalledProcessError):
+        def __getattribute__(self, name):
+            if name == "returncode":
+                raise RuntimeError(PRIVATE)
+            return super().__getattribute__(name)
+
+    if metadata == "unreadable":
+        failure = UnreadableExit(23, PRIVATE)
+    else:
+        returncode = 10 ** 5000 if metadata == "oversized" else PRIVATE
+        failure = subprocess.CalledProcessError(returncode, PRIVATE)
+    tesseract(recognition_error=failure)
+    with pytest.raises(diagnostic.DiagnosticError) as caught:
+        diagnostic.diagnose_image(image_path, backend="tesseract")
+    assert str(caught.value) == (
+        "Tesseract recognition failed: child exited with nonzero status (source: mission_text)"
+    )
+
+
+@pytest.mark.parametrize("text", ["", "Mission: Sightseer"], ids=["empty", "candidate"])
+def test_actual_image_cli_success_matches_complete_diagnostic_json(
+    diagnostic, image_path, tesseract, capsys, record_property, text,
+):
+    import test_capture
+
+    tsv = TSV_HEADER + (f"5\t1\t1\t1\t1\t1\t0\t0\t20\t10\t90\t{text}\n" if text else "")
+    tesseract(tsv)
+    expected = diagnostic.diagnose_image(image_path, backend="tesseract")
+    assert expected["status"] == "ok"
+    assert set(expected) == {
+        "schema_version", "mode", "status", "input", "backend", "context", "sources",
+        "detector_candidate", "limits",
+    }
+    assert len(expected["sources"]) == 6
+    if text:
+        assert expected["detector_candidate"]["identity"] == {
+            "status": "known_name", "candidates": ["Sightseer"], "mission_name": "Sightseer",
+            "mission_type": "VIP_WORK", "heist_phase": "UNKNOWN", "outcome": None,
+            "outcome_scope": None,
+        }
+    else:
+        assert all(source["status"] == "recognized_empty" for source in expected["sources"].values())
+    tesseract(tsv)
+    assert test_capture.main(["--image", str(image_path), "--backend", "tesseract"]) == 0
+    output = capsys.readouterr()
+    assert output.out == json.dumps(expected, allow_nan=False) + "\n"
+    assert output.err == ""
+    record_property("complete_cli_json", output.out)

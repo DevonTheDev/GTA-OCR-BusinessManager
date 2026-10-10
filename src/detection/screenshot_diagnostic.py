@@ -39,6 +39,36 @@ class DiagnosticError(Exception):
     """A safe explanation of an input or diagnostic execution failure."""
 
 
+class _OCRDiagnosticError(DiagnosticError):
+    """Carry a controlled explanation until the requesting crop is known."""
+
+    def __init__(self, message, *, source=None):
+        self.message = message
+        super().__init__(message if source is None else f"{message} (source: {source})")
+
+
+def _tesseract_process_error(error, *, stage, timeout):
+    """Classify child failures without exposing commands or captured output."""
+    if isinstance(error, subprocess.TimeoutExpired):
+        detail = f"timed out ({timeout}-second limit)"
+    elif isinstance(error, subprocess.CalledProcessError):
+        # Even unusable metadata must not hide a known nonzero child exit.
+        try:
+            returncode = error.returncode
+        except Exception:
+            returncode = None
+        # Bound formatting to OS exit/signal codes, even for malformed exceptions.
+        status = "nonzero status"
+        if type(returncode) is int and -(2**31) <= returncode < 2**32:
+            status = f"status {returncode}"
+        detail = f"failed: child exited with {status}"
+    elif isinstance(error, OSError):
+        detail = "failed: operating system error"
+    else:
+        detail = "failed: subprocess error"
+    return _OCRDiagnosticError(f"Tesseract {stage} {detail}")
+
+
 def _load_image(path):
     """Read bounded bytes and validate the stored canvas before loading pixels."""
     try:
@@ -106,8 +136,8 @@ class _TesseractDiagnostic(OCREngine):
                 [self._binary, "--list-langs"], capture_output=True, check=True,
                 timeout=10, shell=False, text=True,
             )
-        except (OSError, subprocess.SubprocessError):
-            raise DiagnosticError("Tesseract availability check failed or timed out") from None
+        except (OSError, subprocess.SubprocessError) as error:
+            raise _tesseract_process_error(error, stage="availability check", timeout=10) from None
         if "eng" not in probe.stdout.splitlines():
             raise DiagnosticError("Tesseract requires installed English (eng) language data")
         # Do not import or initialize winocr for this separate diagnostic backend.
@@ -123,8 +153,8 @@ class _TesseractDiagnostic(OCREngine):
                     [self._binary, "stdin", "stdout", "-l", "eng", "--psm", "6", "tsv"],
                     input=png.getvalue(), capture_output=True, check=True, timeout=15, shell=False,
                 )
-            except (OSError, subprocess.SubprocessError):
-                raise DiagnosticError("Tesseract recognition failed or timed out") from None
+            except (OSError, subprocess.SubprocessError) as error:
+                raise _tesseract_process_error(error, stage="recognition", timeout=15) from None
         try:
             # Quotes are literal OCR characters, not CSV delimiters. Dict order
             # retains the observed line order; geometry is deliberately omitted.
@@ -148,7 +178,7 @@ class _TesseractDiagnostic(OCREngine):
                 words=words,
             )
         except (ValueError, TypeError, KeyError, AttributeError, csv.Error):
-            raise DiagnosticError("Tesseract returned invalid TSV recognition output") from None
+            raise _OCRDiagnosticError("Tesseract recognition failed: invalid TSV output") from None
 
 
 class _RecordingOCR:
@@ -171,15 +201,20 @@ class _RecordingOCR:
         source["status"] = "failed"
         try:
             result = self._engine.recognize_preprocessed(image, invert=invert, scale=scale, threshold=threshold)
-        except DiagnosticError:
-            raise
+        except _OCRDiagnosticError as error:
+            raise _OCRDiagnosticError(error.message, source=name) from None
         except Exception:
-            raise DiagnosticError(f"OCR recognition failed for {name}") from None
+            backend = "Windows OCR" if self._backend == "windows" else "Tesseract"
+            raise _OCRDiagnosticError(
+                f"{backend} recognition failed: unexpected backend error", source=name,
+            ) from None
         # Production native failure is distinct from a successful empty native
         # reading (null confidence). Tesseract legitimately uses 0 for no words.
         if (self._backend == "windows" and result.text == ""
                 and result.confidence == 0.0 and not result.words):
-            raise DiagnosticError(f"Windows OCR recognition failed for {name}")
+            raise _OCRDiagnosticError(
+                "Windows OCR recognition failed: native backend reported failure", source=name,
+            )
         source.update(
             status="recognized_empty" if result.is_empty else "recognized",
             text=result.text, ocr_confidence=result.confidence,
@@ -253,6 +288,9 @@ def diagnose_image(path, *, backend="windows") -> dict:
         }
         json.dumps(report, allow_nan=False)
         return report
+    except _OCRDiagnosticError as error:
+        # Keep the public exception and CLI error.type compatible.
+        raise DiagnosticError(str(error)) from None
     except DiagnosticError:
         raise
     except Exception:
