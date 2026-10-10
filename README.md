@@ -871,8 +871,12 @@ result evidence and never becomes a fresh objective or payout estimate.
 
 An ordinary result is also admitted when the **entire** header OCR value is
 **MISSION PASSED**. ASCII letter case, spaces or tabs between the two words,
-and surrounding spaces, tabs or CR/LF line breaks are accepted. Wrapped words,
-punctuation, subtitles, mission names, cash and other extra text are excluded.
+and surrounding spaces, tabs or CR/LF line breaks are accepted. One observed
+two-line layout also permits exactly **2 of 3 armaments delivered** on the
+immediately following line (LF, CRLF or CR), with ASCII case and horizontal
+space/tab tolerance. The literal count is not generalized: other counts,
+wrapped labels/subtitles, joined lines, punctuation, mission names, cash and
+other extra text remain diagnostics-only.
 The detector and app revalidate this same narrow grammar. The header supplies
 only a successful outcome; independently admitted primary evidence still owns
 identity and conflict checks. An activity-only VIP footer cannot supply terminal
@@ -894,6 +898,18 @@ and all 48 OCR readings stayed identical. The
 [ordinary-result evaluation](validation/ordinary-result-header-evaluation.json)
 records hashes, source URLs and exact before/after observations. These
 independent stills are not a chronological gameplay sequence.
+
+The armament exception is grounded in one additional 1600×900 site-served
+[Data Contract guide still](https://www.gtaboom.com/los-santos-tuners-the-data-contract-guide-36cf),
+whose complete two-line header fits the existing result region. Its subtitle
+supplies no mission identity, objective, amount or mission alias. The source
+page and filename likewise provide no identity authority. The
+[armament-result evaluation](validation/armament-result-header-evaluation.json)
+records exact image/source hashes, the unchanged baseline observations and
+the bounded candidate diagnostic. Other armament counts/layouts remain
+unvalidated. The separate named loadout lobby and generic enforcer objective
+still retain their recorded PHONE/MENU visual false positives; this exception
+does not change the broad visual heuristics.
 
 Controlled real-app tests cover completion of the original owner, repeated
 results, old objectives, primary conflicts and empty balances. The existing

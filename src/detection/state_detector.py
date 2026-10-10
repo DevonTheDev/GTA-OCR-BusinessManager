@@ -26,12 +26,18 @@ _VIP_STATUS_ROW = re.compile(
     re.IGNORECASE | re.ASCII,
 )
 _ORDINARY_RESULT_HEADER = re.compile(
-    r"[ \t\r\n]*MISSION[ \t]+PASSED[ \t\r\n]*", re.IGNORECASE | re.ASCII,
+    r"[ \t\r\n]*MISSION[ \t]+PASSED"
+    r"(?:[ \t]*(?:\r\n|\r|\n)[ \t]*2[ \t]+of[ \t]+3[ \t]+armaments[ \t]+delivered)?"
+    r"[ \t\r\n]*", re.IGNORECASE | re.ASCII,
 )
 
 
 def is_ordinary_result_header(reading: MissionReading) -> bool:
-    """Admit only the whole standalone label, with no identity or payout text."""
+    """Admit the whole label, optionally with one observed literal subtitle.
+
+    The two-line armament count is result-only evidence, never identity,
+    objective or payout authority. Other counts and layouts stay diagnostic.
+    """
     return _ORDINARY_RESULT_HEADER.fullmatch(reading.raw_text) is not None
 
 

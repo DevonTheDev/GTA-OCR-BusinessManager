@@ -1,0 +1,1316 @@
+{
+  "schema_version": 1,
+  "evaluated_at_utc": "2026-10-10T18:06:09.807588+00:00",
+  "purpose": "Admit one observed complete result/header subtitle without widening identity or accounting authority",
+  "baseline_commit": "75e78d6d0596271320e7226f544b72bec237a057",
+  "candidate_source_sha256": {
+    "src/detection/state_detector.py": "8baa33379412881426c1f44737cbfe1d47bc87f7adad18dd4e7cb8fe752f9a80",
+    "src/detection/parsers/mission_parser.py": "8259746e7ad1057d00bcc6eadfe9310603aa004ff181c1a0c04c1ab04ce549ea",
+    "src/detection/ocr_engine.py": "3db644687a607b64cfa15638265f447cd3b9d9d07e4fd05c7e4ee36ed7a5685d",
+    "src/capture/regions.py": "0e6380977da7fb1ead4aa10dc3cde4b889d41d37b60595dd5b2de1d1c716120c",
+    "test_capture.py": "58e2f19be014c55938338ff596e0cfff4a57c0d9a78d45edbc308599152a1ba5",
+    "src/detection/screenshot_diagnostic.py": "f404befac5216095330096360d5749a51bcc8756bbd724a95ad99168b059abfe",
+    "src/app.py": "5f3fa6bb045f18186f5dc5ca3a0fbe30d9dafbb80c49ed415af1792429c79de0"
+  },
+  "new_test_sha256": "a8870dda1dc3b670ad83fe0df847d6e08e55263f7233fd491b19f925c5b47be1",
+  "method": {
+    "candidate_command": "python test_capture.py --image <exact retained local JPEG> --backend tesseract",
+    "backend": "Installed Tesseract 5.5.0, English, PSM 6; production preprocessing and default crops",
+    "candidate_image_runs": 8,
+    "candidate_source_observations": 48,
+    "input_handling": "One unmodified exact original per fresh detector; no templates, resize search, image editing or OCR retries",
+    "new_frame_baseline": {
+      "commit": "75e78d6d0596271320e7226f544b72bec237a057",
+      "evaluation_sha256": "8714cb9e0ac393af177581901977a29e9d79d521fd1a78f9f308c1af8406c4eb",
+      "manifest_sha256": "2968281609cf84b6f38f1f0eba03b4f199d281f3da7daf5ea84f1cd94e06bc62"
+    },
+    "retained_five_baseline": {
+      "description": "Reuse earlier successful raw reports from the ordinary-result evaluation. Active detector, parser, crop, preprocessing and CLI entrypoint hashes match the current baseline. The diagnostic error-handler source changed afterward, so these are not an exact same-build baseline. Each exact original was run once against the frozen candidate, and successful observations/candidates were compared.",
+      "source_freeze_sha256": "5bc512f92add9ae6c8475af93bf6070a6eb2ba1ad9b9b3da6e221428f66a6cae",
+      "matching_active_source_sha256": {
+        "src/detection/state_detector.py": "958f7a9c807a3dc5f3e8afed441d4a6c7b362dedac3dd4450b3e54cdd68d5eaf",
+        "src/detection/parsers/mission_parser.py": "8259746e7ad1057d00bcc6eadfe9310603aa004ff181c1a0c04c1ab04ce549ea",
+        "src/detection/ocr_engine.py": "3db644687a607b64cfa15638265f447cd3b9d9d07e4fd05c7e4ee36ed7a5685d",
+        "src/capture/regions.py": "0e6380977da7fb1ead4aa10dc3cde4b889d41d37b60595dd5b2de1d1c716120c",
+        "test_capture.py": "58e2f19be014c55938338ff596e0cfff4a57c0d9a78d45edbc308599152a1ba5"
+      },
+      "earlier_diagnostic_sha256": "27e10440d9fc839af8afe81c9d5074bdc17e8e30524097bd7a87c77040b6d693",
+      "current_diagnostic_sha256": "f404befac5216095330096360d5749a51bcc8756bbd724a95ad99168b059abfe"
+    }
+  },
+  "verification": {
+    "final_tests_command": [
+      "python",
+      "-m",
+      "pytest",
+      "-q",
+      "--tb=short",
+      "tests/test_armament_result_header.py",
+      "tests/test_ordinary_result_header.py",
+      "tests/test_result_header_admission.py",
+      "tests/test_result_header_workflow.py",
+      "tests/test_result_header_capture.py",
+      "tests/test_mission_identity.py",
+      "tests/test_parsers.py",
+      "tests/test_primary_business_admission.py",
+      "tests/test_heist_success_results.py",
+      "tests/test_terminal_mission_identity_ownership.py",
+      "tests/test_mission_episode_rearming.py",
+      "tests/test_mission_completion_callbacks.py",
+      "tests/test_app_accounting.py",
+      "tests/test_mission_result_accounting.py",
+      "tests/test_unnamed_app_replay.py",
+      "tests/test_vip_status_admission.py",
+      "tests/test_joined_vip_status_admission.py"
+    ],
+    "final_tests_result": "1053 passed in 33.06s",
+    "new_test_file_cases": 77,
+    "red_on_exact_baseline": "14 failed, 63 passed; same final test bytes as candidate run",
+    "test_oracle_correction": "Initial candidate result: 1052 passed, one test assertion incorrectly expected direct _process_state to populate a default capture.game_state on success. Corrected assertion checks admitted evidence/outcome and actual completed owner/SQLite record. Preserved initial output and reran corrected test bytes against exact baseline: 14 failed, 63 passed.",
+    "production_and_tests_frozen_for_final_tests_and_images": true,
+    "candidate_exit_codes": [
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0,
+      0
+    ],
+    "candidate_timeouts": 0,
+    "candidate_stderr_bytes": 0,
+    "candidate_empty_process_groups": 8,
+    "unchanged_ocr_observations": 48,
+    "unchanged_candidates": 7,
+    "changed_candidates": [
+      "Armament-8.jpg: PHONE -> MISSION_COMPLETE; unknown identity"
+    ],
+    "full_suite_run": false
+  },
+  "observations": [
+    {
+      "input": {
+        "name": "Armament-8.jpg",
+        "sha256": "958d56af587d7e2d7bc828aff573cc08e5fe8d5a18794b7be1a9d90cf27f39c3",
+        "bytes": 213355,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "decoded_rgb_sha256": "76d65dce8bb638bfdb9ad6b808fa470ffd6c55936526af7ae0acc9ac1d079ef9",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "source_page_url": "https://www.gtaboom.com/los-santos-tuners-the-data-contract-guide-36cf",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d7/86/Armament-8.jpg",
+      "baseline_kind": "same-current-build",
+      "baseline_report_sha256": "0c1ed4a174cdb1b0d969b6d4e4430a1efbf6024fc3e5d9868fb76efa1f3d7c8d",
+      "candidate_report_sha256": "1b60c60af2d7e8b364ae2fb43bf516d9b84ee6f9138cc1e05ae675aadf1f68c5",
+      "before": {
+        "state": "PHONE",
+        "heuristic_score": 0.6,
+        "reason": "Phone UI detected",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "after": {
+        "state": "MISSION_COMPLETE",
+        "heuristic_score": 0.85,
+        "reason": "Independent ordinary mission result header",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": "complete",
+          "outcome_scope": null
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "By pe ALE 9\n4h eh 1\nBSvenans ik\nEAS a",
+          "ocr_confidence": 0.1587301090909091
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "TLE. atl] ips ey oil Ese ee plete cre cosets) as a a St ea (all ate ees\nAe OEE ei Mees Yi ree eee HERS Races Ae Sepa =i\nGe a ay sf SEEM ees Batu | Fee ast hha Feta ize fd ea el",
+          "ocr_confidence": 0.2383182354347826
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "aos ee Ug HES Berta = essa ge SU See ;\nSP tN 4 --sBee RES Ete EEO Bk eee Sie eet |\nad | A Fra Fg cc rH Fest Bit Bove iii re ans aca SU ta age Elin rcs nents oy mice\npat GOT tse eee pra pea wae Be: | ESE, ioe\n\u2018wore. By oy Pacman 7h Se EGY TE",
+          "ocr_confidence": 0.23973250671875
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": "MISSION PASSED\n2 of 3 armaments delivered",
+          "ocr_confidence": 0.9519257571428571
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "nig\nSS\nBS\nTransaction Pending\n, i 5 ae",
+          "ocr_confidence": 0.2516168555555556
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 8.276319557000534
+    },
+    {
+      "input": {
+        "name": "Data-Contract-1.jpg",
+        "sha256": "47943772863aa32deefe6873b151829abd6ee1cf553e4f89bc88c3392ab02a54",
+        "bytes": 112790,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "decoded_rgb_sha256": "799dd13a26289c0d57ab15982ab6c413d7ee08705469d8b83361ff4f6f1a8dbc",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "source_page_url": "https://www.gtaboom.com/los-santos-tuners-the-data-contract-guide-36cf",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/59/Data-Contract-1.jpg",
+      "baseline_kind": "same-current-build",
+      "baseline_report_sha256": "a502da974dd38cdb8e5ec18e5ae7861a665c1c2a5ae34ecc9d49787f8a154eee",
+      "candidate_report_sha256": "a502da974dd38cdb8e5ec18e5ae7861a665c1c2a5ae34ecc9d49787f8a154eee",
+      "before": {
+        "state": "PHONE",
+        "heuristic_score": 0.6,
+        "reason": "Phone UI detected",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "after": {
+        "state": "PHONE",
+        "heuristic_score": 0.6,
+        "reason": "Phone UI detected",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "ee LL SR ASETES Se . TI ISS Se = eer\na . we we a+ . \u2014 + ee a fot, . ae fll he",
+          "ocr_confidence": 0.3198295053846154
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "2 Bille Mic I Ristoly Machines pistols Be lasses Sis eee eee\n[ci eal | Po a",
+          "ocr_confidence": 0.2838787723529412
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "e .\nOnline Leaderboa",
+          "ocr_confidence": 0.6901883900000001
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": "jot the raneporeee VOU GOIN DackUpsOnly GuUeStOn IS ayOu seagy RO WPenetrate pulne erazyass NUCIear DUNKEL We meed them hard drivi\n\u2018it\u2019 And make sure the clientcomes backin one piece OnyoUrdos Onna necotsOnmred \u2018\nn Loadout < Hustler > SSS FE",
+          "ocr_confidence": 0.4253249282926829
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": ": Select Pil] No invites sent \u201c>",
+          "ocr_confidence": 0.6986077642857141
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 4.827827082001022
+    },
+    {
+      "input": {
+        "name": "Gang-Termination-1.jpg",
+        "sha256": "e8c857e3b6ac14bca30bf9ee6beaeb5882845a9cee58436aaed7fd989b2422b5",
+        "bytes": 114931,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "decoded_rgb_sha256": "4eef548f1f977bbe91ad86e136efaa85100f7bd1efb5ba85fb63a41690df208e",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "source_page_url": "https://www.gtaboom.com/security-contract-gang-termination-8fd5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/10/2c/Gang-Termination-1.jpg",
+      "baseline_kind": "same-current-build",
+      "baseline_report_sha256": "de749e9663bc22a8a92f59241fbf6aeb9239d5b27cea7c5610c08764b5fb50aa",
+      "candidate_report_sha256": "de749e9663bc22a8a92f59241fbf6aeb9239d5b27cea7c5610c08764b5fb50aa",
+      "before": {
+        "state": "MENU",
+        "heuristic_score": 0.7,
+        "reason": "Menu overlay detected",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "after": {
+        "state": "MENU",
+        "heuristic_score": 0.7,
+        "reason": "Menu overlay detected",
+        "identity": {
+          "status": "unknown",
+          "candidates": [],
+          "mission_name": "",
+          "mission_type": "UNKNOWN",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "Bes Sg er eae ee iy, A cat eed TD) ES RS RS SS\nSECS FTN ANY at _| Fee es Oe Ripert inane\u2019 reo ade ee ; [ies MPR NS Sree\nSoa ba ate Or Pee ed Si A gd Stal fA PSLEES - woe vet AD Le eS redbnce \u201caie\nme BE Sti yt cence, MAT An EN ar hed A AS. nee vite SS - ogee B\ngr SP ree N eg ig cit\nMeee rE ee AT eT = ~",
+          "ocr_confidence": 0.23446066976190477
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "Pye ta a pee te SASL ptt ee et Pm ams OT ye Skt eee fe ite ir o-oo ek era ace a eee ven hie owe\nSoo Raw ieee ae SNS RA A Lo NR Bee\nTe So oe Pee Santen YE ARERR ree Te Ne eg UE NS \u201cNg aes be or so\nCea Seen Be OL UE fe enh re ee eae ere eh Ole AN GI ot Fen oe | eee oe Sed Heese Rg tT : :",
+          "ocr_confidence": 0.2612016169512195
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "Find and eliminate the",
+          "ocr_confidence": 0.963249475
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": "Ts oe ~ ey wR \"i A. = ni 0 > : dt es ,\n:) fe . _\u2014_- * pee Yi apt Am Siam\nAte \u2018 Pe \\ - x 7 = . . ee ~ : in",
+          "ocr_confidence": 0.1884295017948718
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "ENFORCERS REMAINING 2",
+          "ocr_confidence": 0.9402740766666667
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 8.40141949999088
+    },
+    {
+      "input": {
+        "name": "headhunter-2.jpg",
+        "sha256": "b01c78aa3a7b78f4bb78b6ca20cf71968c1c23da18d2e329766e56b4b121cc7e",
+        "bytes": 117170,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 795
+      },
+      "decoded_rgb_sha256": "e4445d14f9805e980f05c1b8b327f1b9d0075b3ffd6e43aa3423cd14cfaa0141",
+      "dimensions": [
+        1600,
+        795
+      ],
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/d0/27/Headhunter-2.jpg",
+      "baseline_kind": "earlier-successful-diagnostic",
+      "baseline_report_sha256": "f48c071d606b8ac78fa5a88f16be2b6646426b8777185a479b40de28eb94c64b",
+      "candidate_report_sha256": "f48c071d606b8ac78fa5a88f16be2b6646426b8777185a479b40de28eb94c64b",
+      "before": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "after": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            15,
+            1200,
+            79
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "nt Deets a i",
+          "ocr_confidence": 0.31249576749999997
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            357,
+            1200,
+            477
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "is, ee \u2014 as De, a meer EE a i Uo SO RES ae EST neti a :\ntS rm BSS eee ume camer, SW i bee rer a",
+          "ocr_confidence": 0.22271424551724137
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            278,
+            1280,
+            397
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            715,
+            1200,
+            795
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "Assassinate tis fine! target. |",
+          "ocr_confidence": 0.390818602
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            95,
+            1280,
+            254
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": "Se ch Oo ee ll\n1 \u2014",
+          "ocr_confidence": 0.33276200857142857
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            699,
+            1584,
+            795
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "TARGETS REMAINING 1\nvip woRK END 1273.\n<_< i ~",
+          "ocr_confidence": 0.5168764880000001
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 6.678770344995428
+    },
+    {
+      "input": {
+        "name": "sightseer-package.jpg",
+        "sha256": "c50c8fe3a4005bd2b71096fc0c298d0ebcffff6accde37d5b650bc9bdfdaa04e",
+        "bytes": 76558,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 794
+      },
+      "decoded_rgb_sha256": "c78053f9e367a4acfa9c44a1fdeadff276a9a2e8b9b14cb27f12b6a49ee2678a",
+      "dimensions": [
+        1600,
+        794
+      ],
+      "source_page_url": "https://www.gtaboom.com/make-500k-an-hour-in-gta-online-146c",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/2b/69/Package.jpg",
+      "baseline_kind": "earlier-successful-diagnostic",
+      "baseline_report_sha256": "4d60bab06a47d18b82b91d54cdb4ace345d4bd3dd9ecbeec9abad66b061e650d",
+      "candidate_report_sha256": "4d60bab06a47d18b82b91d54cdb4ace345d4bd3dd9ecbeec9abad66b061e650d",
+      "before": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "after": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete VIP status row supplies category identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "VIP_WORK"
+          ],
+          "mission_name": "",
+          "mission_type": "VIP_WORK",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            15,
+            1200,
+            79
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "oa ee a aan a AE ety es Ser oe cae ye, !\nae pO EATS ae aad wea =\nay res a gh en Pastis . ge Se oe wT tag\ndoo weet - LEE an any aoa ~ a 4,\nWye rr SESE ne ee Ta MT ee a 7 eee \u201ct io\n\u201c +e . we ay EE Eee ~ om re ae\n\u2018oa! Ane L te ee gE a oe a gerd 7 eo ew a an an",
+          "ocr_confidence": 0.2511235874390244
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            357,
+            1200,
+            476
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "; a Mey \u2014 ys a ARUN eo Cee nee ere",
+          "ocr_confidence": 0.3577603118181818
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            277,
+            1280,
+            397
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            714,
+            1200,
+            794
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "Retrieve the package.",
+          "ocr_confidence": 0.9663981633333334
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            95,
+            1280,
+            254
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": "Ww ~_\u2014 > .__ \u2014 \u2014 \u2014\n. =6 Ts ~ _ \u2014\n> : : \u2014 -\u2014 ~~\n- _ Le \u2014 le . \u2014 ad = a\nee a \u2014 _\u2014 \u2014 ~~ aii, a \u2014\n= : \u2014 ee . ==\nSSS See eee -\u2014\n' = . .\n| . \u2014\u2014\u2014\u2014\u2014 : \u2014\n;\n' \u2014\noh \\ = SD",
+          "ocr_confidence": 0.33456513296875
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            698,
+            1584,
+            794
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "PACKAGES REMAINING 1\ne\nVIPWORKEND 11:324",
+          "ocr_confidence": 0.8617127466666666
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 8.128286324994406
+    },
+    {
+      "input": {
+        "name": "cayo-finale-start.jpg",
+        "sha256": "59a05cd96f32b1ee7c389744cc7c520ce144cf4261b9239b621384e566922e68",
+        "bytes": 26719,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "decoded_rgb_sha256": "c2ff0dbf9e43f7b10161d0c825ee7165a04ec9cc75814c28ba730da6b7a596dc",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/c4/40/Cayo-Perico-Finale-1.jpg",
+      "baseline_kind": "earlier-successful-diagnostic",
+      "baseline_report_sha256": "02445e71df858fdc1b45a49ab70f28ed73ee546fd56d0953f2e3819b0852c13d",
+      "candidate_report_sha256": "02445e71df858fdc1b45a49ab70f28ed73ee546fd56d0953f2e3819b0852c13d",
+      "before": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "after": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "1. I oo . a |",
+          "ocr_confidence": 0.29335184166666667
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "Go to El Rubio's compound.",
+          "ocr_confidence": 0.9594539799999999
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": "1 a a :\n. 7 1.\nJ\nid i=\nls",
+          "ocr_confidence": 0.29622057181818184
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "TAKE $0\nLOOT BAG (|,\nTEAM LIVES 1@)",
+          "ocr_confidence": 0.6940890875
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 4.335683515993878
+    },
+    {
+      "input": {
+        "name": "cayo-finale-escape.jpg",
+        "sha256": "c6a9dab6b467059b4ba3be8359948a50eb8940010b5ddddb6b145258933090a5",
+        "bytes": 56541,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "decoded_rgb_sha256": "80ac1f2d1ba4c85eadb492558a72e317266a664a6d4e4df0f2c46fec53cf69ba",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/6c/e8/Cayo-Perico-Finale-42.jpg",
+      "baseline_kind": "earlier-successful-diagnostic",
+      "baseline_report_sha256": "124db781bf590f55c432c706a7707f6888bf1a78a06655513f5ce0b2f2988b3d",
+      "candidate_report_sha256": "124db781bf590f55c432c706a7707f6888bf1a78a06655513f5ce0b2f2988b3d",
+      "before": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "after": {
+        "state": "MISSION_ACTIVE",
+        "heuristic_score": 0.8,
+        "reason": "Complete bottom objective supplies specific mission identity",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": null,
+          "outcome_scope": null
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "et <= \u2014\u2014 = = = Fuel dd gc = \u2014\u2014\u2014 ne a . =",
+          "ocr_confidence": 0.4647870353333333
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "at Oe te we At ar oe\nwe Pod . im. +. ete .",
+          "ocr_confidence": 0.3715940842857143
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "Escape Cayo Perico.",
+          "ocr_confidence": 0.8032006233333333
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": ": C \u2019 \"ae \u00e9 \u00a9\n- F, brs\n:\n. : \u2018 \u2019\n. aie = i",
+          "ocr_confidence": 0.25744915611111113
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "TAKE $1,396,354\nLOOT BAG \u2014\u2014EEEEEM",
+          "ocr_confidence": 0.746705842
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 4.122427475987934
+    },
+    {
+      "input": {
+        "name": "cayo-finale-summary.jpg",
+        "sha256": "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877",
+        "bytes": 104362,
+        "format": "JPEG",
+        "width": 1600,
+        "height": 900
+      },
+      "decoded_rgb_sha256": "840865caf6d73e5291c950f59a165ad4cf1e73f761f5c01894b5ff972b0ab42b",
+      "dimensions": [
+        1600,
+        900
+      ],
+      "source_page_url": "https://www.gtaboom.com/cayo-perico-heist-finale-solo-elite-challenge-hard-mode-walkthrough-96e5",
+      "asset_url": "https://media.gtaboom.com/variants/1600/media/images/01/65/Cayo-Perico-Heist-Finale-Summary.jpg",
+      "baseline_kind": "earlier-successful-diagnostic",
+      "baseline_report_sha256": "705fea284815b851e70bd7e23a5c20760d63f59a93d61176a16396dfe76972b6",
+      "candidate_report_sha256": "705fea284815b851e70bd7e23a5c20760d63f59a93d61176a16396dfe76972b6",
+      "before": {
+        "state": "MISSION_COMPLETE",
+        "heuristic_score": 0.85,
+        "reason": "Independent family-qualified heist result header",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": "complete",
+          "outcome_scope": "heist"
+        }
+      },
+      "after": {
+        "state": "MISSION_COMPLETE",
+        "heuristic_score": 0.85,
+        "reason": "Independent family-qualified heist result header",
+        "identity": {
+          "status": "type_only",
+          "candidates": [
+            "CAYO_PERICO"
+          ],
+          "mission_name": "",
+          "mission_type": "CAYO_PERICO",
+          "heist_phase": "UNKNOWN",
+          "outcome": "complete",
+          "outcome_scope": "heist"
+        }
+      },
+      "all_six_source_observations_exactly_unchanged": true,
+      "unchanged_sources": {
+        "mission_text": {
+          "box_ltrb": [
+            400,
+            18,
+            1200,
+            90
+          ],
+          "status": "recognized_empty",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "",
+          "ocr_confidence": 0.0
+        },
+        "center_prompt": {
+          "box_ltrb": [
+            400,
+            405,
+            1200,
+            540
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "LIMARY Ss! AI GEU Jane? i Aaeene\nSecondary Targets Take: $406354\nteva eae war te BRAS\nR\u00e9ncing}Ree: \u2018$148;685:\nBESS geeatenrnasiencs gaa, | \u00a2 me 2) yEERAROQOR",
+          "ocr_confidence": 0.09608476807692308
+        },
+        "mission_banner": {
+          "box_ltrb": [
+            320,
+            315,
+            1280,
+            450
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": true,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "| Approach Vehicle \u2018Kosatie |\nSS6ondan arqete Take: $406:354",
+          "ocr_confidence": 0.40554674333333335
+        },
+        "bottom_objective": {
+          "box_ltrb": [
+            400,
+            810,
+            1200,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "oT | ey",
+          "ocr_confidence": 0.17923706333333334
+        },
+        "result_header": {
+          "box_ltrb": [
+            320,
+            108,
+            1280,
+            288
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": false,
+            "scale": 2.0
+          },
+          "text": "heist Passed\nThe Cayo Perico Heist",
+          "ocr_confidence": 0.9476802966666668
+        },
+        "vip_status": {
+          "box_ltrb": [
+            1312,
+            792,
+            1584,
+            900
+          ],
+          "status": "recognized",
+          "preprocessing": {
+            "threshold": false,
+            "invert": true,
+            "scale": 2.0
+          },
+          "text": "* .\not ;\n* 4% ie . :",
+          "ocr_confidence": 0.2533403388888889
+        }
+      },
+      "candidate_exit_code": 0,
+      "candidate_elapsed_seconds": 4.649516967998352
+    }
+  ],
+  "limits": [
+    "One literal observed count/subtitle only; other counts, joined/wrapped layouts and subtitles are diagnostics-only.",
+    "The subtitle and source page/filename have no identity, objective, money, alias or ownership authority.",
+    "The still-image diagnostic is upstream of app ownership/accounting; real-app safety assertions use injected OCR text and disposable SQLite.",
+    "No new active named-mission positive was acquired. The named loadout lobby title remains clipped/missed and unsupported; it is only a limited mission-negative control.",
+    "Data-Contract-1 remains a PHONE false visual label; Gang-Termination-1 remains a MENU false visual label. Its red faction text is still omitted by OCR. No broad visual fix is claimed.",
+    "A bare old result after a newly accepted owner remains temporally indistinguishable from that owner's success; explicit stale identity and repeated-owner barriers are preserved.",
+    "Missing money keeps the existing stored-zero activity-earnings policy; this is not observed zero payout. No identity, money or cooldown arises without an owner.",
+    "Linux diagnostic Tesseract only; no Windows OCR, live capture, gameplay sequence, GUI, full-suite, deployment or general accuracy claim.",
+    "Third-party original and derivative image bytes remain outside the repository and are not committed or uploaded."
+  ]
+}
