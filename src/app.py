@@ -16,7 +16,8 @@ from .capture.screen_capture import ScreenCapture
 from .capture.regions import ScreenRegions
 from .detection.ocr_engine import OCREngine
 from .detection.state_detector import (
-    StateDetector, StateDetectionResult, VIP_STATUS_MARKER, is_qualified_result_header,
+    StateDetector, StateDetectionResult, VIP_STATUS_MARKER, is_ordinary_result_header,
+    is_qualified_result_header,
 )
 from .detection.mission_episode import (
     MissionIdentity, ObjectiveEvidence, TerminalMissionEpisode, objective_evidence,
@@ -1202,7 +1203,7 @@ class GTABusinessManager:
             header_evidence = getattr(state_result, "result_header_evidence", "")
             if header_evidence:
                 header = self._mission_parser.parse(header_evidence)
-                if not is_qualified_result_header(header):
+                if not (is_ordinary_result_header(header) or is_qualified_result_header(header)):
                     return header
             sources = (
                 state_result.mission_text, state_result.objective_text,
@@ -1287,12 +1288,23 @@ class GTABusinessManager:
         header_evidence = getattr(state_result, "result_header_evidence", "")
         if header_evidence:
             header = self._mission_parser.parse(header_evidence)
-            if not is_qualified_result_header(header):
+            ordinary = is_ordinary_result_header(header)
+            if not (ordinary or is_qualified_result_header(header)):
                 return replace(
                     state_result, state=GameState.UNKNOWN, confidence=0.0,
-                    reason="Result header lacks independently qualified heist evidence",
+                    reason="Result header lacks independently qualified result evidence",
                     mission=header, result_header_evidence="",
                 )
+            if ordinary:
+                reading = self._mission_reading(state_result)
+                if (state_result.state != GameState.MISSION_COMPLETE
+                        or reading.outcome != "complete" or reading.outcome_scope is not None
+                        or reading.identity_status == "ambiguous"):
+                    return replace(
+                        state_result, state=GameState.UNKNOWN, confidence=0.0,
+                        reason="Ordinary result header conflicts with mission observation",
+                        mission=reading, result_header_evidence="",
+                    )
         guarded = self._guard_terminal_mission_identity(state_result)
         if guarded is not state_result:
             return guarded

@@ -25,6 +25,14 @@ _VIP_STATUS_ROW = re.compile(
     r"|[ \t]*VIPWORKEND[ \t]+[0-9][0-9:.]{0,15}[ \t]*",
     re.IGNORECASE | re.ASCII,
 )
+_ORDINARY_RESULT_HEADER = re.compile(
+    r"[ \t\r\n]*MISSION[ \t]+PASSED[ \t\r\n]*", re.IGNORECASE | re.ASCII,
+)
+
+
+def is_ordinary_result_header(reading: MissionReading) -> bool:
+    """Admit only the whole standalone label, with no identity or payout text."""
+    return _ORDINARY_RESULT_HEADER.fullmatch(reading.raw_text) is not None
 
 
 def is_qualified_result_header(reading: MissionReading) -> bool:
@@ -179,7 +187,7 @@ class StateDetector:
             center_text_image: Optional cropped center screen region
             mission_banner_image: Optional cropped mission name/result banner
             bottom_objective_image: Optional independent bottom objective crop
-            result_header_image: Optional independent result-only heist header
+            result_header_image: Optional independent result-only header
             vip_status_image: Optional independent identity-only VIP status crop
 
         Returns:
@@ -371,20 +379,29 @@ class StateDetector:
         ).text
         result = replace(result, result_header_text=raw)
         header = self._mission_parser.parse(raw)
-        if header.outcome_scope != "heist":
+        ordinary = is_ordinary_result_header(header)
+        if not ordinary and header.outcome_scope != "heist":
             return result
-        if not is_qualified_result_header(header):
+        if not ordinary and not is_qualified_result_header(header):
             return replace(result, state=GameState.UNKNOWN, confidence=0.0,
                            reason="Heist result header lacks compatible independent identity")
         merged = self._mission_parser.parse_regions((
             result.mission_text, result.objective_text, result.banner_text,
-            result.bottom_objective_command, result.vip_status_evidence, raw,
+            result.bottom_objective_command,
+            # Like the app's terminal fallback, an ordinary result cannot
+            # acquire category identity from an activity-only footer marker.
+            "" if ordinary else result.vip_status_evidence, raw,
         ))
-        if not is_qualified_result_header(merged):
+        qualified = (
+            merged.outcome == "complete" and merged.outcome_scope is None
+            and merged.identity_status != "ambiguous"
+        ) if ordinary else is_qualified_result_header(merged)
+        if not qualified:
             return replace(result, state=GameState.UNKNOWN, confidence=0.0,
                            reason="Result header conflicts with primary mission evidence", mission=merged)
         return replace(result, state=GameState.MISSION_COMPLETE, confidence=0.85,
-                       reason="Independent family-qualified heist result header", mission=merged,
+                       reason=("Independent ordinary mission result header" if ordinary else
+                               "Independent family-qualified heist result header"), mission=merged,
                        result_header_evidence=raw)
 
     def _bottom_objective_command(self, raw: str) -> str:

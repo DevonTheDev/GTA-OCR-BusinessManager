@@ -846,7 +846,7 @@ unread. No completion or payout was fabricated. Those observations are retained 
 These are diagnostic Tesseract results, not Windows OCR or live-game accuracy
 measurements. The guide images remain outside the repository.
 
-#### Recognize a qualified upper heist result
+#### Recognize a qualified upper result
 
 The same capture batch also supplies a separate upper-center result header.
 It uses the fixed relative region `(0.20, 0.12, 0.60, 0.20)` with grayscale,
@@ -854,8 +854,8 @@ no thresholding or inversion, and 2× scaling. This preserves the existing
 mission and bottom-objective crops. It adds an OCR pass on eligible cycles;
 native performance and broader layout coverage have not been measured.
 
-This observation can supply a result only when its own text contains a complete
-**HEIST PASSED** phrase and an unambiguous supported heist family. A title alone,
+For a heist, this observation can supply a result only when its own text contains
+a complete **HEIST PASSED** phrase and an unambiguous supported heist family. A title alone,
 business label, objective, number or currency cannot start or refine an activity,
 open a business reading, or supply a balance or reward through this region.
 A heading that loses its heist title cannot borrow identity from another crop
@@ -868,6 +868,40 @@ its start time and already established phase. A result seen while idle creates
 no activity. Repeated results and the old objective remain subject to the
 existing episode fence. Raw header text is retained separately from admitted
 result evidence and never becomes a fresh objective or payout estimate.
+
+An ordinary result is also admitted when the **entire** header OCR value is
+**MISSION PASSED**. ASCII letter case, spaces or tabs between the two words,
+and surrounding spaces, tabs or CR/LF line breaks are accepted. Wrapped words,
+punctuation, subtitles, mission names, cash and other extra text are excluded.
+The detector and app revalidate this same narrow grammar. The header supplies
+only a successful outcome; independently admitted primary evidence still owns
+identity and conflict checks. An activity-only VIP footer cannot supply terminal
+category identity. Direct callbacks with contradictory state or cached result
+evidence are rejected. It can finish an existing named, category-only or
+unresolved activity without supplying a new name, type or phase. When no activity
+has started, it creates no activity or earnings row. Missing balances keep the
+existing stored-0 accounting behavior; that value is not observed zero earnings.
+
+This ordinary layout is grounded in two local, complete 1600×900 site-served
+JPEGs from the [Gang Termination guide](https://www.gtaboom.com/security-contract-gang-termination-8fd5)
+and [Asset Protection guide](https://www.gtaboom.com/security-contract-asset-protection-7fd9/).
+Their result-header OCR reads **MISSION PASSED** exactly. The visible subtitles
+and guide names establish no mission identity, and the banner cash supplies no
+payout. The original capture bounds and HUD safe-zone settings are unknown.
+In the eight-image production diagnostic, both new ordinary results changed
+from MENU to MISSION_COMPLETE with unknown identity; the other six candidates
+and all 48 OCR readings stayed identical. The
+[ordinary-result evaluation](validation/ordinary-result-header-evaluation.json)
+records hashes, source URLs and exact before/after observations. These
+independent stills are not a chronological gameplay sequence.
+
+Controlled real-app tests cover completion of the original owner, repeated
+results, old objectives, primary conflicts and empty balances. The existing
+episode fence rejects replayed identity/objective evidence and explicitly
+mismatched stale results. Observations have no frame identity or timestamp:
+a bare old success banner seen after a separately accepted next activity cannot
+be distinguished from that next activity's success. This change does not add
+temporal tracking or claim to solve that ambiguity.
 
 The retained real Cayo summary is now readable through this dedicated pass.
 In a manually arranged replay of the guide's escape and summary stills, the
@@ -1778,7 +1812,7 @@ All regions defined as relative coordinates (0.0-1.0) for multi-resolution suppo
 | money_display | Bank balance | Top-right |
 | mission_text | Mission objectives | Top-center |
 | bottom_objective | Restricted named-objective evidence | Bottom-center |
-| result_header | Qualified heist-result evidence only | Upper-center |
+| result_header | Exact ordinary success or family-qualified heist result | Upper-center |
 | timer_display | Countdown timers | Bottom-right |
 | center_screen | Prompts/notifications | Center |
 
