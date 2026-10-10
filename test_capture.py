@@ -230,7 +230,7 @@ def _run_image_diagnostic(path, backend):
 def main(argv=None):
     """Dispatch one local image diagnostic or run all four live checks."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", metavar="PATH", help="diagnose one local PNG or JPEG")
+    parser.add_argument("--image", metavar="PATH", help="diagnose one local static PNG, JPEG or WebP")
     parser.add_argument(
         "--backend",
         choices=("windows", "tesseract"),

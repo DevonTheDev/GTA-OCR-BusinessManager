@@ -69,16 +69,78 @@ def _tesseract_process_error(error, *, stage, timeout):
     return _OCRDiagnosticError(f"Tesseract {stage} {detail}")
 
 
+def _check_dimensions(width, height):
+    if not (MIN_DIMENSION <= width <= MAX_DIMENSION
+            and MIN_DIMENSION <= height <= MAX_DIMENSION):
+        raise DiagnosticError("Image dimensions must each be between 100 and 8192 pixels")
+    if width * height > MAX_PIXELS:
+        raise DiagnosticError("Image exceeds the 16,777,216 decoded pixels limit")
+
+
+def _check_webp_container(encoded):
+    """Bound WebP allocation before Pillow constructs its canvas-sized decoder.
+
+    Inspect only RIFF chunk extents and static canvas/bitstream headers; Pillow
+    remains the decoder. Metadata payloads are skipped without copying them.
+    https://developers.google.com/speed/webp/docs/riff_container
+    """
+    if encoded[:4] != b"RIFF" or encoded[8:12] != b"WEBP":
+        return
+    if int.from_bytes(encoded[4:8], "little") + 8 != len(encoded):
+        raise ValueError("Invalid WebP extent")
+    position, canvas, bitstream = 12, None, None
+    while position < len(encoded):
+        if position + 8 > len(encoded):
+            raise ValueError("Incomplete WebP chunk")
+        kind = encoded[position:position + 4]
+        size = int.from_bytes(encoded[position + 4:position + 8], "little")
+        start = position + 8
+        end = start + size
+        padded_end = end + (size & 1)
+        if padded_end > len(encoded) or (size & 1 and encoded[end] != 0):
+            raise ValueError("Invalid WebP chunk extent or padding")
+        if position == 12 and kind not in (b"VP8X", b"VP8 ", b"VP8L"):
+            raise ValueError("Invalid first WebP chunk")
+        header = encoded[start:min(start + 10, end)]
+        if kind in (b"ANIM", b"ANMF") or (kind == b"VP8X" and header and header[0] & 2):
+            raise DiagnosticError("Only a single static image is supported; animated or multiframe images are unsupported")
+        if kind == b"VP8X":
+            if position != 12 or size != 10:
+                raise ValueError("Invalid or duplicate WebP canvas")
+            canvas = (int.from_bytes(header[4:7], "little") + 1,
+                      int.from_bytes(header[7:10], "little") + 1)
+            _check_dimensions(*canvas)
+        elif kind in (b"VP8 ", b"VP8L"):
+            if bitstream is not None:
+                raise ValueError("Duplicate WebP image")
+            if kind == b"VP8L":
+                if size < 5 or header[0] != 0x2f or header[4] >> 5:
+                    raise ValueError("Invalid WebP lossless header")
+                bits = int.from_bytes(header[1:5], "little")
+                bitstream = ((bits & 0x3fff) + 1, ((bits >> 14) & 0x3fff) + 1)
+            else:
+                if size < 10 or header[0] & 1 or header[3:6] != b"\x9d\x01\x2a":
+                    raise ValueError("Invalid WebP keyframe header")
+                bitstream = (int.from_bytes(header[6:8], "little") & 0x3fff,
+                             int.from_bytes(header[8:10], "little") & 0x3fff)
+            _check_dimensions(*bitstream)
+            if canvas is not None and canvas != bitstream:
+                raise ValueError("Conflicting WebP dimensions")
+        position = padded_end
+    if bitstream is None:
+        raise ValueError("Missing static WebP image")
+
+
 def _load_image(path):
     """Read bounded bytes and validate the stored canvas before loading pixels."""
     try:
         supplied = os.fspath(path)
         if (not isinstance(supplied, str) or not supplied or supplied == "-"
                 or "://" in supplied or supplied.startswith(("//", "\\\\"))):
-            raise DiagnosticError("Supply one existing regular local PNG or JPEG file")
+            raise DiagnosticError("Supply one existing regular local PNG, JPEG or WebP file")
         path = Path(supplied)
-        if path.suffix.lower() not in (".png", ".jpg", ".jpeg"):
-            raise DiagnosticError("Input must have a PNG or JPEG filename extension")
+        if path.suffix.lower() not in (".png", ".jpg", ".jpeg", ".webp"):
+            raise DiagnosticError("Input must have a PNG, JPEG or WebP filename extension")
         metadata = path.stat()
         if not stat.S_ISREG(metadata.st_mode):
             raise DiagnosticError("Input must be an existing regular file")
@@ -94,19 +156,16 @@ def _load_image(path):
             encoded = file.read(MAX_ENCODED_BYTES + 1)
         if len(encoded) > MAX_ENCODED_BYTES:
             raise DiagnosticError("Input exceeds the 32 MiB encoded size limit")
+        _check_webp_container(encoded)
         with warnings.catch_warnings():
             warnings.simplefilter("error", Image.DecompressionBombWarning)
             with io.BytesIO(encoded) as stream, Image.open(stream) as image:
-                if image.format not in ("PNG", "JPEG"):
-                    raise DiagnosticError("Decoded input must actually be PNG or JPEG")
+                if image.format not in ("PNG", "JPEG", "WEBP"):
+                    raise DiagnosticError("Decoded input must actually be PNG, JPEG or WebP")
                 width, height = image.size
-                if not (MIN_DIMENSION <= width <= MAX_DIMENSION
-                        and MIN_DIMENSION <= height <= MAX_DIMENSION):
-                    raise DiagnosticError("Image dimensions must each be between 100 and 8192 pixels")
-                if width * height > MAX_PIXELS:
-                    raise DiagnosticError("Image exceeds the 16,777,216 decoded pixels limit")
+                _check_dimensions(width, height)
                 if getattr(image, "n_frames", 1) != 1:
-                    raise DiagnosticError("Only a single static image is supported; animated or multiframe PNG is unsupported")
+                    raise DiagnosticError("Only a single static image is supported; animated or multiframe images are unsupported")
                 if image.getexif().get(274, 1) not in (None, 1):
                     raise DiagnosticError("Nontrivial image orientation metadata is unsupported")
                 image_format = image.format
@@ -120,8 +179,8 @@ def _load_image(path):
         raise
     except (Image.DecompressionBombError, Image.DecompressionBombWarning):
         raise DiagnosticError("Image exceeds Pillow decompression safety limits") from None
-    except (OSError, ValueError, TypeError, SyntaxError):
-        raise DiagnosticError("Input could not be read as a complete local PNG or JPEG image") from None
+    except (OSError, EOFError, ValueError, TypeError, SyntaxError):
+        raise DiagnosticError("Input could not be read as a complete local PNG, JPEG or WebP image") from None
 
 
 class _TesseractDiagnostic(OCREngine):
@@ -223,7 +282,7 @@ class _RecordingOCR:
 
 
 def diagnose_image(path, *, backend="windows") -> dict:
-    """Inspect one bounded local PNG/JPEG; return evidence, never activity state.
+    """Inspect one bounded local PNG/JPEG/WebP; return evidence, never activity state.
 
     Raises DiagnosticError for invalid input, unavailable OCR, or failed OCR.
     Empty recognized text and unknown/ambiguous detector candidates are valid.

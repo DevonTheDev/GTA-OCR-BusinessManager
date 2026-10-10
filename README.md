@@ -1729,13 +1729,14 @@ evidence; the original images and derived PNGs remain outside the repository.
 
 ### Diagnose one saved screenshot
 
-Use an existing local PNG or JPEG to inspect the current mission detector without
+Use an existing local static PNG, JPEG or WebP to inspect the current mission detector without
 starting capture or a tracking session:
 
 ```bash
 python test_capture.py --image screenshot.png
 # Explicit optional diagnostic backend; Tesseract and its English data must already be installed
 python test_capture.py --image screenshot.jpg --backend tesseract
+python test_capture.py --image screenshot.webp --backend tesseract
 ```
 
 Windows OCR is the default. An unavailable backend or failed recognition returns
@@ -1759,9 +1760,16 @@ score is a different measure and is not an accuracy estimate. Exit zero means
 the diagnostic ran, including when its candidate is unknown or incorrect.
 
 This reads one stored canvas with no rotation, crop correction, custom regions
-or loaded templates. Inputs must be single-frame PNG/JPEG files of at most
+or loaded templates. Inputs must be single-frame PNG/JPEG/WebP files of at most
 32 MiB, 100–8192 pixels on each axis and at most 16,777,216 pixels in total;
-nontrivial orientation metadata is unsupported. It does not load settings or
+nontrivial orientation metadata is unsupported. WebP requires decoding support
+in the installed Pillow; unreadable or unsupported input fails explicitly.
+WebP container and bitstream dimensions are checked before decoder allocation,
+including when WebP bytes use another supported extension. Malformed, conflicting
+or duplicate WebP headers, invalid lengths/padding, and animation containers
+(even with only one frame) are rejected. This adds file-format support only;
+OCR preprocessing, crop geometry and recognition rules are unchanged.
+It does not load settings or
 write images, history, cooldowns or financial records. The report is isolated
 detector evidence, not proof that the application would start or complete an
 activity. Still images cannot validate episode continuity, live capture, native

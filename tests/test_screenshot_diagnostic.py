@@ -242,25 +242,28 @@ def test_image_mode_does_not_enter_application_or_financial_services(diagnostic,
     assert diagnostic.diagnose_image(image_path)["status"] == "ok"
 
 
-@pytest.mark.parametrize("path", ["https://example.com/a.png", "file:///tmp/a.png", "//server/share/a.png", r"\\server\share\a.png", "-", "missing.png"])
+@pytest.mark.parametrize("path", ["https://example.com/a.png", "file:///tmp/a.png", "//server/share/a.png", r"\\server\share\a.png", "-", "missing.png",
+                                   "https://example.com/a.webp", "file:///tmp/a.webp", "//server/share/a.webp", r"\\server\share\a.webp", "missing.webp"])
 def test_rejects_nonlocal_or_missing_input(diagnostic, path):
     with pytest.raises(diagnostic.DiagnosticError):
         diagnostic.diagnose_image(path)
 
 
-def test_rejects_directories_and_nonregular_files(diagnostic, tmp_path):
-    directory = tmp_path / "directory.png"
+@pytest.mark.parametrize("suffix", [".png", ".webp"])
+def test_rejects_directories_and_nonregular_files(diagnostic, tmp_path, suffix):
+    directory = tmp_path / ("directory" + suffix)
     directory.mkdir()
     with pytest.raises(diagnostic.DiagnosticError, match="regular file"):
         diagnostic.diagnose_image(directory)
     if hasattr(os, "mkfifo"):
-        fifo = tmp_path / "fifo.png"
+        fifo = tmp_path / ("fifo" + suffix)
         os.mkfifo(fifo)
         with pytest.raises(diagnostic.DiagnosticError, match="regular file"):
             diagnostic.diagnose_image(fifo)
 
 
-@pytest.mark.parametrize("filename,format", [("wrong.gif", "PNG"), ("pretend.png", "GIF"), ("pretend.jpg", "BMP")])
+@pytest.mark.parametrize("filename,format", [("wrong.gif", "PNG"), ("pretend.png", "GIF"), ("pretend.jpg", "BMP"),
+                                             ("pretend.webp", "GIF"), ("pretend.webp", "BMP"), ("wrong.gif", "WEBP")])
 def test_rejects_extensions_and_decoded_formats(diagnostic, tmp_path, filename, format):
     path = tmp_path / filename
     Image.new("RGB", (320, 180)).save(path, format=format)
@@ -275,8 +278,11 @@ def test_rejects_malformed_and_truncated_input(diagnostic, image_path):
             diagnostic.diagnose_image(image_path)
 
 
-def test_rejects_encoded_oversize_before_opening_image(diagnostic, image_path, monkeypatch):
-    with image_path.open("wb") as file:
+@pytest.mark.parametrize("format,suffix", [("PNG", ".png"), ("WEBP", ".webp")])
+def test_rejects_encoded_oversize_before_opening_image(diagnostic, tmp_path, monkeypatch, format, suffix):
+    image_path = tmp_path / ("oversized" + suffix)
+    Image.new("RGB", (320, 180)).save(image_path, format=format)
+    with image_path.open("r+b") as file:
         file.truncate(32 * 1024 * 1024 + 1)
     monkeypatch.setattr(diagnostic.Image, "open", lambda *args, **kwargs: pytest.fail("Oversize input reached decoder"))
     with pytest.raises(diagnostic.DiagnosticError, match="32 MiB"):
@@ -342,7 +348,7 @@ def test_rejects_multiframe_png(diagnostic, image_path):
         diagnostic.diagnose_image(image_path)
 
 
-@pytest.mark.parametrize("format,suffix", [("JPEG", ".jpg"), ("PNG", ".png")])
+@pytest.mark.parametrize("format,suffix", [("JPEG", ".jpg"), ("PNG", ".png"), ("WEBP", ".webp")])
 def test_rejects_nontrivial_orientation(diagnostic, tmp_path, format, suffix):
     path = tmp_path / ("rotated" + suffix)
     exif = Image.Exif()
@@ -352,12 +358,277 @@ def test_rejects_nontrivial_orientation(diagnostic, tmp_path, format, suffix):
         diagnostic.diagnose_image(path)
 
 
-@pytest.mark.parametrize("mode,format,suffix", [("RGBA", "PNG", ".png"), ("L", "PNG", ".PNG"), ("RGB", "JPEG", ".jpeg")])
-def test_accepts_static_png_and_jpeg_modes(diagnostic, tmp_path, native, mode, format, suffix):
+@pytest.mark.parametrize("mode,format,suffix", [("RGBA", "PNG", ".png"), ("L", "PNG", ".PNG"), ("RGB", "JPEG", ".jpeg"),
+                                              ("RGB", "WEBP", ".webp"), ("RGBA", "WEBP", ".WEBP"), ("L", "WEBP", ".webp")])
+def test_accepts_static_image_modes(diagnostic, tmp_path, native, mode, format, suffix):
     native()
     path = tmp_path / ("input" + suffix)
     Image.new(mode, (320, 180), 70).save(path, format=format)
     assert diagnostic.diagnose_image(path)["input"]["format"] == format
+
+
+@pytest.mark.parametrize("filename,format", [("renamed.png", "WEBP"), ("renamed.webp", "PNG"), ("renamed.webp", "JPEG")])
+def test_supported_suffix_does_not_override_actual_format(diagnostic, tmp_path, filename, format):
+    path = tmp_path / filename
+    Image.new("RGB", (320, 180)).save(path, format=format)
+    frame, metadata = diagnostic._load_image(path)
+    assert metadata["format"] == format
+    assert frame.shape == (180, 320, 3)
+    assert frame.dtype == np.uint8
+    assert frame.flags.owndata and frame.flags.c_contiguous
+
+
+@pytest.mark.parametrize("mode", ["RGB", "RGBA", "L"])
+def test_lossless_webp_matches_all_png_pixels_crops_and_ocr_inputs(
+    diagnostic, tmp_path, native, monkeypatch, mode,
+):
+    rgb = np.arange(320 * 180 * 3, dtype=np.uint32).reshape(180, 320, 3).astype(np.uint8)
+    pixels = rgb if mode == "RGB" else rgb[:, :, 0]
+    if mode == "RGBA":
+        pixels = np.dstack((rgb, rgb[:, :, 0]))
+    expected_rgb = rgb if mode != "L" else np.repeat(pixels[:, :, None], 3, axis=2)
+    expected_frame = expected_rgb[:, :, ::-1].copy()
+    regions = ScreenRegions()
+    observed_frames, observed_crops = [], []
+
+    class CheckingDetector(StateDetector):
+        def detect(self, image, **kwargs):
+            np.testing.assert_array_equal(image, expected_frame)
+            assert image.flags.owndata and image.flags.c_contiguous
+            observed_frames.append(image.copy())
+            assert set(kwargs) == set(ARGUMENTS.values())
+            crops = {}
+            for source, argument in ARGUMENTS.items():
+                left, top, right, bottom = getattr(regions, source).to_absolute(320, 180)
+                crop = kwargs[argument]
+                np.testing.assert_array_equal(crop, expected_frame[top:bottom, left:right])
+                assert crop.flags.owndata and crop.flags.c_contiguous
+                assert not np.shares_memory(crop, image)
+                crops[source] = crop.copy()
+            observed_crops.append(crops)
+            return super().detect(image, **kwargs)
+
+    monkeypatch.setattr(diagnostic, "StateDetector", CheckingDetector)
+    reports, ocr_inputs = [], []
+    for format, suffix in (("PNG", ".png"), ("WEBP", ".webp")):
+        path = tmp_path / ("equivalent" + suffix)
+        # Each format is independently encoded from the same source pixels.
+        # exact=True preserves RGB even beneath fully transparent WebP pixels.
+        with Image.fromarray(pixels) as image:
+            image.save(path, format=format, **({"lossless": True, "exact": True} if format == "WEBP" else {}))
+        calls = native(["Mission: Sightseer"])
+        before = len(calls)
+        report = diagnostic.diagnose_image(path)
+        metadata = report.pop("input")
+        assert metadata == {
+            "name": path.name, "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+            "bytes": path.stat().st_size, "format": format, "width": 320, "height": 180,
+        }
+        reports.append(report)
+        ocr_inputs.append(calls[before:])
+        assert len(ocr_inputs[-1]) == 6
+        for source in SOURCES:
+            assert report["sources"][source]["box_ltrb"] == list(getattr(regions, source).to_absolute(320, 180))
+    assert reports[0] == reports[1]
+    np.testing.assert_array_equal(observed_frames[0], observed_frames[1])
+    for source in SOURCES:
+        np.testing.assert_array_equal(observed_crops[0][source], observed_crops[1][source])
+    for (png, png_language), (webp, webp_language) in zip(*ocr_inputs, strict=True):
+        np.testing.assert_array_equal(png, webp)
+        assert png_language == webp_language == "en"
+
+
+@pytest.mark.parametrize("header", [b"VP8 ", b"VP8L", b"VP8X"])
+@pytest.mark.parametrize("suffix", [".webp", ".png"])
+@pytest.mark.parametrize("width,height", [(99, 180), (320, 99), (8193, 100), (100, 8193), (5000, 4000)])
+def test_webp_dimension_headers_reject_before_decoder_allocation(
+    diagnostic, tmp_path, monkeypatch, header, suffix, width, height,
+):
+    path = tmp_path / ("dimensions" + suffix)
+    exif = Image.Exif()
+    exif[274] = 1
+    # Encode only a small real image; never allocate an oversized test canvas.
+    Image.new("RGB", (320, 180)).save(path, format="WEBP", lossless=header == b"VP8L",
+                                    **({"exif": exif} if header == b"VP8X" else {}))
+    encoded = bytearray(path.read_bytes())
+    assert encoded[12:16] == header
+    if header == b"VP8 ":
+        encoded[26:30] = struct.pack("<HH", width, height)
+    elif header == b"VP8L":
+        encoded[21:25] = struct.pack("<I", (width - 1) | ((height - 1) << 14))
+    else:
+        encoded[24:27] = (width - 1).to_bytes(3, "little")
+        encoded[27:30] = (height - 1).to_bytes(3, "little")
+    path.write_bytes(encoded)
+    monkeypatch.setattr(Image, "open", lambda *args, **kwargs: pytest.fail("Invalid dimensions reached allocating decoder"))
+    with pytest.raises(diagnostic.DiagnosticError, match="dimensions|pixels"):
+        diagnostic._load_image(path)
+
+
+def webp_chunk(kind, payload):
+    return kind + len(payload).to_bytes(4, "little") + payload + (b"\x00" if len(payload) % 2 else b"")
+
+
+def webp_container(*chunks):
+    body = b"WEBP" + b"".join(chunks)
+    return b"RIFF" + len(body).to_bytes(4, "little") + body
+
+
+def webp_size_header(kind, width, height):
+    if kind == b"VP8X":
+        data = b"\x00" * 4 + (width - 1).to_bytes(3, "little") + (height - 1).to_bytes(3, "little")
+    elif kind == b"VP8L":
+        data = b"\x2f" + ((width - 1) | ((height - 1) << 14)).to_bytes(4, "little")
+    else:
+        data = b"\x00" * 3 + b"\x9d\x01\x2a" + struct.pack("<HH", width, height)
+    return webp_chunk(kind, data)
+
+
+@pytest.mark.parametrize("kind", [b"VP8 ", b"VP8L"])
+@pytest.mark.parametrize("size", [(8193, 180), (320, 181)])
+def test_webp_canvas_cannot_hide_oversized_or_conflicting_bitstream(diagnostic, tmp_path, monkeypatch, kind, size):
+    path = tmp_path / "conflict.png"
+    path.write_bytes(webp_container(webp_size_header(b"VP8X", 320, 180), webp_size_header(kind, *size)))
+    monkeypatch.setattr(Image, "open", lambda *args, **kwargs: pytest.fail("Conflicting header reached allocating decoder"))
+    with pytest.raises(diagnostic.DiagnosticError):
+        diagnostic._load_image(path)
+
+
+@pytest.mark.parametrize("damage", [
+    "empty", "riff-short", "riff-long", "chunk-short", "chunk-long", "padding",
+    "duplicate-canvas", "duplicate-image", "late-canvas", "unknown-first",
+    "short-vp8x", "short-vp8l", "short-vp8", "bad-vp8l", "bad-vp8", "interframe",
+    "anim-flag", "anim-chunk", "frame-chunk",
+])
+def test_webp_container_rejections_precede_decoder_allocation(diagnostic, tmp_path, monkeypatch, damage):
+    canvas = webp_size_header(b"VP8X", 320, 180)
+    bitstream = webp_size_header(b"VP8L", 320, 180)
+    samples = {
+        "empty": webp_container(),
+        "riff-short": webp_container(bitstream) + b"\x00\x00",
+        "riff-long": webp_container(bitstream)[:-2],
+        "chunk-short": webp_container(b"VP8L"),
+        "chunk-long": webp_container(b"VP8L" + (1000).to_bytes(4, "little")),
+        "padding": webp_container(bitstream[:-1] + b"\x01"),
+        "duplicate-canvas": webp_container(canvas, canvas, bitstream),
+        "duplicate-image": webp_container(bitstream, bitstream),
+        "late-canvas": webp_container(bitstream, canvas),
+        "unknown-first": webp_container(webp_chunk(b"TEST", b""), bitstream),
+        "short-vp8x": webp_container(webp_chunk(b"VP8X", b"\x00" * 9), bitstream),
+        "short-vp8l": webp_container(webp_chunk(b"VP8L", b"\x2f\x00\x00\x00")),
+        "short-vp8": webp_container(webp_chunk(b"VP8 ", b"\x00" * 9)),
+        "bad-vp8l": webp_container(webp_chunk(b"VP8L", b"\x00" * 5)),
+        "bad-vp8": webp_container(webp_chunk(b"VP8 ", b"\x00" * 10)),
+        "interframe": webp_container(webp_chunk(b"VP8 ", b"\x01\x00\x00\x9d\x01\x2a" + struct.pack("<HH", 320, 180))),
+        "anim-flag": webp_container(canvas[:8] + b"\x02" + canvas[9:], bitstream),
+        "anim-chunk": webp_container(canvas, webp_chunk(b"ANIM", b"\x00" * 6), bitstream),
+        "frame-chunk": webp_container(canvas, bitstream, webp_chunk(b"ANMF", b"\x00" * 16)),
+    }
+    path = tmp_path / "invalid.webp"
+    path.write_bytes(samples[damage])
+    monkeypatch.setattr(Image, "open", lambda *args, **kwargs: pytest.fail("Invalid container reached allocating decoder"))
+    with pytest.raises(diagnostic.DiagnosticError):
+        diagnostic._load_image(path)
+
+
+@pytest.mark.parametrize("header", [b"VP8 ", b"VP8L", b"VP8X"])
+def test_real_static_webp_headers_decode_with_metadata(diagnostic, tmp_path, header):
+    path = tmp_path / "static.webp"
+    exif = Image.Exif()
+    exif[274] = 1
+    mode = "RGB" if header == b"VP8 " else "RGBA"
+    color = (23, 91, 177) if mode == "RGB" else (23, 91, 177, 120)
+    with Image.new(mode, (320, 180), color) as image:
+        image.save(path, format="WEBP", lossless=header == b"VP8L",
+                   **({"exif": exif} if header == b"VP8X" else {}))
+    encoded = path.read_bytes()
+    assert encoded[12:16] == header
+    # A valid odd-length unknown metadata chunk exercises bounded skipping/pad.
+    path.write_bytes(webp_container(encoded[12:], webp_chunk(b"TEST", b"abc")))
+    with Image.open(path) as image:
+        expected = np.asarray(image.convert("RGB"))[:, :, ::-1]
+    frame, metadata = diagnostic._load_image(path)
+    np.testing.assert_array_equal(frame, expected)
+    assert metadata["format"] == "WEBP"
+
+
+@pytest.mark.parametrize("frames", [1, 2])
+def test_rejects_real_animated_webp_before_decoder_allocation(diagnostic, tmp_path, monkeypatch, frames):
+    path = tmp_path / "animated.webp"
+    with Image.new("RGB", (320, 180), "gray") as first, Image.new("RGB", (320, 180), "white") as second:
+        first.save(path, format="WEBP", save_all=True, append_images=[second], duration=100, loop=0, lossless=True)
+    with Image.open(path) as image:
+        assert image.format == "WEBP" and image.n_frames == 2
+    if frames == 1:
+        encoded = path.read_bytes()
+        first_frame = encoded.index(b"ANMF")
+        end = first_frame + 8 + int.from_bytes(encoded[first_frame + 4:first_frame + 8], "little")
+        end += end % 2
+        path.write_bytes(webp_container(encoded[12:end]))
+        with Image.open(path) as image:
+            assert image.n_frames == 1
+    monkeypatch.setattr(Image, "open", lambda *args, **kwargs: pytest.fail("Animation reached allocating decoder"))
+    with pytest.raises(diagnostic.DiagnosticError, match="single|animated|multiframe"):
+        diagnostic._load_image(path)
+
+
+@pytest.mark.parametrize("damage", ["truncated", "corrupt"])
+def test_rejects_incomplete_real_webp_without_ocr(diagnostic, tmp_path, monkeypatch, damage):
+    path = tmp_path / "damaged.webp"
+    Image.new("RGB", (320, 180), "gray").save(path, format="WEBP", lossless=True)
+    encoded = path.read_bytes()
+    assert encoded[:4] == b"RIFF" and encoded[8:16] == b"WEBPVP8L"
+    if damage == "truncated":
+        encoded = encoded[:len(encoded) // 2]
+    else:
+        # Keep the real container/header but damage its lossless bitstream marker.
+        encoded = encoded[:20] + b"\x00" + encoded[21:]
+    path.write_bytes(encoded)
+    monkeypatch.setattr(diagnostic, "_TesseractDiagnostic", lambda: pytest.fail("Invalid input reached OCR"))
+    with pytest.raises(diagnostic.DiagnosticError, match="complete local.*WebP"):
+        diagnostic.diagnose_image(path, backend="tesseract")
+
+
+def test_unavailable_webp_decoder_returns_safe_input_error(diagnostic, tmp_path, monkeypatch):
+    from PIL import WebPImagePlugin
+
+    path = tmp_path / "valid.webp"
+    Image.new("RGB", (320, 180)).save(path, format="WEBP")
+    monkeypatch.setattr(WebPImagePlugin, "SUPPORTED", False)
+    with pytest.warns(UserWarning, match="WEBP support not installed"):
+        with pytest.raises(diagnostic.DiagnosticError, match="complete local.*WebP"):
+            diagnostic._load_image(path)
+
+
+def test_webp_decoder_end_of_stream_is_safe_cli_error(diagnostic, tmp_path, monkeypatch, capsys):
+    import test_capture
+    from PIL import WebPImagePlugin
+
+    path = tmp_path / "incomplete.webp"
+    Image.new("RGB", (320, 180)).save(path, format="WEBP")
+    original_decoder = WebPImagePlugin._webp.WebPAnimDecoder
+
+    class ExhaustedDecoder:
+        def __init__(self, encoded):
+            self.decoder = original_decoder(encoded)
+
+        def __getattr__(self, name):
+            return getattr(self.decoder, name)
+
+        def get_next(self):
+            # Pillow's real _get_next raises EOFError for this decoder result.
+            return None
+
+    monkeypatch.setattr(WebPImagePlugin._webp, "WebPAnimDecoder", ExhaustedDecoder)
+    monkeypatch.setattr(diagnostic, "_TesseractDiagnostic", lambda: pytest.fail("Incomplete input reached OCR"))
+    assert test_capture.main(["--image", str(path), "--backend", "tesseract"]) == 1
+    output = capsys.readouterr()
+    assert json.loads(output.out) == {
+        "schema_version": 1, "mode": "single_image_diagnostic", "status": "error",
+        "backend": {"name": "tesseract"},
+        "error": {"type": "DiagnosticError", "message": "Input could not be read as a complete local PNG, JPEG or WebP image"},
+    }
+    assert output.err == ""
 
 
 def test_invalid_crop_is_an_error_before_recognition(diagnostic, image_path, native, monkeypatch):
@@ -629,7 +900,7 @@ def test_actual_image_cli_probe_failure_does_not_invent_source(
     assert len(calls) == 1
 
 
-def test_actual_image_cli_generic_input_error_is_unchanged(diagnostic, capsys):
+def test_actual_image_cli_generic_input_error_lists_supported_formats(diagnostic, capsys):
     import test_capture
 
     assert test_capture.main(["--image", "https://example.com/private.png"]) == 1
@@ -639,7 +910,7 @@ def test_actual_image_cli_generic_input_error_is_unchanged(diagnostic, capsys):
         "backend": {"name": "windows"},
         "error": {
             "type": "DiagnosticError",
-            "message": "Supply one existing regular local PNG or JPEG file",
+            "message": "Supply one existing regular local PNG, JPEG or WebP file",
         },
     }
 
