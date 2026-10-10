@@ -19,7 +19,7 @@ class RegionType(Enum):
     PHONE_SCREEN = auto()  # In-game phone when open
     FULL_SCREEN = auto()  # Full screen capture (for template matching)
     BOTTOM_OBJECTIVE = auto()  # Objective-only bottom-center text
-    RESULT_HEADER = auto()  # Result-only upper heist heading and title
+    RESULT_HEADER = auto()  # Upper result or narrowly qualified start heading
     VIP_STATUS = auto()  # Identity-only bottom-right VIP Work status
 
 
@@ -132,7 +132,7 @@ class ScreenRegions:
     # A separate objective-only source; never a business/result/money crop.
     bottom_objective: Region = Region(x=0.25, y=0.90, width=0.50, height=0.10)
 
-    # Independent result-only observation; no objective/business/money authority.
+    # Upper result/start-title observation; no objective/business/money authority.
     result_header: Region = Region(x=0.20, y=0.12, width=0.60, height=0.20)
 
     # Independent identity-only footer. The existing timer crop is unchanged.

@@ -1028,6 +1028,37 @@ completion or financial entry, including when the suffix is **0:00**.
 Native Windows OCR and the
 requested YouTube evidence remain unverified.
 
+#### Recognize the observed Sightseer start banner
+
+The existing upper-center observation can also supply a named active mission
+when its complete text is **SIGHTSEER** followed on the next CR/LF line by
+**Collect the packages hidden around the map**, and the separate VIP footer
+independently supplies an accepted status row. Only ASCII case, horizontal
+spaces/tabs, and surrounding CR/LF whitespace may vary. A title alone, shared
+Sightseer-app instruction, partial or joined banner, extra text, or missing
+status cannot use this narrow exception. No crop, preprocessing, or OCR call
+changes were needed.
+
+The complete raw banner is stored as `active_title_evidence`, separately from
+`result_header_evidence`. Only its verified catalog name enters identity
+matching: the package subtitle adds no objective or episode-rearming authority,
+and the status suffix adds no result, timer, or financial authority. Conflicting
+independent titles remain uncertain; primary business, completed/failed, and
+ambiguous evidence retains priority. The application rebuilds the same evidence
+and checks every cached reading field before admission, including direct callers.
+Compatible VIP Work activities can acquire the Sightseer name without restarting
+their time or balance baseline, and a repeated completed episode stays fenced.
+
+This exception is grounded in one original 2560×1440 PC Gamer JPEG, whose upper
+title was cleanly read by the unchanged production diagnostic while the lower
+mission-banner crop contained scenery. Its exact text and provenance are retained
+in [the OCR fixture](tests/fixtures/ocr_sightseer_start_banner.json); original and
+derived images remain outside the repository. The
+[evaluation](validation/sightseer-start-banner-evaluation.json) records the
+bounded original-image comparison and actual app/session regression results.
+This is one supported layout with diagnostic Linux Tesseract, not native Windows
+OCR, live gameplay, broader named-mission accuracy, or YouTube evidence.
+
 #### Recover an unfinished detection
 
 If a result was missed while tracking was paused, the app can remain attached to

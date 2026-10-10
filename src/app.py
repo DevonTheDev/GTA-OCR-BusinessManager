@@ -90,6 +90,7 @@ class CaptureResult:
     result_header_evidence: str = ""
     vip_status_text: str = ""
     vip_status_evidence: str = ""
+    active_title_evidence: str = ""
 
 
 @dataclass
@@ -860,6 +861,7 @@ class GTABusinessManager:
             result.result_header_evidence = getattr(state_result, "result_header_evidence", "")
             result.vip_status_text = getattr(state_result, "vip_status_text", "")
             result.vip_status_evidence = getattr(state_result, "vip_status_evidence", "")
+            result.active_title_evidence = getattr(state_result, "active_title_evidence", "")
             result.mission = getattr(state_result, "mission", None)
 
             # Update state machine
@@ -1036,6 +1038,7 @@ class GTABusinessManager:
         capture_result.result_header_evidence = getattr(state_result, "result_header_evidence", "")
         capture_result.vip_status_text = getattr(state_result, "vip_status_text", "")
         capture_result.vip_status_evidence = getattr(state_result, "vip_status_evidence", "")
+        capture_result.active_title_evidence = getattr(state_result, "active_title_evidence", "")
         guarded_result = self._guard_mission_observation(state_result)
         if guarded_result is not state_result:
             # Direct callers receive the same conservative observation as a
@@ -1052,6 +1055,7 @@ class GTABusinessManager:
             capture_result.result_header_evidence = guarded_result.result_header_evidence
             capture_result.vip_status_text = guarded_result.vip_status_text
             capture_result.vip_status_evidence = guarded_result.vip_status_evidence
+            capture_result.active_title_evidence = guarded_result.active_title_evidence
             capture_result.mission = guarded_result.mission
             return
         state = state_result.state
@@ -1198,6 +1202,8 @@ class GTABusinessManager:
                 and math.isfinite(confidence) and confidence > 0.6)
 
     def _mission_reading(self, state_result: StateDetectionResult) -> MissionReading:
+        if getattr(state_result, "active_title_evidence", ""):
+            return self._validated_active_title_reading(state_result) or MissionReading()
         reading = getattr(state_result, "mission", None)
         if reading is None:
             header_evidence = getattr(state_result, "result_header_evidence", "")
@@ -1220,6 +1226,18 @@ class GTABusinessManager:
                     and reading.outcome is None and reading.outcome_scope is None
                     and reading.identity_status != "ambiguous"):
                 reading = self._mission_parser.parse_regions((*sources, VIP_STATUS_MARKER))
+        return reading
+
+    def _validated_active_title_reading(self, state_result):
+        """Direct/fallback callers must prove the same complete source contract."""
+        reading = StateDetector.sightseer_start_reading(state_result, self._mission_parser)
+        cached = getattr(state_result, "mission", None)
+        if (reading is None or reading.identity_status != "known_name"
+                or reading.mission_name != "Sightseer" or reading.mission_type != MissionType.VIP_WORK
+                or reading.heist_phase != MissionType.UNKNOWN or not reading.is_active
+                or reading.outcome is not None or reading.outcome_scope is not None
+                or (cached is not None and cached != reading)):
+            return None
         return reading
 
     @staticmethod
@@ -1285,6 +1303,13 @@ class GTABusinessManager:
 
     def _guard_mission_observation(self, state_result):
         """Apply acceptance before state/money processing and to direct callers."""
+        if (getattr(state_result, "active_title_evidence", "")
+                and self._validated_active_title_reading(state_result) is None):
+            return replace(
+                state_result, state=GameState.UNKNOWN, confidence=0.0,
+                reason="Active title lacks compatible independent banner and VIP status evidence",
+                active_title_evidence="",
+            )
         header_evidence = getattr(state_result, "result_header_evidence", "")
         if header_evidence:
             header = self._mission_parser.parse(header_evidence)

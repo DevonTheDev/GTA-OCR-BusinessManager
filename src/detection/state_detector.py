@@ -30,6 +30,11 @@ _ORDINARY_RESULT_HEADER = re.compile(
     r"(?:[ \t]*(?:\r\n|\r|\n)[ \t]*2[ \t]+of[ \t]+3[ \t]+armaments[ \t]+delivered)?"
     r"[ \t\r\n]*", re.IGNORECASE | re.ASCII,
 )
+_SIGHTSEER_START_BANNER = re.compile(
+    r"[ \t\r\n]*SIGHTSEER[ \t]*(?:\r\n|\r|\n)[ \t]*"
+    r"Collect[ \t]+the[ \t]+packages[ \t]+hidden[ \t]+around[ \t]+the[ \t]+map"
+    r"[ \t\r\n]*", re.IGNORECASE | re.ASCII,
+)
 
 
 def is_ordinary_result_header(reading: MissionReading) -> bool:
@@ -70,6 +75,7 @@ class StateDetectionResult:
     result_header_evidence: str = ""
     vip_status_text: str = ""
     vip_status_evidence: str = ""
+    active_title_evidence: str = ""
 
 
 @dataclass
@@ -193,7 +199,7 @@ class StateDetector:
             center_text_image: Optional cropped center screen region
             mission_banner_image: Optional cropped mission name/result banner
             bottom_objective_image: Optional independent bottom objective crop
-            result_header_image: Optional independent result-only header
+            result_header_image: Optional upper result or narrowly qualified start banner
             vip_status_image: Optional independent identity-only VIP status crop
 
         Returns:
@@ -369,8 +375,33 @@ class StateDetector:
         return replace(result, state=GameState.MISSION_ACTIVE, confidence=0.8,
                        reason="Complete VIP status row supplies category identity", mission=reading)
 
+    @staticmethod
+    def sightseer_start_reading(result, parser):
+        """Rebuild only the observed upper title, with independent VIP status.
+
+        The complete banner validates a name, not objective/result authority.
+        Keep its raw text in active_title_evidence; only the fixed catalog title
+        enters the parser. Callers must reject an ambiguous reconstructed name.
+        """
+        evidence = getattr(result, "active_title_evidence", "")
+        if (not evidence or len(evidence) > 512
+                or evidence != result.result_header_text
+                or _SIGHTSEER_START_BANNER.fullmatch(evidence) is None
+                or result.state != GameState.MISSION_ACTIVE
+                or result.result_header_evidence
+                or result.vip_status_evidence != VIP_STATUS_MARKER
+                or StateDetector._vip_status_marker(result.vip_status_text) != VIP_STATUS_MARKER):
+            return None
+        sources = (result.mission_text, result.objective_text, result.banner_text,
+                   result.bottom_objective_command)
+        primary = parser.parse_regions(sources)
+        if (primary.outcome is not None or primary.outcome_scope is not None
+                or primary.identity_status == "ambiguous"):
+            return None
+        return parser.parse_regions((*sources, "Sightseer", VIP_STATUS_MARKER))
+
     def _result_header_observation(self, result, image, *, observation=None):
-        """Admit only a self-qualified result, retaining primary source priority."""
+        """Keep separate result/start-title admission and primary source priority."""
         reading = result.mission
         protected = reading is not None and (
             reading.outcome is not None or reading.outcome_scope is not None
@@ -387,6 +418,16 @@ class StateDetector:
         header = self._mission_parser.parse(raw)
         ordinary = is_ordinary_result_header(header)
         if not ordinary and header.outcome_scope != "heist":
+            candidate = replace(result, active_title_evidence=raw)
+            reading = self.sightseer_start_reading(candidate, self._mission_parser)
+            if reading is not None:
+                if reading.identity_status == "ambiguous":
+                    return replace(result, state=GameState.UNKNOWN, confidence=0.0,
+                                   reason="Upper active title conflicts with independent mission identity",
+                                   mission=reading)
+                return replace(candidate, confidence=0.8,
+                               reason="Complete Sightseer start banner with independent VIP status",
+                               mission=reading)
             return result
         if not ordinary and not is_qualified_result_header(header):
             return replace(result, state=GameState.UNKNOWN, confidence=0.0,
@@ -744,6 +785,8 @@ class StateDetector:
                     vip_status_text=(ocr.vip_status_text if ocr is not None else best.vip_status_text),
                     vip_status_evidence=(ocr.vip_status_evidence if ocr is not None
                                          else best.vip_status_evidence),
+                    active_title_evidence=(ocr.active_title_evidence if ocr is not None
+                                           else best.active_title_evidence),
                     hud_visible=best.hud_visible,
                 )
 
@@ -756,7 +799,8 @@ class StateDetector:
                            result_header_text=ocr.result_header_text,
                            result_header_evidence=ocr.result_header_evidence,
                            vip_status_text=ocr.vip_status_text,
-                           vip_status_evidence=ocr.vip_status_evidence)
+                           vip_status_evidence=ocr.vip_status_evidence,
+                           active_title_evidence=ocr.active_title_evidence)
         return best
 
     def _update_context(self, result: StateDetectionResult) -> None:

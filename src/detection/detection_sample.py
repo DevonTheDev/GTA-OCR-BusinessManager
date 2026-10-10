@@ -186,7 +186,7 @@ def _backend(engine):
 
 _OBSERVATION_TEXT = ("mission_text", "objective_text", "banner_text", "bottom_objective_text",
                      "bottom_objective_command", "result_header_text", "result_header_evidence",
-                     "vip_status_text", "vip_status_evidence")
+                     "vip_status_text", "vip_status_evidence", "active_title_evidence")
 
 
 def _observation(value, processed=False):

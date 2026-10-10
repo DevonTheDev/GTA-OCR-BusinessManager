@@ -1,0 +1,133 @@
+{
+  "source_page_url": "https://www.pcgamer.com/games/grand-theft-auto/whats-the-best-vip-work-in-gta-online/",
+  "asset_url": "https://cdn.mos.cms.futurecdn.net/7h4ZCoc9aVkePzy8qr7YBd.jpg",
+  "input": {
+    "name": "pcgamer-vip-sightseer-7h4ZCoc9aVkePzy8qr7YBd.jpg",
+    "sha256": "185b8c436c8f6abcf0b4ad36112fc59b474070ab6e8ce7964d369dcb41884169",
+    "bytes": 812755,
+    "format": "JPEG",
+    "width": 2560,
+    "height": 1440
+  },
+  "baseline_commit": "cf0ab946b2c345321c3a0cbbc2c0da5062bba204",
+  "backend": {
+    "name": "tesseract",
+    "diagnostic_only": true,
+    "ocr_confidence_source": "tesseract_word_mean"
+  },
+  "sources": {
+    "mission_text": {
+      "box_ltrb": [
+        640,
+        28,
+        1920,
+        144
+      ],
+      "status": "recognized",
+      "preprocessing": {
+        "threshold": true,
+        "invert": true,
+        "scale": 2.0
+      },
+      "text": "Wiss) Ih sw PSS",
+      "ocr_confidence": 0.32662408
+    },
+    "center_prompt": {
+      "box_ltrb": [
+        640,
+        648,
+        1920,
+        864
+      ],
+      "status": "recognized",
+      "preprocessing": {
+        "threshold": true,
+        "invert": true,
+        "scale": 2.0
+      },
+      "text": "ce raaeed | | keel ee | \u2014_ LRU ES a eel a et ea : eee Se Ss \u2014\u2014\nama Fr teas a ae sa A roan ABE: Tee ee aia \u2014 To = By). 2 frees He gett. | eee 4 \u2014\n| rape | ets eos | Demme | Rea | cone it ant je ST ee eee\npret | lageereld U eae pe neal || Feb eters | (eee | Pee a CEN, gn gSaaeTN Oo een ae GA Hi Faw ee be (fae eS ee ec, SPI a\nme NC ee ae ee Se ae NG, \\; || eee Se ee ee",
+      "ocr_confidence": 0.28282184906542057
+    },
+    "mission_banner": {
+      "box_ltrb": [
+        512,
+        503,
+        2048,
+        720
+      ],
+      "status": "recognized",
+      "preprocessing": {
+        "threshold": true,
+        "invert": true,
+        "scale": 2.0
+      },
+      "text": "\\Wtiseeeeilies aa mak i aes Pras | oe sae en = | rth & | ro qi - poi [op as if pers cee aoe\neee eee aa ql ie",
+      "ocr_confidence": 0.27557955533333334
+    },
+    "bottom_objective": {
+      "box_ltrb": [
+        640,
+        1296,
+        1920,
+        1440
+      ],
+      "status": "recognized",
+      "preprocessing": {
+        "threshold": false,
+        "invert": true,
+        "scale": 2.0
+      },
+      "text": "> ) SUse theisightseer app. COMING) the Next package)",
+      "ocr_confidence": 0.46932591333333334
+    },
+    "result_header": {
+      "box_ltrb": [
+        512,
+        172,
+        2048,
+        460
+      ],
+      "status": "recognized",
+      "preprocessing": {
+        "threshold": false,
+        "invert": false,
+        "scale": 2.0
+      },
+      "text": "SIGHTSEER\nCollect the packages hidden around the map",
+      "ocr_confidence": 0.9536450575000001
+    },
+    "vip_status": {
+      "box_ltrb": [
+        2099,
+        1267,
+        2534,
+        1440
+      ],
+      "status": "recognized",
+      "preprocessing": {
+        "threshold": false,
+        "invert": true,
+        "scale": 2.0
+      },
+      "text": "PACKAGES REMAINING 3\nVIPWORKEND 14:58",
+      "ocr_confidence": 0.9397940979999999
+    }
+  },
+  "baseline_candidate": {
+    "state": "MISSION_ACTIVE",
+    "heuristic_score": 0.8,
+    "reason": "Complete VIP status row supplies category identity",
+    "identity": {
+      "status": "type_only",
+      "candidates": [
+        "VIP_WORK"
+      ],
+      "mission_name": "",
+      "mission_type": "VIP_WORK",
+      "heist_phase": "UNKNOWN",
+      "outcome": null,
+      "outcome_scope": null
+    }
+  },
+  "limits": "Real original JPEG diagnostic OCR text; injected tests do not execute native Windows OCR or redistribute the image."
+}
