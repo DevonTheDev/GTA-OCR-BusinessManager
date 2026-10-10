@@ -1321,14 +1321,20 @@ class GTABusinessManager:
         objectives = self._objective_evidence(state_result)
         if self._data.mission_start_time is not None:
             identity = self._current_mission_identity()
-            if identity.explicit:
-                self._data.terminal_mission_episode = TerminalMissionEpisode(
-                    identity, self._data.mission_objectives.include(objectives),
-                )
+            # An unresolved owner was still consumed. Keep its evidence before
+            # callbacks so a shared-app replay cannot start that activity again.
+            self._data.terminal_mission_episode = TerminalMissionEpisode(
+                identity, self._data.mission_objectives.include(objectives),
+            )
             return
         identity = self._reading_identity(state_result, reading)
         episode = self._data.terminal_mission_episode
         if episode is not None and episode.identity.compatible(identity):
+            if (not episode.identity.explicit and identity.explicit
+                    and reading.identity_status in ("known_name", "type_only")):
+                # A supported unowned result establishes its normal identity
+                # fence without losing the unresolved owner's objective history.
+                episode = replace(episode, identity=identity)
             self._data.terminal_mission_episode = replace(
                 episode, objectives=episode.objectives.include(objectives),
             )

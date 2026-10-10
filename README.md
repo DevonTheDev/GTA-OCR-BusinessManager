@@ -565,13 +565,19 @@ establish Sightseer. An unresolved app-only observation after a recorded result
 keeps the previous result's fence unless it supplies a new complete objective;
 dropping the false name must not rearm a duplicate result, activity row or cooldown.
 This uses the existing objective-evidence rules, including their conservative
-handling of repeated, partial and overflowing observations. An active mission
-keeps its owner; an independent new title/category or complete objective still
-can start tracking. With no prior result, existing generic objective cues may
-start an unresolved activity. This is a narrow shared-app replay guard, not a
-general guarantee against unnamed replays. Parser and capture/tracker/SQLite
-regressions use controlled OCR text, not new gameplay screenshots or Windows
-OCR measurements.
+handling of repeated, partial and overflowing observations. This also applies
+when the completed activity never acquired a name or category: consuming an
+UNKNOWN owner retains its evidence before completion callbacks can reenter.
+An active mission keeps its owner; an independent new title/category or complete
+objective still can start tracking. An initial generic result with no owned
+activity does not establish this context, so later generic objective cues can
+still start an unresolved activity. A genuinely new activity showing only the
+same shared-app prompt remains indistinguishable from replay and can stay
+uncertain until independent identity or new complete objective evidence appears,
+or a fresh capture session clears the context. This is a narrow shared-app
+replay guard, not a general guarantee against unnamed replays. Parser and
+capture/tracker/SQLite regressions use controlled OCR text, not new gameplay
+screenshots or Windows OCR measurements.
 
 Conflicting names/categories remain ambiguous. Unknown objectives no longer
 default to a contact mission; a generic delivery classification remains
