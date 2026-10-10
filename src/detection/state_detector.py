@@ -27,7 +27,7 @@ _VIP_STATUS_ROW = re.compile(
 )
 _ORDINARY_RESULT_HEADER = re.compile(
     r"[ \t\r\n]*MISSION[ \t]+PASSED"
-    r"(?:[ \t]*(?:\r\n|\r|\n)[ \t]*2[ \t]+of[ \t]+3[ \t]+armaments[ \t]+delivered)?"
+    r"(?:\.|[ \t]*(?:\r\n|\r|\n)[ \t]*2[ \t]+of[ \t]+3[ \t]+armaments[ \t]+delivered)?"
     r"[ \t\r\n]*", re.IGNORECASE | re.ASCII,
 )
 _SIGHTSEER_START_BANNER = re.compile(
@@ -38,10 +38,11 @@ _SIGHTSEER_START_BANNER = re.compile(
 
 
 def is_ordinary_result_header(reading: MissionReading) -> bool:
-    """Admit the whole label, optionally with one observed literal subtitle.
+    """Admit the whole label with one observed period or literal subtitle.
 
-    The two-line armament count is result-only evidence, never identity,
-    objective or payout authority. Other counts and layouts stay diagnostic.
+    The standalone ASCII period and two-line armament count are separate,
+    result-only variants, never identity, objective or payout authority.
+    Other punctuation, counts and layouts stay diagnostic.
     """
     return _ORDINARY_RESULT_HEADER.fullmatch(reading.raw_text) is not None
 
