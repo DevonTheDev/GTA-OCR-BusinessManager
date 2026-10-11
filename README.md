@@ -2188,6 +2188,19 @@ signs or every Unicode sign lookalike, or resolve ambiguous unsigned numbers.
 Local tests use actual parser/capture/accounting code and temporary SQLite with
 controlled OCR text; they do not establish Windows OCR or live gameplay accuracy.
 
+An exact, case-insensitive row-leading `Reward $85,000` field is also excluded
+from balance observations. Leading horizontal whitespace and horizontal spaces
+around the dollar marker are allowed; the label and amount must share a row.
+Connected malformed amount tails and horizontally grouped numeric chunks are
+excluded too. A newline, fresh currency marker, sign, `|`, `;`, `:`, or following
+independent word ends that payload. Separate balance text remains eligible and
+reward-only abstention preserves parsed/accepted balance history and accounting.
+This narrow synthetic-text safeguard does not recognize `Reward: $85,000`, bare
+`reward 85000`, same-line prose, missing/misread labels or cross-line fields.
+An unlabeled `$85,000` still follows the existing balance rules. A separately
+recognized mission can complete with zero observed earnings; this filter does
+not establish settlement, change mission detection, or repair existing records.
+
 ### Live business stock and supply ratios
 
 Business OCR treats `Stock: 5/10` as 50% and `Supplies: 3/4` as 75%.

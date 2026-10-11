@@ -60,6 +60,19 @@ class MoneyParser:
         re.IGNORECASE,
     )
 
+    # An exact row-leading Reward field is negative balance evidence. Match on
+    # raw text, before strip/normalization can expose a different row start.
+    # Horizontal spaces are tabs and Unicode space separators, never newlines.
+    # Reuse the signed guard's payload boundaries and grouped-number grammar:
+    # attached malformed tails are masked, but an independent word ends it.
+    _HORIZONTAL_SPACE = r"[\t \u00a0\u1680\u2000-\u200a\u202f\u205f\u3000]"
+    REWARD_AMOUNT_PATTERN = re.compile(
+        rf"^{_HORIZONTAL_SPACE}*Reward{_HORIZONTAL_SPACE}+\$"
+        rf"{_HORIZONTAL_SPACE}*{_SIGNED_TOKEN_BODY}+"
+        rf"(?:{_HORIZONTAL_SPACE}+{_SIGNED_NUMBER_TOKEN})*",
+        re.IGNORECASE | re.MULTILINE,
+    )
+
     # Patterns for money values
     # GTA formats: "$1,234,567" or "$1.234.567" (locale-dependent)
     # Include OCR-confused characters in the pattern, but require $ to anchor
@@ -110,8 +123,10 @@ class MoneyParser:
             return MoneyReading(raw_text=text or "")
 
         try:
-            # Clean up the text
-            cleaned = self._clean_text(text)
+            # Mask explicit reward fields before any extraction or fallback,
+            # preserving literal newline boundaries and the original raw text.
+            cleaned = self.REWARD_AMOUNT_PATTERN.sub("|", text)
+            cleaned = self._clean_text(cleaned)
             # Keep a barrier rather than deleting rejected spans: deletion or
             # whitespace would allow cash/bank labels or numeric fragments on
             # either side to join into a different candidate.
