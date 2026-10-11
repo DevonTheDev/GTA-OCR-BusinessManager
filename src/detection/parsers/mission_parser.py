@@ -1,7 +1,8 @@
 """Conservative, shared mission identity and result parsing for OCR text.
 
 Names, explicit category labels and allowlisted complete distinctive objectives
-are evidence; ordinary objective vocabulary is not. No OCR typos are guessed.
+are evidence; ordinary objective vocabulary is not. Only the observed header
+label alias is admitted, without general OCR spelling repair.
 """
 
 import re
@@ -55,7 +56,7 @@ class MissionReading:
     outcome: Optional[Literal["complete", "failed", "conflicting"]] = None
     # A scoped result label is independent of identity/phase. Keep its scope
     # even when unqualified, so a template cannot promote it to an activity.
-    outcome_scope: Optional[Literal["heist"]] = None
+    outcome_scope: Optional[Literal["heist", "payphone_hit"]] = None
     # Shared phone-app text is observation metadata, never mission identity.
     sightseer_app_reference: bool = False
 
@@ -260,7 +261,11 @@ class MissionParser:
         """Parse this text only; preserve raw text and the original-case objective."""
         return self.parse_regions((text,))
 
-    def parse_regions(self, texts: Iterable[str]) -> MissionReading:
+    def parse_result_header(self, text: str) -> MissionReading:
+        """Interpret one independent result header, never an active title."""
+        return self.parse_regions((), result_header=text)
+
+    def parse_regions(self, texts: Iterable[str], *, result_header: str = "") -> MissionReading:
         """Combine complete evidence from independent OCR crops.
 
         Wrapping within a crop is allowed; phrases never span crop boundaries.
@@ -268,7 +273,21 @@ class MissionParser:
         identity and results before changing the last active reading.
         """
         sources = tuple(text for text in texts if text)
+        # This label has authority only in the explicitly supplied header role.
+        # Whole lines and the complete two-line banner are deliberate: do not
+        # join crops, accept extra reward rows, or infer a category from "hit".
+        header_lines = [re.sub(r"[ \t]+", " ", line.strip(" \t")).casefold()
+                        for line in re.split(r"\r\n?|\n", result_header.strip("\r\n"))]
+        hit_labels = {"hit complete", "hit complege"}
+        hit_scope = any(line in hit_labels for line in header_lines)
+        hit_names = {_normalize(name) for name, kind in self.MISSION_NAMES.items()
+                     if kind == MissionType.PAYPHONE_HIT}
+        qualified_hit_header = (len(header_lines) == 2 and header_lines[0] in hit_labels
+                                and header_lines[1] in hit_names)
+        if result_header:
+            sources += (result_header,)
         reading = MissionReading(raw_text="\n".join(sources))
+        scopes = {"payphone_hit"} if hit_scope else set()
         outcomes = set()
         names = {}
         categories = set()
@@ -276,7 +295,7 @@ class MissionParser:
         keywords = set()
         for text in sources:
             if any(_is_heist_success(match) for match in _HEIST_SUCCESS.finditer(text)):
-                reading.outcome_scope = "heist"
+                scopes.add("heist")
             outcomes.update(_outcome_evidence(text))
             if not reading.objective:
                 reading.objective = self._extract_objective(text)
@@ -343,17 +362,24 @@ class MissionParser:
                  or reading.heist_phase == MissionType.HEIST_FINALE)
             and reading.heist_phase != MissionType.HEIST_PREP
         )
-        if reading.outcome_scope == "heist":
+        if scopes:
+            reading.outcome_scope = "payphone_hit" if hit_scope else "heist"
             outcomes.add("complete")
-        if len(outcomes) > 1:
+        qualified_hit = (qualified_hit_header and reading.identity_status == "known_name"
+                         and reading.mission_type == MissionType.PAYPHONE_HIT
+                         and reading.heist_phase == MissionType.UNKNOWN)
+        if len(outcomes) > 1 or len(scopes) > 1:
             reading.outcome = "conflicting"
+        elif hit_scope and not qualified_hit:
+            reading.outcome = None
         elif reading.outcome_scope == "heist" and not qualified_heist:
             reading.outcome = None
         elif "complete" in outcomes:
             reading.outcome = "complete"
         elif "failed" in outcomes:
             reading.outcome = "failed"
-        reading.is_active = reading.has_mission and reading.outcome is None and reading.outcome_scope is None
+        reading.is_active = (reading.has_mission and reading.outcome is None
+                             and reading.outcome_scope is None and not result_header)
 
         reading.keywords_found = sorted(keywords)
         if reading.has_mission and reading.is_active:

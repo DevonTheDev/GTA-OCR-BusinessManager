@@ -934,6 +934,31 @@ aspect ratios, and it does not validate Windows OCR, live gameplay or YouTube
 capture. The original guide images and their derivatives remain outside the
 repository because redistribution rights are unestablished.
 
+#### Recognize named Payphone Hit results
+
+A Payphone Hit result requires the entire independent header to contain two
+lines: **hit complete**, or the observed OCR alias **hit COMPLEGE**, followed by
+an exact supported Payphone Hit title. Ordinary case and surrounding horizontal
+whitespace are tolerated. Partial names, extra rows, other misspellings and text
+in other crops gain no result authority; identity cannot be borrowed from the
+current activity. Raw OCR spelling is retained, and existing primary conflicts
+and result priorities remain in force.
+
+A compatible PAYPHONE_HIT or unresolved owner can complete once, subject to
+existing title/type/phase and episode checks. A result with no owner creates no
+activity; callback-created replacement owners cannot be consumed by that old
+result. The header supplies no cash. Independent balance parsing retains the
+signed-notification and explicit row-leading Reward guards; accepted balance
+changes remain observed amounts, not verified payouts. An unowned or rejected
+hit does not label an independent earning event as mission income.
+
+Two static original-image integrations, for The Tech Entrepreneur and The
+Cofounder, reused all six previously cached OCR responses with unchanged pixel
+crops and actual visual checks. Both qualified as named results; these were not
+fresh OCR runs. The original default money-crop readings abstained on both
+images. Synthetic accounting/ownership tests and these two stills do not prove
+payout recognition, transaction settlement, native Windows OCR or live gameplay.
+
 #### Recognize the distinctive El Rubio objective
 
 The complete instruction **Go to El Rubio's compound.** can identify the Cayo

@@ -900,6 +900,16 @@ class GTABusinessManager:
             )
             if sample is not None:
                 sample.call("stage", "candidate", state_result)
+            # The new header scope owns only the activity present at capture
+            # admission. Callbacks may replace or refine it before money/state
+            # processing; never recapture their new owner as this result's.
+            payphone_scope = (
+                getattr(getattr(state_result, "mission", None), "outcome_scope", None) == "payphone_hit"
+                or self._mission_parser.parse_result_header(
+                    getattr(state_result, "result_header_evidence", "")).outcome_scope == "payphone_hit"
+            )
+            payphone_owner = self._activity_tracker.current_activity
+            payphone_snapshot = self._payphone_owner_snapshot() if payphone_scope else None
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
             state_result = self._guard_mission_observation(state_result)
@@ -945,7 +955,18 @@ class GTABusinessManager:
                 money_reading = self._money_parser.parse(ocr_result.text)
                 if money_reading.has_value and self._money_parser.validate_reading(money_reading):
                     result.money = money_reading
-                    result.money_change = self._process_money_change(money_reading)
+                    if payphone_scope:
+                        owned = (payphone_owner is not None
+                                 and self._data.mission_start_time is not None
+                                 and self._activity_tracker.current_activity is payphone_owner
+                                 and self._payphone_owner_snapshot() == payphone_snapshot
+                                 and state_result.state == GameState.MISSION_COMPLETE)
+                        # Keep independently valid balance amounts. An unowned
+                        # or rejected hit supplies no earning-source authority.
+                        source = (self._data.current_mission or "Mission") if owned else ""
+                        result.money_change = self._process_money_change(money_reading, earning_source=source)
+                    else:
+                        result.money_change = self._process_money_change(money_reading)
                     self._data.successful_ocr += 1
 
             # OCR timer if in mission
@@ -959,6 +980,14 @@ class GTABusinessManager:
                     result.timer = timer_reading
 
             # Handle state-specific processing
+            if payphone_scope and (
+                    self._activity_tracker.current_activity is not payphone_owner
+                    or self._payphone_owner_snapshot() != payphone_snapshot):
+                state_result = replace(state_result, state=GameState.UNKNOWN, confidence=0.0,
+                                       reason="Payphone result owner changed during capture")
+                result.game_state = state_result.state
+                result.state_confidence = state_result.confidence
+                result.state_reason = state_result.reason
             self._process_state(state_result, result)
             current_activity = self._activity_tracker.current_activity
             if current_activity is not None:
@@ -980,7 +1009,7 @@ class GTABusinessManager:
 
         return result
 
-    def _process_money_change(self, reading: MoneyReading) -> int:
+    def _process_money_change(self, reading: MoneyReading, *, earning_source: Optional[str] = None) -> int:
         """Process a money reading and detect changes."""
         if not reading.has_value:
             return 0
@@ -1029,7 +1058,10 @@ class GTABusinessManager:
 
         if change != 0:
             if change > 0:
-                self._persist_earning(change, current_value)
+                if earning_source is None:
+                    self._persist_earning(change, current_value)
+                else:
+                    self._persist_earning(change, current_value, source_override=earning_source)
 
             if prev_money is not None:
                 logger.info(
@@ -1046,15 +1078,15 @@ class GTABusinessManager:
 
         return change
 
-    def _persist_earning(self, amount: int, balance_after: int) -> None:
+    def _persist_earning(self, amount: int, balance_after: int, *, source_override: Optional[str] = None) -> None:
         """Persist an earning to the database."""
         if not self._repository or not self._data.db_session_id:
             return
 
         try:
             # Infer source from current game state
-            source = ""
-            if self._state_machine:
+            source = source_override if source_override is not None else ""
+            if source_override is None and self._state_machine:
                 state = self._state_machine.state
                 if state == GameState.MISSION_COMPLETE:
                     source = self._data.current_mission or "Mission"
@@ -1274,16 +1306,15 @@ class GTABusinessManager:
         if reading is None:
             header_evidence = getattr(state_result, "result_header_evidence", "")
             if header_evidence:
-                header = self._mission_parser.parse(header_evidence)
+                header = self._mission_parser.parse_result_header(header_evidence)
                 if not (is_ordinary_result_header(header) or is_qualified_result_header(header)):
                     return header
             sources = (
                 state_result.mission_text, state_result.objective_text,
                 getattr(state_result, "banner_text", ""),
                 getattr(state_result, "bottom_objective_command", ""),
-                header_evidence,
             )
-            reading = self._mission_parser.parse_regions(sources)
+            reading = self._mission_parser.parse_regions(sources, result_header=header_evidence)
             # Footer identity cannot qualify an outcome from another source.
             if (getattr(state_result, "vip_status_evidence", "") == VIP_STATUS_MARKER
                     and state_result.state not in (GameState.BUSINESS_COMPUTER,
@@ -1291,7 +1322,7 @@ class GTABusinessManager:
                                                    GameState.MISSION_FAILED)
                     and reading.outcome is None and reading.outcome_scope is None
                     and reading.identity_status != "ambiguous"):
-                reading = self._mission_parser.parse_regions((*sources, VIP_STATUS_MARKER))
+                reading = self._mission_parser.parse_regions((*sources, VIP_STATUS_MARKER), result_header=header_evidence)
         return reading
 
     def _validated_active_title_reading(self, state_result):
@@ -1377,8 +1408,29 @@ class GTABusinessManager:
                 active_title_evidence="",
             )
         header_evidence = getattr(state_result, "result_header_evidence", "")
+        header = self._mission_parser.parse_result_header(header_evidence)
+        cached = getattr(state_result, "mission", None)
+        if (header.outcome_scope == "payphone_hit"
+                or getattr(cached, "outcome_scope", None) == "payphone_hit"):
+            sources = (state_result.mission_text, state_result.objective_text,
+                       getattr(state_result, "banner_text", ""),
+                       getattr(state_result, "bottom_objective_command", ""))
+            primary = self._mission_parser.parse_regions(sources)
+            reading = self._mission_parser.parse_regions(
+                (*sources, getattr(state_result, "vip_status_evidence", "")),
+                result_header=header_evidence,
+            )
+            if (not header_evidence or header_evidence != state_result.result_header_text
+                    or not is_qualified_result_header(header)
+                    or not is_qualified_result_header(reading)
+                    or state_result.state != GameState.MISSION_COMPLETE
+                    or primary.outcome is not None or primary.outcome_scope is not None
+                    or primary.identity_status == "ambiguous"
+                    or (cached is not None and cached != reading)):
+                return replace(state_result, state=GameState.UNKNOWN, confidence=0.0,
+                               reason="Payphone result lacks compatible independent header evidence",
+                               mission=reading, result_header_evidence="")
         if header_evidence:
-            header = self._mission_parser.parse(header_evidence)
             ordinary = is_ordinary_result_header(header)
             if not (ordinary or is_qualified_result_header(header)):
                 return replace(
@@ -1419,6 +1471,15 @@ class GTABusinessManager:
                 )
         return state_result
 
+    def _payphone_owner_snapshot(self):
+        """Capture-local semantic/timing fence for the newly admitted scope."""
+        current = self._activity_tracker.current_activity
+        return (current.name if current else None, current.activity_type if current else None,
+                current.started_at if current else None, self._data.mission_start_time,
+                self._data.mission_start_money, self._data.current_mission,
+                self._data.mission_identity_status, self._data.mission_identity_type,
+                self._data.mission_heist_phase)
+
     def _remember_terminal_episode(self, state_result, reading):
         """Snapshot ownership before listeners; repeated results add evidence only."""
         objectives = self._objective_evidence(state_result)
@@ -1451,6 +1512,13 @@ class GTABusinessManager:
             reading = self._mission_reading(state_result)
             current = self._activity_tracker.current_activity
             scope_conflict = False
+            if reading.outcome_scope == "payphone_hit":
+                scope_conflict = (
+                    state_result.state != GameState.MISSION_COMPLETE or reading.outcome != "complete"
+                    or self._data.mission_heist_phase != MissionType.UNKNOWN
+                    or (current is not None and current.activity_type not in (
+                        ActivityType.PAYPHONE_HIT, ActivityType.UNKNOWN))
+                )
             if reading.outcome_scope == "heist":
                 allowed_types = {self._activity_kind(family) for family in MissionParser.HEIST_FAMILIES}
                 allowed_types.update((ActivityType.HEIST_FINALE, ActivityType.UNKNOWN))

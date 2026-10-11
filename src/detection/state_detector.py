@@ -52,7 +52,11 @@ def is_ordinary_result_header(reading: MissionReading) -> bool:
 
 
 def is_qualified_result_header(reading: MissionReading) -> bool:
-    """Require the independent header to prove both heist success and family."""
+    """Require the independently parsed header's scoped success and identity."""
+    if reading.outcome_scope == "payphone_hit":
+        return (reading.outcome == "complete" and reading.identity_status == "known_name"
+                and reading.mission_type == MissionType.PAYPHONE_HIT
+                and reading.heist_phase == MissionType.UNKNOWN)
     return (
         reading.outcome_scope == "heist" and reading.outcome == "complete"
         and reading.identity_status in ("known_name", "type_only")
@@ -421,9 +425,9 @@ class StateDetector:
             image, threshold=False, invert=False, scale=2.0,
         ).text
         result = replace(result, result_header_text=raw)
-        header = self._mission_parser.parse(raw)
+        header = self._mission_parser.parse_result_header(raw)
         ordinary = is_ordinary_result_header(header)
-        if not ordinary and header.outcome_scope != "heist":
+        if not ordinary and header.outcome_scope is None:
             candidate = replace(result, active_title_evidence=raw)
             reading = self.sightseer_start_reading(candidate, self._mission_parser)
             if reading is not None:
@@ -438,14 +442,15 @@ class StateDetector:
             return replace(result, screen_evidence=marker) if marker else result
         if not ordinary and not is_qualified_result_header(header):
             return replace(result, state=GameState.UNKNOWN, confidence=0.0,
-                           reason="Heist result header lacks compatible independent identity")
+                           reason="Scoped result header lacks compatible independent identity",
+                           mission=header if header.outcome_scope == "payphone_hit" else result.mission)
         merged = self._mission_parser.parse_regions((
             result.mission_text, result.objective_text, result.banner_text,
             result.bottom_objective_command,
             # Like the app's terminal fallback, an ordinary result cannot
             # acquire category identity from an activity-only footer marker.
-            "" if ordinary else result.vip_status_evidence, raw,
-        ))
+            "" if ordinary else result.vip_status_evidence,
+        ), result_header=raw)
         qualified = (
             merged.outcome == "complete" and merged.outcome_scope is None
             and merged.identity_status != "ambiguous"
@@ -455,6 +460,7 @@ class StateDetector:
                            reason="Result header conflicts with primary mission evidence", mission=merged)
         return replace(result, state=GameState.MISSION_COMPLETE, confidence=0.85,
                        reason=("Independent ordinary mission result header" if ordinary else
+                               "Independent named payphone hit result header" if header.outcome_scope == "payphone_hit" else
                                "Independent family-qualified heist result header"), mission=merged,
                        result_header_evidence=raw)
 
@@ -772,7 +778,7 @@ class StateDetector:
         """Combine detection results from multiple sources."""
         outcomes = (GameState.MISSION_COMPLETE, GameState.MISSION_FAILED)
         if ocr is not None and ocr.mission is not None:
-            if ocr.mission.outcome_scope == "heist" and ocr.mission.outcome is None:
+            if ocr.mission.outcome_scope is not None and ocr.mission.outcome is None:
                 return ocr
             if ocr.mission.outcome == "conflicting":
                 return ocr
