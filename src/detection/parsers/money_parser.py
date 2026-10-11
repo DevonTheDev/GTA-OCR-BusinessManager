@@ -42,6 +42,24 @@ class MoneyParser:
     # Excluding B, I, g, q as they're too likely to match word text
     OCR_DIGIT_CHARS = r"\dOolS"
 
+    # HUD deltas are not balances. Match explicit prefix signs, including signs
+    # between a currency marker and its number. Consume connected malformed
+    # suffixes too, so numeric fallback cannot recover part of a rejected delta.
+    # A new currency marker/sign/barrier or newline ends the numeric payload;
+    # horizontal whitespace may group digits as in "85 000".
+    _SIGNED_TOKEN_BODY = r"[^\s$€£¥+\-−|;:]"
+    _SIGNED_NUMBER_TOKEN = (
+        r"(?=[^\s$€£¥+\-−|;:]*\d|[OolS,.]+(?=\s|$|[$€£¥+\-−|;:]))"
+        rf"[{OCR_DIGIT_CHARS},.]{_SIGNED_TOKEN_BODY}*"
+    )
+    SIGNED_AMOUNT_PATTERN = re.compile(
+        # A signed currency token is excluded even if OCR mangles its beginning.
+        rf"(?:(?:[+\-−]\s*[$€£¥]|[$€£¥]\s*[+\-−])\s*{_SIGNED_TOKEN_BODY}+"
+        rf"|[+\-−]\s*{_SIGNED_NUMBER_TOKEN})"
+        rf"(?:[^\S\r\n]+{_SIGNED_NUMBER_TOKEN})*",
+        re.IGNORECASE,
+    )
+
     # Patterns for money values
     # GTA formats: "$1,234,567" or "$1.234.567" (locale-dependent)
     # Include OCR-confused characters in the pattern, but require $ to anchor
@@ -94,6 +112,10 @@ class MoneyParser:
         try:
             # Clean up the text
             cleaned = self._clean_text(text)
+            # Keep a barrier rather than deleting rejected spans: deletion or
+            # whitespace would allow cash/bank labels or numeric fragments on
+            # either side to join into a different candidate.
+            cleaned = self.SIGNED_AMOUNT_PATTERN.sub("|", cleaned)
 
             if not cleaned:
                 return MoneyReading(raw_text=text)
@@ -101,12 +123,14 @@ class MoneyParser:
             # Try to parse as cash/bank split first
             cash_bank = self._parse_cash_bank(cleaned)
             if cash_bank.has_value:
+                cash_bank.raw_text = text
                 self._last_valid_reading = cash_bank
                 return cash_bank
 
             # Try to parse as single value
             single = self._parse_single_value(cleaned)
             if single.has_value:
+                single.raw_text = text
                 self._last_valid_reading = single
                 return single
 

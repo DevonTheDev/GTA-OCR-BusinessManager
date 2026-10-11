@@ -2171,6 +2171,23 @@ therefore need a restart or future threshold-policy adjustment. Tests use synthe
 OCR text through the actual capture/accounting path and disposable SQLite, without
 Windows OCR, screenshots, live gameplay or an accuracy benchmark.
 
+### Signed money notifications
+
+Money observations exclude explicit prefix `+`, `-`, and `−` (Unicode minus)
+amounts, such as `+$85,000`, `$-85,000` and `-85000`. These HUD changes cannot
+establish a balance or become an earnings delta through the numeric fallback.
+When `$10,000` and `+$85,000` are read together, the unsigned `$10,000` remains
+the balance candidate. Original OCR text is retained for review. A frame with
+only a signed notification leaves balance history and accounting unchanged.
+
+Existing unsigned cash/bank parsing, locale separators, OCR digit corrections,
+largest-unsigned-value selection and plausibility thresholds remain in effect.
+This is balance-observation filtering, not proof of transaction settlement or
+mission success. It does not recover missing or misread signs, recognize suffix
+signs or every Unicode sign lookalike, or resolve ambiguous unsigned numbers.
+Local tests use actual parser/capture/accounting code and temporary SQLite with
+controlled OCR text; they do not establish Windows OCR or live gameplay accuracy.
+
 ### Live business stock and supply ratios
 
 Business OCR treats `Stock: 5/10` as 50% and `Supplies: 3/4` as 75%.
