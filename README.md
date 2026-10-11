@@ -1727,6 +1727,68 @@ decoded source pixels. These use diagnostic Tesseract and stored pixels at the
 acquisition boundary. They add no YouTube footage or continuous gameplay
 evidence; the original images and derived PNGs remain outside the repository.
 
+### Replay one saved sample offline
+
+```bash
+python test_capture.py --sample /path/to/gta-detection-…
+# Windows example
+python test_capture.py --sample "C:\Users\player\Pictures\gta-detection-…"
+```
+
+This mode performs a fresh recorded-text reclassification of one completed local
+export. It runs the current `StateDetector` with empty history, no templates, the
+saved full-frame pixels, and independent crops reconstructed from the saved
+same-call geometry. Each source receives only its recorded OCR response when
+the new request has the same explicit option names and values. It never runs an
+OCR backend, image preprocessing, live capture, application guards, settings,
+selection, accounting, database updates or capture cadence. It writes no files,
+including Python bytecode. `--sample` and `--image` are mutually exclusive;
+`--backend` applies only to `--image`. The no-argument live checks stay separate.
+
+Standard output contains exactly one JSON report; diagnostics use standard error.
+Exit 0 means the reclassification ran, including an unknown candidate or a
+candidate different from the saved one. Exit 1 reports an input or execution
+error. Argument conflicts use the usual argparse exit 2. `unsupported_input`
+means the saved evidence cannot answer this fresh request; it does not mean the
+export was corrupt. Missing geometry, crops extending beyond the retained frame,
+and unsupported detector observations cannot be repaired with current HUD
+defaults. Missing images stay absent. A newly requested, failed, unavailable,
+unobserved or unrequested response cannot become empty text; an explicitly
+successful empty reading remains valid. A repeated source request is unsupported
+because this format does not retain full call history. Used and unused source
+responses are listed. Omitted custom-backend defaults remain unknown/null;
+recorded native defaults are checked, not executed.
+
+The stored `detector_candidate`, `first_guarded`, `processed` and `selection`
+remain separate from `fresh_detector_candidate`. Optional historical stages may
+be missing/null. `candidate_changed` compares only mutually present observation
+fields; `candidate_comparison` names compared, changed and missing fields, so an
+older omitted field is not reported as a detection change. This is not an exact
+historical rerun, a ground-truth label, native OCR validation, or an accuracy/parity
+check. No historical detector context, templates, guards or application state
+are restored.
+
+The reader requires schema-1 `COMPLETE.json`, `sample.json` and `frame.png`, with
+matching sample IDs and exact declared sizes and SHA-256 hashes. A leftover
+`COMPLETE.pending` is ignored. Hashes establish payload consistency, not producer
+authenticity. Limits match the exporter: 64 MiB PNG, 256 KiB sample JSON,
+1–8192 pixels per axis and 16,777,216 decoded pixels; the completion marker is
+limited to 4 KiB and JSON nesting to 32 levels. Duplicate JSON keys, nonfinite
+numbers, contradictory relevant fields, and incomplete/non-RGB/animated PNGs
+are rejected. Only fixed child filenames are read. URL, UNC, device, traversal,
+observed symlink/reparse and nonregular paths are rejected; ordinary Windows
+local drive paths are supported. Descriptor checks and no-follow flags where
+available reduce accidental redirects, but do not guarantee protection against
+hostile concurrent filesystem replacement. Keep the directory stable during
+replay. Input text and report fields are data, never commands or paths to execute.
+
+Automated checks use synthetic pixels/text passed through the unchanged sample
+exporter. A separate local check used retained interaction-menu pixels and six
+previously stored diagnostic readings through the same exporter, with custom
+capture/backend provenance. Both exercise offline reclassification only; they
+add no new frame capture, OCR run, continuous gameplay, or historical parity
+evidence. Original/derived images remain outside the repository.
+
 ### Nightclub screen capture cadence
 
 An otherwise unknown screen can expose `screen_evidence` as

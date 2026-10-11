@@ -1,4 +1,4 @@
-"""Live Windows pipeline checks or a bounded single-image OCR diagnostic."""
+"""Live Windows checks, a single-image OCR diagnostic, or offline sample replay."""
 
 import argparse
 from contextlib import closing, redirect_stdout
@@ -227,20 +227,52 @@ def _run_image_diagnostic(path, backend):
     return 0
 
 
+def _run_sample_replay(path):
+    """A recorded-text mode isolated from live capture and OCR backends."""
+    # Importing this isolated CLI mode must not create __pycache__ files either.
+    sys.dont_write_bytecode = True
+    input_errors, unsupported_errors = (), ()
+    try:
+        with redirect_stdout(sys.stderr):
+            from src.detection.sample_replay import replay_sample, SampleReplayError, UnsupportedSampleError
+
+            input_errors, unsupported_errors = (SampleReplayError,), (UnsupportedSampleError,)
+            report = replay_sample(path)
+            output = json.dumps(report, allow_nan=False)
+    except Exception as error:
+        known = isinstance(error, input_errors)
+        report = {
+            "schema_version": 1, "mode": "saved_sample_replay", "status": "error",
+            "error": {
+                "type": type(error).__name__ if known else "SampleReplayError",
+                "category": "unsupported_input" if isinstance(error, unsupported_errors) else "invalid_input" if known else "execution_error",
+                "message": str(error) if known else "Saved-sample replay could not complete",
+            },
+        }
+        print(json.dumps(report, allow_nan=False))
+        return 1
+    print(output)
+    return 0
+
+
 def main(argv=None):
-    """Dispatch one local image diagnostic or run all four live checks."""
+    """Dispatch an offline diagnostic or run all four live checks."""
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--image", metavar="PATH", help="diagnose one local static PNG, JPEG or WebP")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--sample", metavar="DIRECTORY", help="reclassify one completed local sample using recorded OCR text only")
+    mode.add_argument("--image", metavar="PATH", help="diagnose one local static PNG, JPEG or WebP")
     parser.add_argument(
         "--backend",
         choices=("windows", "tesseract"),
         help="image OCR backend (default: windows; tesseract is diagnostic-only)",
     )
     args = parser.parse_args(argv)
+    if args.backend is not None and args.image is None:
+        parser.error("--backend requires --image")
+    if args.sample is not None:
+        return _run_sample_replay(args.sample)
     if args.image is not None:
         return _run_image_diagnostic(args.image, args.backend or "windows")
-    if args.backend is not None:
-        parser.error("--backend requires --image")
 
     print("=" * 50)
     print("GTA Business Manager - Pipeline Test")
