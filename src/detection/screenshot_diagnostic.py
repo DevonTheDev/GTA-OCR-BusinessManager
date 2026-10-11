@@ -343,6 +343,7 @@ def diagnose_image(path, *, backend="windows") -> dict:
                 "state": result.state.name, "heuristic_score": float(result.confidence),
                 "reason": result.reason, "identity": identity,
                 "active_title_evidence": result.active_title_evidence,
+                "screen_evidence": result.screen_evidence,
             },
             "limits": limits,
         }

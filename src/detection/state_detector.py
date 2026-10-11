@@ -20,6 +20,10 @@ logger = get_logger("detection.state")
 
 # Only this fixed category marker may leave the footer admission boundary.
 VIP_STATUS_MARKER = "VIP WORK"
+NIGHTCLUB_SCREEN_MARKER = "NIGHTCLUB_MANAGEMENT_HEADER"
+_NIGHTCLUB_LABELS = tuple(re.compile(r"(?<!\w)(?ai:" + phrase + r")(?!\w)") for phrase in (
+    r"Nightclub[ \t]+Popularity", r"Player[ \t]+Visits", r"Current[ \t]+Client(?:é|è)le",
+))
 _VIP_STATUS_ROW = re.compile(
     r"[ \t]*VIP[ \t]+WORK[ \t]+END(?:[ \t]+[0-9][0-9:.]{0,15})?[ \t]*"
     r"|[ \t]*VIPWORKEND[ \t]+[0-9][0-9:.]{0,15}[ \t]*",
@@ -77,6 +81,7 @@ class StateDetectionResult:
     vip_status_text: str = ""
     vip_status_evidence: str = ""
     active_title_evidence: str = ""
+    screen_evidence: str = ""
 
 
 @dataclass
@@ -429,7 +434,8 @@ class StateDetector:
                 return replace(candidate, confidence=0.8,
                                reason="Complete Sightseer start banner with independent VIP status",
                                mission=reading)
-            return result
+            marker = self._nightclub_screen_evidence(result, self._mission_parser)
+            return replace(result, screen_evidence=marker) if marker else result
         if not ordinary and not is_qualified_result_header(header):
             return replace(result, state=GameState.UNKNOWN, confidence=0.0,
                            reason="Heist result header lacks compatible independent identity")
@@ -451,6 +457,44 @@ class StateDetector:
                        reason=("Independent ordinary mission result header" if ordinary else
                                "Independent family-qualified heist result header"), mission=merged,
                        result_header_evidence=raw)
+
+    @staticmethod
+    def _nightclub_screen_evidence(result, parser):
+        """A bounded UI receipt only, never a state, business or mission identity.
+
+        These are the two observed accent spellings, not spelling repair. The
+        caller admits this only in the otherwise-unadmitted header branch.
+        """
+        raw = result.result_header_text
+        if (result.state != GameState.UNKNOWN or type(raw) is not str or len(raw) > 512
+                or any(getattr(result, name, "") for name in (
+                    "bottom_objective_command", "vip_status_evidence",
+                    "active_title_evidence", "result_header_evidence"))):
+            return ""
+        try:
+            if (len(raw.encode("utf-8")) > 512 or len(raw.splitlines()) > 8
+                    or any(len(line.encode("utf-8")) > 128 for line in raw.splitlines())):
+                return ""
+        except UnicodeEncodeError:
+            return ""
+        end = 0
+        for label in _NIGHTCLUB_LABELS:
+            match = label.search(raw, end)
+            if match is None:
+                return ""
+            end = match.end()
+        for reading in (result.mission, parser.parse(raw)):
+            if reading is not None and (
+                    reading.identity_status != "unknown" or reading.mission_name
+                    or reading.mission_type != MissionType.UNKNOWN
+                    or reading.heist_phase != MissionType.UNKNOWN
+                    or reading.outcome is not None or reading.outcome_scope is not None
+                    or reading.objective):
+                return ""
+        if objective_evidence((raw, result.mission_text, result.objective_text,
+                               result.banner_text)).entries:
+            return ""
+        return NIGHTCLUB_SCREEN_MARKER
 
     def _bottom_objective_command(self, raw: str) -> str:
         """Admit one complete family-qualified command, never extracted scraps.

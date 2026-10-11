@@ -17,7 +17,7 @@ from .capture.regions import ScreenRegions
 from .detection.ocr_engine import OCREngine
 from .detection.state_detector import (
     StateDetector, StateDetectionResult, VIP_STATUS_MARKER, is_ordinary_result_header,
-    is_qualified_result_header,
+    is_qualified_result_header, NIGHTCLUB_SCREEN_MARKER,
 )
 from .detection.mission_episode import (
     MissionIdentity, ObjectiveEvidence, TerminalMissionEpisode, objective_evidence,
@@ -91,6 +91,7 @@ class CaptureResult:
     vip_status_text: str = ""
     vip_status_evidence: str = ""
     active_title_evidence: str = ""
+    screen_evidence: str = ""
 
 
 @dataclass
@@ -708,18 +709,27 @@ class GTABusinessManager:
     def _capture_loop(self) -> None:
         """Main capture loop; its finally block owns deferred resource cleanup."""
         worker = threading.current_thread()
+        hinted_state = None
+        cadence_revision = None
         logger.debug("Capture loop started")
         try:
             while not self._stop_event.is_set():
                 # Admission and Pause share one lock: a paused worker is either
                 # already busy or cannot start another iteration.
                 with self._lifecycle_lock:
+                    # Pause -> Resume may finish between loop iterations.
+                    # Retire the old interval before the next acquisition.
+                    if (hinted_state is not None
+                            and cadence_revision != self._recovery_revision):
+                        self._adjust_capture_rate(hinted_state)
+                        hinted_state = None
                     sample_token = None
                     sample_admitted_at = None
                     admitted = self._state == AppState.RUNNING and not self._stop_event.is_set()
                     if admitted:
                         self._capture_busy = True
                         self._recovery_revision += 1
+                        cadence_revision = self._recovery_revision
                         slot = self._detection_sample_slot
                         if (slot is not None
                                 and self._detection_sample_matches(slot.status.token, "armed")):
@@ -729,6 +739,9 @@ class GTABusinessManager:
                                 slot.status, state="collecting", message="Collecting detection sample…"
                             )
                 if not admitted:
+                    if hinted_state is not None:
+                        self._adjust_capture_rate(hinted_state)
+                        hinted_state = None
                     self._stop_event.wait(0.1)
                     continue
                 failed = False
@@ -747,6 +760,10 @@ class GTABusinessManager:
                     # Preserve legacy/custom unarmed call shape exactly.
                     result = (self._do_capture_cycle(collection) if collection is not None
                               else self._do_capture_cycle())
+                    # Capture callbacks receive mutable results. Freeze the
+                    # accepted current receipt before any callback can edit it.
+                    cadence_marker = getattr(result, "screen_evidence", "")
+                    cadence_state = result.game_state
                     self._last_capture_result = result
                     for callback in self._on_capture:
                         if self._stop_event.is_set():
@@ -756,10 +773,18 @@ class GTABusinessManager:
                         except Exception as e:
                             logger.error(f"Capture callback error: {e}")
                     if not self._stop_event.is_set():
-                        self._adjust_capture_rate(result.game_state)
+                        with self._lifecycle_lock:
+                            current = (self._state == AppState.RUNNING
+                                       and cadence_revision == self._recovery_revision)
+                            hinted_state = self._schedule_capture_result(
+                                result.game_state, cadence_marker if current else "", cadence_state,
+                            )
                 except Exception as e:
                     logger.error(f"Capture cycle error: {e}")
                     failed = True
+                    if hinted_state is not None:
+                        self._adjust_capture_rate(hinted_state)
+                        hinted_state = None
                 finally:
                     self._finish_detection_sample(collection, failed)
                     collection = None
@@ -770,7 +795,11 @@ class GTABusinessManager:
                 if failed:
                     self._stop_event.wait(1.0)
         finally:
-            self._finish_stop(worker)
+            try:
+                if hinted_state is not None and self._capture is not None:
+                    self._adjust_capture_rate(hinted_state)
+            finally:
+                self._finish_stop(worker)
             logger.debug("Capture loop ended")
 
     def _do_capture_cycle(self, sample: Optional[_DetectionSampleCollection] = None) -> CaptureResult:
@@ -826,11 +855,39 @@ class GTABusinessManager:
                 )
             # Detect game state
             detection_options = {}
-            if sample is not None:
-                if getattr(self._state_detector.detect, "supports_detection_sample_observation", False) is True:
-                    detection_options["observation"] = sample.observe_ocr
-                else:
-                    sample.call("mission_observation_unavailable")
+            header_phase, header_text = 0, None
+
+            def observe(source, event, payload):
+                # Retain only a bounded string and phase for this invocation.
+                # This receipt never creates a sample or retains pixels/OCR objects.
+                nonlocal header_phase, header_text
+                if source == "header":
+                    try:
+                        if event == "availability":
+                            if header_phase != 0 or payload["available"] is not True:
+                                raise ValueError("Header unavailable")
+                        elif event == "request":
+                            if header_phase != 0 or payload["kwargs"] != {
+                                    "threshold": False, "invert": False, "scale": 2.0}:
+                                raise ValueError("Unexpected header request")
+                            header_phase = 1
+                        elif event == "result":
+                            raw = payload["result"].text
+                            if (header_phase != 1 or type(raw) is not str or len(raw) > 512
+                                    or len(raw.encode("utf-8")) > 512):
+                                raise ValueError("Unexpected header result")
+                            header_phase, header_text = 2, raw
+                        else:
+                            raise ValueError("Header observation failed")
+                    except Exception:
+                        header_phase, header_text = -1, None
+                if sample is not None:
+                    sample.observe_ocr(source, event, payload)
+
+            if getattr(self._state_detector.detect, "supports_detection_sample_observation", False) is True:
+                detection_options["observation"] = observe
+            elif sample is not None:
+                sample.call("mission_observation_unavailable")
             state_result = self._state_detector.detect(
                 full_screen,
                 mission_text_image=mission_img,
@@ -846,6 +903,14 @@ class GTABusinessManager:
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
             state_result = self._guard_mission_observation(state_result)
+            marker = getattr(state_result, "screen_evidence", "")
+            if type(marker) is not str or marker != "":
+                accepted = (type(marker) is str and marker == NIGHTCLUB_SCREEN_MARKER
+                            and header_img is not None and capture_regions[7] is not None
+                            and header_phase == 2 and header_text == state_result.result_header_text
+                            and StateDetector._nightclub_screen_evidence(
+                                state_result, self._mission_parser) == NIGHTCLUB_SCREEN_MARKER)
+                state_result = replace(state_result, screen_evidence=marker if accepted else "")
             if sample is not None:
                 sample.call("stage", "first_guarded", state_result)
 
@@ -862,6 +927,7 @@ class GTABusinessManager:
             result.vip_status_text = getattr(state_result, "vip_status_text", "")
             result.vip_status_evidence = getattr(state_result, "vip_status_evidence", "")
             result.active_title_evidence = getattr(state_result, "active_title_evidence", "")
+            result.screen_evidence = getattr(state_result, "screen_evidence", "")
             result.mission = getattr(state_result, "mission", None)
 
             # Update state machine
@@ -1676,8 +1742,8 @@ class GTABusinessManager:
                 # Empty and failed attempts also consume the retry budget.
                 self._last_analytics_time = time.monotonic()
 
-    def _adjust_capture_rate(self, state: GameState) -> None:
-        """Adjust capture rate based on game state."""
+    def _capture_fps(self, state: GameState) -> float:
+        """Return the ordinary configured rate, independently of screen hints."""
         if state in (GameState.MISSION_ACTIVE, GameState.SELLING,
                      GameState.HEIST_PREP, GameState.HEIST_FINALE):
             fps = self._settings.get("capture.active_fps", 2.0)
@@ -1689,7 +1755,36 @@ class GTABusinessManager:
             fps = self._settings.get("capture.idle_fps", 0.5)
             fps = self._validate_fps(fps, default=0.5, name="idle_fps")
 
+        return fps
+
+    def _adjust_capture_rate(self, state: GameState) -> None:
+        """Adjust capture rate based on game state; keep the legacy call shape."""
+        self._capture.set_capture_rate(self._capture_fps(state))
+
+    def _schedule_capture_result(self, state, marker, observed_state):
+        """Use a current receipt only with native cycle, policy and rate setter.
+
+        1 FPS is a conservative resource budget, not a measured OCR optimum.
+        Custom policies/providers keep their existing one-argument path.
+        Return the ordinary state to restore if this hint is later retired.
+        """
+        native = (
+            getattr(self._do_capture_cycle, "__func__", None) is GTABusinessManager._do_capture_cycle
+            and getattr(self._adjust_capture_rate, "__func__", None) is GTABusinessManager._adjust_capture_rate
+            and getattr(self._capture_fps, "__func__", None) is GTABusinessManager._capture_fps
+            and type(self._capture) is ScreenCapture
+            and getattr(self._capture.set_capture_rate, "__func__", None) is ScreenCapture.set_capture_rate
+        )
+        if (not native or type(marker) is not str or marker != NIGHTCLUB_SCREEN_MARKER
+                or state != observed_state):
+            self._adjust_capture_rate(state)
+            return None
+        ordinary = self._capture_fps(state)
+        accepted = self._capture_fps(self._state_machine.state)
+        business = self._capture_fps(GameState.BUSINESS_COMPUTER)
+        fps = max(ordinary, accepted, min(1.0, business))
         self._capture.set_capture_rate(fps)
+        return state if fps > ordinary else None
 
     def _on_game_state_transition(self, transition: StateTransition) -> None:
         """Handle game state transitions."""

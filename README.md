@@ -1727,6 +1727,26 @@ decoded source pixels. These use diagnostic Tesseract and stored pixels at the
 acquisition boundary. They add no YouTube footage or continuous gameplay
 evidence; the original images and derived PNGs remain outside the repository.
 
+### Nightclub screen capture cadence
+
+An otherwise unknown screen can expose `screen_evidence` as
+`NIGHTCLUB_MANAGEMENT_HEADER` when the current header contains the bounded,
+ordered labels `Nightclub Popularity`, `Player Visits`, and `Current Clientéle`
+(or the observed `Current Clientèle` spelling), with no admitted mission evidence.
+On the native capture path, a successful current header observation can request
+up to `min(1.0, capture.business_fps)` FPS while preserving higher ordinary
+configured rates. The 1 FPS hint is a conservative resource budget. A missing,
+negative or failed observation, pause, or stop retires it; custom capture/rate
+policies retain their existing behavior.
+
+This marker leaves the detector state, confidence and mission reading unchanged
+and supplies no business ownership, business values, mission or accounting
+authority. It adds no crops or OCR reads per cycle. Fixed-frame tests inject
+recorded OCR into seven retained original screenshots and compare identical
+frame/money sequences with the hint accepted or suppressed. These checks do not
+establish native Windows OCR accuracy, live accounting parity, gameplay benefit
+or coverage of other Nightclub layouts.
+
 ### Diagnose one saved screenshot
 
 Use an existing local static PNG, JPEG or WebP to inspect the current mission detector without
