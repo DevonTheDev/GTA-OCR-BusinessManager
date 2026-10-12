@@ -10,11 +10,21 @@ from src.detection.parsers.timer_parser import TimerParser, TimerReading
 from src.game.activities import ActivityType
 from src.game.state_machine import GameState
 from tests.test_session_display_refresh import Display, surface
+from tests.test_app_accounting import app as app
+from tests.test_timer_capture import TRUNCATED_TIMER_INPUTS, timer_capture
 
 
 class ActivityDisplay(Display):
     def set_activity(self, name, timer="", objective=""):
         self.text, self.timer, self.objective = name, timer, objective
+
+
+class TimerDisplay(Display):
+    def show(self):
+        self.visible = True
+
+    def hide(self):
+        self.visible = False
 
 
 def make_app(capture=None, state=GameState.MISSION_ACTIVE):
@@ -237,3 +247,48 @@ def test_parsed_positive_invalid_zero_sequence_refreshes_timer(view):
             assert widget._activity_card.timer == expected
         else:
             assert widget._timer_label.text == (f"Timer: {expected}" if expected else "")
+
+
+@pytest.mark.parametrize("kind", ["dashboard", "overlay"])
+@pytest.mark.parametrize("invalid_text", TRUNCATED_TIMER_INPUTS)
+def test_actual_capture_sequence_clears_and_restores_display_timer(app, kind, invalid_text):
+    app._state = AppState.RUNNING
+    observe = timer_capture(app)
+    widget = surface(app, kind)
+    if kind == "dashboard":
+        widget._activity_card = ActivityDisplay()
+    else:
+        widget._timer_label = TimerDisplay()
+    owner = None
+    previous_timer = None
+
+    for text, expected in (("20:00", "20:00"), (invalid_text, ""), ("0", "0:00"), ("5:30", "5:30")):
+        result = observe(text)
+        # Mirror the capture loop's publication of this actual cycle result.
+        app._last_capture_result = result
+        if owner is None:
+            owner = app._activity_tracker.current_activity
+            started = owner.started_at
+        widget.refresh()
+
+        assert app.game_state is result.game_state is GameState.MISSION_ACTIVE
+        assert result.activity_name == "Headhunter"
+        assert app._activity_tracker.current_activity is owner
+        assert owner.started_at == started
+        assert app.current_money == 100_000 and app.session_earnings == 0
+        assert app.recent_activities == []
+        if expected:
+            assert result.timer is not None and result.timer.has_value
+            assert app._timer_parser.get_last_valid() is result.timer
+            previous_timer = result.timer
+        else:
+            assert result.timer is None
+            assert app._timer_parser.get_last_valid() is previous_timer
+        if kind == "dashboard":
+            assert widget._activity_card.text == "Headhunter"
+            assert widget._activity_card.timer == expected
+        else:
+            assert widget._activity_label.text == "Headhunter"
+            assert widget._state_badge.text == "MISSION ACTIVE"
+            assert widget._timer_label.text == (f"Timer: {expected}" if expected else "")
+            assert widget._timer_label.visible is bool(expected)

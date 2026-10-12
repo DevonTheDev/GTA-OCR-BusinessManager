@@ -3,6 +3,7 @@
 from types import SimpleNamespace
 
 import numpy as np
+import pytest
 
 from src.capture.regions import ScreenRegions
 from src.detection.state_detector import StateDetector
@@ -10,6 +11,14 @@ from src.game.activities import ActivityType
 from src.game.state_machine import GameState, GameStateMachine
 from src.utils.performance import PerformanceMonitor
 from tests.test_app_accounting import app as app
+
+
+TRUNCATED_TIMER_INPUTS = (
+    "100:00", "100:00:00", "0:000", "1:00:000", "1:000:00",
+    "1:0:00", "0:00:1", "1:02:03:04", "1:02:03:4",
+    "100 : 00", "1 : 0 : 00", "1\t:\n02\t:\n03\t:\n4",
+    " 1OO;OO;OO ", "١٠٠:٠٠", "０:００:１",
+)
 
 
 def timer_capture(app):
@@ -67,7 +76,8 @@ def test_twenty_minute_timer_survives_real_capture_cycle(app):
     assert app._repository.export_session_data(app._data.db_session_id)["activities"] == []
 
 
-def test_positive_invalid_zero_timer_sequence_preserves_activity_and_money(app):
+@pytest.mark.parametrize("invalid_text", ("60:00:60",) + TRUNCATED_TIMER_INPUTS)
+def test_positive_invalid_zero_timer_sequence_preserves_activity_and_money(app, invalid_text):
     observe = timer_capture(app)
     completions = []
     app.on_mission_complete(completions.append)
@@ -79,7 +89,8 @@ def test_positive_invalid_zero_timer_sequence_preserves_activity_and_money(app):
     assert positive.timer.has_value and positive.timer.total_seconds == 1200
     assert app._timer_parser.get_last_valid() is positive.timer
 
-    for text in ("60:00:60", "0"):
+    previous_timer = positive.timer
+    for text, total, formatted in ((invalid_text, None, None), ("0", 0, "0:00"), ("5:30", 330, "5:30")):
         result = observe(text)
         assert result.game_state is GameState.MISSION_ACTIVE
         assert result.activity_name == owner.name == "Headhunter"
@@ -96,12 +107,13 @@ def test_positive_invalid_zero_timer_sequence_preserves_activity_and_money(app):
         assert completions == app._activity_tracker.completed_activities == []
         stored = app._repository.export_session_data(app._data.db_session_id)
         assert stored["activities"] == stored["earnings"] == []
-        if text == "60:00:60":
+        if total is None:
             assert result.timer is None
-            assert app._timer_parser.get_last_valid() is positive.timer
+            assert app._timer_parser.get_last_valid() is previous_timer
         else:
             assert result.timer is not None and result.timer.has_value
-            assert result.timer.total_seconds == 0 and result.timer.formatted == "0:00"
-            assert result.timer.raw_text == "0"
+            assert result.timer.total_seconds == total and result.timer.formatted == formatted
+            assert result.timer.raw_text == text
             assert app._timer_parser.get_last_valid() is result.timer
-            assert result.timer is not positive.timer
+            assert result.timer is not previous_timer
+            previous_timer = result.timer

@@ -1033,11 +1033,27 @@ Successful readings keep cleaned input. Invalid current readings clear the
 displayed timer; a valid zero displays `0:00`, without completing the activity
 or changing ownership, balances or earnings.
 
-This is parse-status validation within the existing grammar. Regex boundaries
-and OCR substitutions are unchanged: the unanchored parser still accepts
-`100:00`, `100:00:00` and `0:000` as zero, `1:00:000` as 3600 seconds, and
-surrounding text such as `Time: 20:00 remaining`. It does not validate the
-entire OCR string as a timestamp.
+The selected hours or minutes match must now cover its entire numeric token:
+Unicode decimal digits joined by one `:`, `;` or `.` separator, with the
+existing optional whitespace around each separator. A match that truncates
+that token is invalid, including `100:00`, `100:00:00`, `0:000`, `1:00:000`,
+`1:000:00`, `1:0:00`, `0:00:1` and a fourth field such as `1:02:03:4`.
+Spaced forms and OCR-corrected separators obey the same rule. A failed match
+does not rescan for a later timer: `100:00 0:00` remains invalid.
+
+Format selection is unchanged: the first hours match anywhere is tried before
+the first minutes match, then anchored seconds. Thus `100:00 1:02:03` still
+selects the complete hours value, while `20:00 100:00:00` is invalid because
+the selected hours match is truncated. Valid zero, existing field widths,
+Unicode decimal digits, OCR substitutions and labels such as
+`Time: 20:00 remaining` are preserved. Separate numbers divided only by
+whitespace, including a newline, do not extend a token.
+
+This remains a bounded numeric-token check, not whole-string validation.
+Signs, currency and letters adjoining a timer remain accepted, as does a
+dangling separator. Doubled separators are outside the single-connector token
+grammar: `1::00:00` still yields zero. Superscript `²` is not a Unicode decimal
+digit and does not extend the token.
 
 `TimerReading` retains its six positional constructor fields, representation
 and payload equality. Directly constructed readings retain the legacy value

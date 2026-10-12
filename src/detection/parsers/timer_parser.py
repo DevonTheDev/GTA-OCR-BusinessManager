@@ -125,6 +125,14 @@ class TimerParser:
 
         return cleaned
 
+    @staticmethod
+    def _truncates_numeric_token(text: str, match: re.Match) -> bool:
+        """Reject a selected match that omits part of its numeric token."""
+        return (
+            re.search(r"\d(?:\s*[:;.]\s*)?\Z", text[:match.start()]) is not None
+            or re.match(r"(?:\s*[:;.]\s*)?\d", text[match.end():]) is not None
+        )
+
     def _parse_hhmmss(self, text: str) -> TimerReading:
         """Parse HH:MM:SS format."""
         result = TimerReading()
@@ -134,6 +142,8 @@ class TimerParser:
             return result
         result.raw_text = text
         result._parse_status = "INVALID"
+        if self._truncates_numeric_token(text, match):
+            return result
         if match:
             try:
                 hours = int(match.group(1))
@@ -166,6 +176,8 @@ class TimerParser:
         match = self.MMSS_PATTERN.search(text)
         if match:
             result._parse_status = "INVALID"
+            if self._truncates_numeric_token(text, match):
+                return result
             try:
                 minutes = int(match.group(1))
                 seconds = int(match.group(2))

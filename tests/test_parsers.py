@@ -261,15 +261,91 @@ class TestTimerParser:
         assert reading._parse_status == "NO_MATCH"
         assert parser.get_last_valid() is previous
 
-    @pytest.mark.parametrize("text, total", [
-        ("100:00", 0), ("100:00:00", 0), ("1:00:000", 3600), ("0:000", 0),
+    @pytest.mark.parametrize("text", [
+        "100:00", "100:00:00", "0:000", "1:00:000",
+        "100 : 00", "100 : 00 : 00", "0 : 000", "1 : 00 : 000",
+        "1:000:00", "1:0:00", "0:00:1", "1:02:03:04", "1:02:03:4",
+        "1 : 000 : 00", "1 : 0 : 00", "0 : 00 : 1", "1 : 02 : 03 : 4",
+        "1\t:\n0\t:\n00", "0\t:\n00\t:\n1", "100\t:\n00",
+        "1;02;03;04", "1.02.03.4", " 1OO;OO;OO ", " O.OOO ",
+        "١٠٠:٠٠", "١:٠٠:٠٠٠", "１００:００", "０:００:１",
+        "1\u00a0:\u2003000\u00a0:\u200300", "١:٠:٠٠",
     ])
-    def test_existing_unanchored_partial_matches_remain_accepted(self, parser, text, total):
+    def test_selected_match_cannot_truncate_numeric_token(self, parser, text):
+        previous = parser.parse("20:00")
         reading = parser.parse(text)
-        assert reading.has_value
-        assert reading.total_seconds == total
+        assert not reading.has_value
+        assert (reading.hours, reading.minutes, reading.seconds, reading.total_seconds) == (0, 0, 0, 0)
+        assert reading._parse_status == "INVALID"
         assert reading.raw_text == text
+        assert parser.get_last_valid() is previous
+
+        zero = parser.parse("0")
+        assert zero.has_value and zero.total_seconds == 0
+        assert parser.get_last_valid() is zero and zero is not previous
+
+    @pytest.mark.parametrize("text, cleaned, total", [
+        ("20:00", "20:00", 1200), ("99:59", "99:59", 5999),
+        ("1:02:03", "1:02:03", 3723), ("99:59:59", "99:59:59", 359999),
+        ("0", "0", 0), ("0s", "0s", 0), ("0 sec", "0 sec", 0),
+        ("0:00", "0:00", 0), ("00:00", "00:00", 0), ("0:00:00", "0:00:00", 0),
+        ("999s", "999s", 999),
+        ("Time:20:00 remaining", "Time:20:00 remaining", 1200),
+        ("Time: 20 : 00 remaining", "Time: 20 : 00 remaining", 1200),
+        ("20\t:\n00", "20\t:\n00", 1200),
+        ("10;00", "10:00", 600), ("10.00", "10:00", 600),
+        (" 2O;OO ", "20:00", 1200),
+        ("٢٠:٠٠", "٢٠:٠٠", 1200), ("２０:００", "２０:００", 1200),
+        ("١:٠٢:٠٣", "١:٠٢:٠٣", 3723), ("１:０２:０３", "１:０２:０３", 3723),
+        ("1 20:00", "1 20:00", 1200), ("1\n20:00", "1\n20:00", 1200),
+        ("20:00 1", "20:00 1", 1200),
+    ])
+    def test_complete_numeric_tokens_preserve_existing_grammar(self, parser, text, cleaned, total):
+        reading = parser.parse(text)
+        assert reading.has_value and reading._parse_status == "VALID"
+        assert reading.total_seconds == total
+        assert reading.raw_text == cleaned
         assert parser.get_last_valid() is reading
+
+    @pytest.mark.parametrize("text, status, total", [
+        ("20:00 1:02:03", "VALID", 3723),
+        ("5:60 1:02:03", "VALID", 3723),
+        ("100:00 1:02:03", "VALID", 3723),
+        ("20:00 100:00", "VALID", 1200),
+        ("100:00 0:00", "INVALID", 0),
+        ("100:00:00 1:02:03", "INVALID", 0),
+        ("20:00 100:00:00", "INVALID", 0),
+    ])
+    def test_boundary_rejection_preserves_format_priority_without_rescanning(self, parser, text, status, total):
+        previous = parser.parse("5:30")
+        reading = parser.parse(text)
+        assert reading._parse_status == status
+        assert reading.has_value is (status == "VALID")
+        assert reading.total_seconds == total and reading.raw_text == text
+        assert parser.get_last_valid() is (reading if status == "VALID" else previous)
+
+    @pytest.mark.parametrize("text, total", [
+        ("-20:00", 1200), ("+20:00", 1200), ("$20:00", 1200),
+        ("x20:00x", 1200), ("20:00:", 1200), (":20:00", 1200),
+        ("1::00:00", 0), ("²20:00", 1200), ("20:00²", 1200),
+    ])
+    def test_numeric_boundary_guard_does_not_expand_residual_grammar(self, parser, text, total):
+        reading = parser.parse(text)
+        assert reading.has_value and reading.total_seconds == total
+        assert reading.raw_text == text
+
+    @pytest.mark.parametrize("helper, text", [
+        ("_parse_hhmmss", "100:00:00"), ("_parse_hhmmss", "1:00:000"),
+        ("_parse_hhmmss", "1;02;03;4"), ("_parse_hhmmss", "1.02.03.4"),
+        ("_parse_mmss", "100:00"), ("_parse_mmss", "0:000"),
+        ("_parse_mmss", "1;0;00"), ("_parse_mmss", "0.00.1"),
+    ])
+    def test_each_matched_format_rejects_truncated_numeric_tokens(self, parser, helper, text):
+        reading = getattr(parser, helper)(text)
+        assert not reading.has_value and reading._parse_status == "INVALID"
+        assert (reading.hours, reading.minutes, reading.seconds, reading.total_seconds) == (0, 0, 0, 0)
+        assert reading.raw_text == text
+        assert parser.get_last_valid() is None
 
     # MM:SS format tests
     def test_parse_mmss_basic(self, parser):
