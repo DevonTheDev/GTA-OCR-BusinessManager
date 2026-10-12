@@ -19,7 +19,7 @@ from PyQt6.QtWidgets import (
     QMessageBox,
     QScrollArea,
 )
-from PyQt6.QtCore import Qt, QTimer
+from PyQt6.QtCore import Qt, QTimer, pyqtSignal
 from PyQt6.QtGui import QKeySequence
 
 from ...config.settings import get_settings
@@ -34,6 +34,8 @@ logger = get_logger("ui.settings")
 
 class SettingsPanel(QWidget):
     """Panel for application settings with validation."""
+
+    history_requested = pyqtSignal()
 
     def __init__(self, app: "GTABusinessManager" = None, parent=None):
         super().__init__(parent)
@@ -321,11 +323,22 @@ class SettingsPanel(QWidget):
         config_layout.addStretch()
         data_layout.addLayout(config_layout)
 
-        # Export button
-        export_btn = QPushButton("Export Session Data...")
-        export_btn.clicked.connect(self._export_data)
-        export_btn.setMaximumWidth(200)
-        data_layout.addWidget(export_btn)
+        history_help = (
+            "To export, select a completed session in History, then choose "
+            "“Export selected session as JSON…” and a save location."
+        )
+        history_btn = QPushButton("Open H&istory")
+        history_btn.setObjectName("openSessionHistory")
+        history_btn.clicked.connect(self._open_history)
+        history_btn.setMaximumWidth(200)
+        history_btn.setToolTip(history_help)
+        history_btn.setAccessibleDescription(history_help)
+        data_layout.addWidget(history_btn)
+
+        history_hint = QLabel(history_help)
+        history_hint.setTextFormat(Qt.TextFormat.PlainText)
+        history_hint.setWordWrap(True)
+        data_layout.addWidget(history_hint)
 
         layout.addWidget(data_group)
 
@@ -546,18 +559,9 @@ class SettingsPanel(QWidget):
             self._status_label.setStyleSheet("color: #4CAF50; font-size: 12px;")
             QTimer.singleShot(3000, lambda: self._status_label.setText(""))
 
-    def _export_data(self):
-        """Export session data."""
-        from PyQt6.QtWidgets import QFileDialog
-        import json
-
-        # For now, show a placeholder - full implementation would use repository
-        QMessageBox.information(
-            self,
-            "Export Data",
-            "Session data export will be available in a future update.\n\n"
-            f"Your data is stored at:\n{self._settings.data_dir}",
-        )
+    def _open_history(self):
+        """Request navigation without applying the Settings draft."""
+        self.history_requested.emit()
 
     def has_unsaved_changes(self) -> bool:
         """Check if there are unsaved changes."""

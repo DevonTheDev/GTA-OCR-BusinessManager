@@ -196,6 +196,13 @@ where you want. The view works while tracking is stopped and does not start a ne
 session or change the active character. Use **Refresh history** to load newly
 completed sessions; sessions still in progress are excluded.
 
+From **Settings → Data**, **Open History** takes you to the same History tab and
+refreshes it normally. Unsaved Settings edits remain intact when you return.
+The shortcut does not export automatically: select a completed session in History,
+then choose **Export selected session as JSON…** and a save location. History keeps
+its usual filter, paging and still-visible selection rules; an edited session-note
+search stays unapplied until you choose **Apply search**.
+
 Saved **Net balance change** includes spending, so it can differ from the live
 gross-earnings counter. Times are shown in UTC and missing legacy values stay
 unavailable rather than becoming zero. History pages contain 25 sessions; detail
@@ -204,7 +211,7 @@ and balance change for the selected session. Browsing does not edit the records.
 
 Local tests cover real SQLite paging/filtering and the actual Qt tab, selection,
 details, canceled/failed saves and JSON output. To run native UI checks with the
-existing UI dependencies installed, use `GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_history_panel_qt.py`
+existing UI dependencies installed, use `GTA_RUN_QT_TESTS=1 QT_QPA_PLATFORM=offscreen python -m pytest -q tests/test_history_panel_qt.py tests/test_settings_history_qt.py`
 (set the variables separately on shells without inline environment assignments).
 The ordinary suite skips these opt-in Qt tests. Linux offscreen rendering is
 validated; the native file chooser is substituted in tests, and Windows capture

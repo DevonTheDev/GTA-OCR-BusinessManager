@@ -17,7 +17,7 @@ from PyQt6.QtWidgets import (
     QMenuBar,
     QMenu,
 )
-from PyQt6.QtCore import QTimer, Qt
+from PyQt6.QtCore import QTimer, Qt, pyqtSlot
 from PyQt6.QtGui import QAction
 
 from .widgets.dashboard import DashboardWidget
@@ -183,8 +183,13 @@ class MainWindow(QMainWindow):
 
         # Settings tab
         self._settings_panel = SettingsPanel(self._app, self)
+        self._settings_panel.history_requested.connect(self._show_history)
         self._tabs.addTab(self._settings_panel, "Settings")
         self._tabs.currentChanged.connect(self._on_tab_changed)
+
+    @pyqtSlot()
+    def _show_history(self) -> None:
+        self._tabs.setCurrentWidget(self._history_panel)
 
     def _on_tab_changed(self, index: int) -> None:
         if self._tabs.widget(index) is self._history_panel:
