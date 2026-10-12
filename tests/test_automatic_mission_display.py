@@ -6,7 +6,7 @@ import pytest
 
 from src.app import AppState, CaptureResult
 from src.detection.parsers.mission_parser import MissionReading, MissionType
-from src.detection.parsers.timer_parser import TimerReading
+from src.detection.parsers.timer_parser import TimerParser, TimerReading
 from src.game.activities import ActivityType
 from src.game.state_machine import GameState
 from tests.test_session_display_refresh import Display, surface
@@ -201,3 +201,19 @@ def test_identity_display_preserves_timer_values(view, timer, expected):
         assert widget._activity_card.timer == expected
     else:
         assert widget._timer_label.text == (f"Timer: {expected}" if expected else "")
+
+
+def test_parsed_twenty_minute_timer_reaches_display(view):
+    kind, app, widget = view
+    app.last_capture = CaptureResult(
+        game_state=app.game_state, activity_name="Headhunter",
+        activity_identity_status="known_name", timer=TimerParser().parse("20:00"),
+    )
+
+    widget.refresh()
+
+    assert name(view) == "Headhunter"
+    if kind == "dashboard":
+        assert widget._activity_card.timer == "20:00"
+    else:
+        assert widget._timer_label.text == "Timer: 20:00"

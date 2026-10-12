@@ -113,6 +113,10 @@ class TimerParser:
     def _parse_hhmmss(self, text: str) -> TimerReading:
         """Parse HH:MM:SS format."""
         match = self.HHMMSS_PATTERN.search(text)
+        if not match:
+            # Raw minute text such as 20:00 would make this failed stage look
+            # like a valid zero and prevent the MM:SS parser from running.
+            return TimerReading()
         if match:
             try:
                 hours = int(match.group(1))

@@ -211,6 +211,94 @@ class TestTimerParser:
         assert reading.minutes == 3
         assert reading.seconds == 0
 
+    @pytest.mark.parametrize("text, minutes, cleaned", [
+        ("10:00", 10, "10:00"),
+        ("20:00", 20, "20:00"),
+        ("90:00", 90, "90:00"),
+        ("10;00", 10, "10:00"),
+        ("2O:OO", 20, "20:00"),
+        ("10.00", 10, "10:00"),
+        ("10 :00", 10, "10 :00"),
+        (" 20:00 ", 20, "20:00"),
+        ("Time: 20:00 remaining", 20, "Time: 20:00 remaining"),
+    ])
+    def test_parse_mmss_zero_suffix_keeps_minute_value(self, parser, text, minutes, cleaned):
+        """An unmatched hours stage must let the minute parser own this reading."""
+        reading = parser.parse(text)
+
+        assert reading.has_value
+        assert (reading.hours, reading.minutes, reading.seconds) == (0, minutes, 0)
+        assert reading.total_seconds == minutes * 60
+        assert reading.formatted == f"{minutes}:00"
+        assert reading.raw_text == cleaned
+        assert parser.get_last_valid() is reading
+
+    def test_unmatched_hhmmss_is_an_empty_unsuccessful_reading(self, parser):
+        reading = parser._parse_hhmmss("20:00")
+
+        assert not reading.has_value
+        assert reading == TimerReading()
+        assert parser.get_last_valid() is None
+
+    @pytest.mark.parametrize("text", ["0:00", "00:00", "0:00:00", "00:00:00"])
+    def test_parse_genuine_zero_is_valid_and_cached(self, parser, text):
+        reading = parser.parse(text)
+
+        assert reading.has_value
+        assert (reading.hours, reading.minutes, reading.seconds, reading.total_seconds) == (0, 0, 0, 0)
+        assert reading.formatted == "0:00"
+        assert reading.raw_text == text
+        assert parser.get_last_valid() is reading
+
+    @pytest.mark.parametrize("text, hours, minutes, seconds, total", [
+        ("1:00:00", 1, 0, 0, 3600),
+        ("10:00:00", 10, 0, 0, 36000),
+        ("1:20:00", 1, 20, 0, 4800),
+        ("99:59:59", 99, 59, 59, 359999),
+    ])
+    def test_matched_hours_keep_precedence(self, parser, text, hours, minutes, seconds, total):
+        reading = parser.parse(text)
+
+        assert reading.has_value
+        assert (reading.hours, reading.minutes, reading.seconds) == (hours, minutes, seconds)
+        assert reading.total_seconds == total
+        assert reading.formatted == text
+        assert reading.raw_text == text
+        assert parser.get_last_valid() is reading
+
+    def test_rejected_hhmmss_match_keeps_existing_raw_text_fallback(self, parser):
+        # Preserve this legacy admission while fixing only the no-match branch.
+        # Dropping raw text on every HH failure would instead admit MM prefix 60:00.
+        reading = parser.parse("60:00:60")
+
+        assert reading == TimerReading(raw_text="60:00:60")
+        assert reading.has_value
+        assert parser.get_last_valid() is reading
+
+    @pytest.mark.parametrize("text, minutes, seconds, total", [
+        ("10:01", 10, 1, 601),
+        ("99:59", 99, 59, 5999),
+        ("120s", 2, 0, 120),
+    ])
+    def test_unaffected_minute_and_seconds_values_remain_cached(self, parser, text, minutes, seconds, total):
+        reading = parser.parse(text)
+
+        assert reading.has_value
+        assert (reading.hours, reading.minutes, reading.seconds) == (0, minutes, seconds)
+        assert reading.total_seconds == total
+        assert reading.formatted == f"{minutes}:{seconds:02d}"
+        assert reading.raw_text == text
+        assert parser.get_last_valid() is reading
+
+    @pytest.mark.parametrize("text", ["", "   ", "5:60", " 5;6O ", "not a timer", "0 : 00"])
+    def test_unsuccessful_parse_preserves_raw_text_and_previous_cache(self, parser, text):
+        previous = parser.parse("3:00")
+        reading = parser.parse(text)
+
+        assert not reading.has_value
+        assert reading.raw_text == text
+        assert parser.get_last_valid() is previous
+
     # HH:MM:SS format tests
     def test_parse_hhmmss_basic(self, parser):
         reading = parser.parse("1:30:45")
