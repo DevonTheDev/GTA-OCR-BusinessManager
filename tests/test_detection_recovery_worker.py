@@ -52,6 +52,9 @@ class Pipeline:
         self.raises = False
         self.entered = threading.Event()
         self.release = threading.Event()
+        self.observer = None
+        self.observed = None
+        self.worker_errors = []
         self.captures = []
         self.balance = 1000
         self.extra_callback = None
@@ -62,10 +65,27 @@ class Pipeline:
     def gate(self, stage):
         if self.stage != stage:
             return
+        if stage == "rate" and self.observer is not None:
+            # The real loop holds its lifecycle RLock during rate scheduling.
+            # Observe reentrantly, before admitting the test thread to release
+            # this gate; making that thread call lifecycle APIs would deadlock.
+            try:
+                self.observed = self.observer()
+            except BaseException as error:
+                self.worker_errors.append(error)
         self.entered.set()
-        assert self.release.wait(5), f"Test did not release {stage}"
+        if not self.release.wait(5):
+            error = AssertionError(f"Test did not release {stage}")
+            self.worker_errors.append(error)
+            raise error
         if self.raises:
             raise RuntimeError("synthetic " + stage + " failure")
+
+    def raise_worker_errors(self):
+        # The production loop logs callback/cycle exceptions. A fixture failure
+        # must also fail the test, including a gate deadline reached in teardown.
+        if self.worker_errors:
+            raise self.worker_errors.pop(0)
 
     def initialize(self):
         capture = SimpleNamespace(closed=False)
@@ -112,19 +132,27 @@ class Pipeline:
             self.extra_callback(result)
         self.gate("capture_callback")
 
-    def arm(self, stage, *, raises=False):
+    def arm(self, stage, *, raises=False, observe=None):
         with self.app._lifecycle_lock:
             self.stage, self.raises = stage, raises
+            self.observer, self.observed = observe, None
             self.entered.clear()
             self.release.clear()
             self.app._stop_event.idle.clear()
             self.app._stop_event.error.clear()
             self.app.resume()
         assert self.entered.wait(2), f"Worker did not enter {stage}"
+        self.raise_worker_errors()
+        # Other gates do not hold the lifecycle lock. Keep their concurrent
+        # main-thread calls so they still test Pause against an active worker.
+        if stage != "rate" and observe is not None:
+            return observe()
+        return self.observed
 
     def drain(self):
         self.release.set()
         assert self.app._stop_event.idle.wait(3), "Worker did not return to paused loop"
+        self.raise_worker_errors()
 
 
 @pytest.fixture
@@ -140,12 +168,15 @@ def pipeline(tmp_path, monkeypatch):
     manager.on_capture(fixture.capture_callback)
     assert manager.start()
     assert manager._stop_event.idle.wait(2)
-    yield fixture
-    fixture.release.set()
-    manager.stop()
-    if manager._capture_thread:
-        manager._capture_thread.join(3)
-    repository.close()
+    try:
+        yield fixture
+    finally:
+        fixture.release.set()
+        manager.stop()
+        if manager._capture_thread:
+            manager._capture_thread.join(3)
+        repository.close()
+        fixture.raise_worker_errors()
 
 
 @pytest.mark.parametrize("stage", ["capture", "ocr", "money_callback", "capture_callback", "rate"])
@@ -155,14 +186,16 @@ def test_pause_requires_whole_admitted_iteration_to_drain(pipeline, stage):
     old = recovery_status(app).snapshot
     assert old is not None
     p.balance = 1250
-    p.arm(stage)
-    app.pause()
-    busy = recovery_status(app)
-    assert busy.capture_busy and busy.snapshot is None
-    assert "finish" in busy.message.lower()
-    success, message = app.discard_detected_activity(old)
-    assert not success and "finish" in message.lower()
-    assert app._activity_tracker.current_activity is original
+    def observe_busy():
+        app.pause()
+        busy = recovery_status(app)
+        assert busy.capture_busy and busy.snapshot is None
+        assert "finish" in busy.message.lower()
+        success, message = app.discard_detected_activity(old)
+        assert not success and "finish" in message.lower()
+        assert app._activity_tracker.current_activity is original
+
+    p.arm(stage, observe=observe_busy)
     p.drain()
     ready = recovery_status(app)
     assert not ready.capture_busy and ready.snapshot is not None
@@ -198,9 +231,11 @@ def test_synchronous_callback_cannot_reenter_recovery_before_publication_finishe
 def test_iteration_exception_clears_busy_before_error_or_idle_wait(pipeline, stage):
     p, app = pipeline, pipeline.app
     recovery_status(app)  # Meaningful missing API failure on the unmodified source.
-    p.arm(stage, raises=True)
-    app.pause()
-    assert recovery_status(app).capture_busy
+    def observe_busy():
+        app.pause()
+        assert recovery_status(app).capture_busy
+
+    p.arm(stage, raises=True, observe=observe_busy)
     p.release.set()
     boundary = app._stop_event.idle if stage == "capture_callback" else app._stop_event.error
     assert boundary.wait(2)

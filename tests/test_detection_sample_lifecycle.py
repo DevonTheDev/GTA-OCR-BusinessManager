@@ -102,9 +102,14 @@ def test_arming_during_busy_cycle_waits_for_next_admission(pipeline, recorders, 
     p, app = pipeline, pipeline.app
     sample_status(app)
     p.balance = 1250
-    p.arm(stage)
-    requested = app.request_detection_sample()
-    assert requested.state == "armed"
+    def request_while_busy():
+        assert app._capture_busy
+        requested = app.request_detection_sample()
+        assert requested.state == "armed"
+        assert recorders[0] == []
+        return requested
+
+    p.arm(stage, observe=request_while_busy)
     p.drain()
     assert sample_status(app).state == "armed"
     assert recorders[0] == []
@@ -176,8 +181,12 @@ def test_normal_cycle_exception_consumes_request_and_releases_busy(pipeline, rec
     p, app = pipeline, pipeline.app
     sample_status(app)
     app.request_detection_sample()
-    p.arm(stage, raises=True)
-    app.pause()
+    def observe_collecting():
+        app.pause()
+        assert app._capture_busy
+        assert sample_status(app).state == "collecting"
+
+    p.arm(stage, raises=True, observe=observe_collecting)
     p.release.set()
     assert app._stop_event.error.wait(3)
     assert sample_status(app).state == "failed"
