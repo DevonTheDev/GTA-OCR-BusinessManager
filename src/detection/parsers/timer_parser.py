@@ -2,7 +2,7 @@
 
 import re
 from typing import Optional
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from ...utils.logging import get_logger
 
@@ -20,10 +20,15 @@ class TimerReading:
     total_seconds: int = 0
     raw_text: str = ""
     is_countdown: bool = True  # True for countdown, False for elapsed
+    # Unset preserves legacy construction. Parser results always carry a status.
+    # This private field is still visible to dataclass reflection/asdict.
+    _parse_status: Optional[str] = field(default=None, init=False, repr=False, compare=False)
 
     @property
     def has_value(self) -> bool:
         """Check if a timer value was parsed."""
+        if self._parse_status is not None:
+            return self._parse_status == "VALID"
         return self.total_seconds > 0 or (
             self.hours == 0 and self.minutes == 0 and self.seconds == 0
             and "0:00" in self.raw_text
@@ -75,7 +80,9 @@ class TimerParser:
             TimerReading with parsed values
         """
         if not text or not text.strip():
-            return TimerReading(raw_text=text)
+            result = TimerReading(raw_text=text)
+            result._parse_status = "NO_MATCH"
+            return result
 
         # Clean the text
         cleaned = self._clean_text(text)
@@ -85,11 +92,18 @@ class TimerParser:
         if result.has_value:
             self._last_valid_reading = result
             return result
+        if result._parse_status == "INVALID":
+            # A matched malformed hour candidate must not become a minute prefix.
+            result.raw_text = text
+            return result
 
         # Try MM:SS
         result = self._parse_mmss(cleaned)
         if result.has_value:
             self._last_valid_reading = result
+            return result
+        if result._parse_status == "INVALID":
+            result.raw_text = text
             return result
 
         # Try just seconds
@@ -98,7 +112,8 @@ class TimerParser:
             self._last_valid_reading = result
             return result
 
-        return TimerReading(raw_text=text)
+        result.raw_text = text
+        return result
 
     def _clean_text(self, text: str) -> str:
         """Clean OCR text for timer parsing."""
@@ -112,11 +127,13 @@ class TimerParser:
 
     def _parse_hhmmss(self, text: str) -> TimerReading:
         """Parse HH:MM:SS format."""
+        result = TimerReading()
+        result._parse_status = "NO_MATCH"
         match = self.HHMMSS_PATTERN.search(text)
         if not match:
-            # Raw minute text such as 20:00 would make this failed stage look
-            # like a valid zero and prevent the MM:SS parser from running.
-            return TimerReading()
+            return result
+        result.raw_text = text
+        result._parse_status = "INVALID"
         if match:
             try:
                 hours = int(match.group(1))
@@ -126,24 +143,29 @@ class TimerParser:
                 # Validate ranges
                 if 0 <= hours <= 99 and 0 <= minutes <= 59 and 0 <= seconds <= 59:
                     total = hours * 3600 + minutes * 60 + seconds
-                    return TimerReading(
+                    result = TimerReading(
                         hours=hours,
                         minutes=minutes,
                         seconds=seconds,
                         total_seconds=total,
                         raw_text=text,
                     )
+                    result._parse_status = "VALID"
+                    return result
                 else:
                     logger.debug(f"Timer HH:MM:SS out of range: {hours}:{minutes}:{seconds}")
             except ValueError as e:
                 logger.debug(f"Failed to parse HH:MM:SS from '{text}': {e}")
 
-        return TimerReading(raw_text=text)
+        return result
 
     def _parse_mmss(self, text: str) -> TimerReading:
         """Parse MM:SS format."""
+        result = TimerReading(raw_text=text)
+        result._parse_status = "NO_MATCH"
         match = self.MMSS_PATTERN.search(text)
         if match:
+            result._parse_status = "INVALID"
             try:
                 minutes = int(match.group(1))
                 seconds = int(match.group(2))
@@ -151,41 +173,48 @@ class TimerParser:
                 # Validate ranges
                 if 0 <= minutes <= 99 and 0 <= seconds <= 59:
                     total = minutes * 60 + seconds
-                    return TimerReading(
+                    result = TimerReading(
                         minutes=minutes,
                         seconds=seconds,
                         total_seconds=total,
                         raw_text=text,
                     )
+                    result._parse_status = "VALID"
+                    return result
                 else:
                     logger.debug(f"Timer MM:SS out of range: {minutes}:{seconds}")
             except ValueError as e:
                 logger.debug(f"Failed to parse MM:SS from '{text}': {e}")
 
-        return TimerReading(raw_text=text)
+        return result
 
     def _parse_seconds(self, text: str) -> TimerReading:
         """Parse seconds-only format."""
+        result = TimerReading(raw_text=text)
+        result._parse_status = "NO_MATCH"
         match = self.SECONDS_PATTERN.search(text)
         if match:
+            result._parse_status = "INVALID"
             try:
                 seconds = int(match.group(1))
                 if 0 <= seconds <= 9999:
                     minutes, secs = divmod(seconds, 60)
                     hours, mins = divmod(minutes, 60)
-                    return TimerReading(
+                    result = TimerReading(
                         hours=hours,
                         minutes=mins,
                         seconds=secs,
                         total_seconds=seconds,
                         raw_text=text,
                     )
+                    result._parse_status = "VALID"
+                    return result
                 else:
                     logger.debug(f"Seconds value out of range: {seconds}")
             except ValueError as e:
                 logger.debug(f"Failed to parse seconds from '{text}': {e}")
 
-        return TimerReading(raw_text=text)
+        return result
 
     def estimate_time_remaining(
         self,

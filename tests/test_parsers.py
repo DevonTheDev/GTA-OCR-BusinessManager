@@ -1,5 +1,8 @@
 """Unit tests for OCR text parsers."""
 
+from dataclasses import asdict, fields
+from inspect import signature
+
 import pytest
 
 from src.detection.parsers.money_parser import MoneyParser, MoneyReading
@@ -177,6 +180,24 @@ class TestTimerReading:
         reading = TimerReading(raw_text="0:00")
         assert reading.has_value
 
+    def test_parse_status_preserves_legacy_constructor_repr_and_equality(self):
+        public_fields = ["hours", "minutes", "seconds", "total_seconds", "raw_text", "is_countdown"]
+        assert list(signature(TimerReading).parameters) == public_fields
+        positive = TimerReading(1, 2, 3, 3723, "legacy", False)
+        assert positive.has_value and positive.formatted == "1:02:03"
+        assert not positive.is_countdown
+        legacy = TimerReading(0, 0, 0, 0, "60:00:60", True)
+        rejected = TimerParser().parse("60:00:60")
+        assert legacy.has_value
+        assert not rejected.has_value
+        assert rejected == legacy
+        assert repr(rejected) == repr(legacy)
+        assert list(asdict(legacy)) == public_fields + ["_parse_status"]
+        status = fields(TimerReading)[-1]
+        assert not status.init and not status.repr and not status.compare
+        assert legacy._parse_status is None
+        assert rejected._parse_status == "INVALID"
+
 
 class TestTimerParser:
     """Tests for TimerParser."""
@@ -184,6 +205,71 @@ class TestTimerParser:
     @pytest.fixture
     def parser(self):
         return TimerParser()
+
+    @pytest.mark.parametrize("text, cleaned", [
+        ("0", "0"), ("0s", "0s"), ("0 sec", "0 sec"), ("O", "0"),
+        ("0 : 00", "0 : 00"), ("0 : 00 : 00", "0 : 00 : 00"),
+        ("O : OO", "0 : 00"), (" O:OO ", "0:00"),
+    ])
+    def test_successful_zero_spellings_are_valid_and_cached(self, parser, text, cleaned):
+        previous = parser.parse("20:00")
+        reading = parser.parse(text)
+        assert reading.has_value
+        assert (reading.hours, reading.minutes, reading.seconds, reading.total_seconds) == (0, 0, 0, 0)
+        assert reading.formatted == "0:00"
+        assert reading.raw_text == cleaned
+        assert reading._parse_status == "VALID"
+        assert parser.get_last_valid() is reading and reading is not previous
+
+    @pytest.mark.parametrize("text", [
+        "60:00:60", "00:00:99", "1:30:60", "5:60 0:00",
+        "60:00:60 0:00", " 6O;OO;6O ",
+    ])
+    def test_matched_invalid_candidate_is_terminal_and_keeps_cache(self, parser, text):
+        previous = parser.parse("20:00")
+        reading = parser.parse(text)
+        assert not reading.has_value
+        assert reading.total_seconds == 0
+        assert reading.raw_text == text
+        assert reading._parse_status == "INVALID"
+        assert parser.get_last_valid() is previous
+
+    @pytest.mark.parametrize("helper, text, status, valid", [
+        ("_parse_hhmmss", "20:00", "NO_MATCH", False),
+        ("_parse_hhmmss", "60:00:60", "INVALID", False),
+        ("_parse_hhmmss", "0 : 00 : 00", "VALID", True),
+        ("_parse_mmss", "not 0:00?", "VALID", True),
+        ("_parse_mmss", "not a timer", "NO_MATCH", False),
+        ("_parse_mmss", "5:60 0:00", "INVALID", False),
+        ("_parse_mmss", "0 : 00", "VALID", True),
+        ("_parse_seconds", "0:00", "NO_MATCH", False),
+        ("_parse_seconds", "1000s", "NO_MATCH", False),
+        ("_parse_seconds", "0", "VALID", True),
+    ])
+    def test_each_parser_stage_marks_its_result(self, parser, helper, text, status, valid):
+        reading = getattr(parser, helper)(text)
+        assert reading.has_value is valid
+        assert reading._parse_status == status
+        assert parser.get_last_valid() is None
+
+    @pytest.mark.parametrize("text", ["", "   ", "not a timer", "1000s"])
+    def test_no_match_has_explicit_status_and_preserves_original_text(self, parser, text):
+        previous = parser.parse("20:00")
+        reading = parser.parse(text)
+        assert not reading.has_value
+        assert reading.raw_text == text
+        assert reading._parse_status == "NO_MATCH"
+        assert parser.get_last_valid() is previous
+
+    @pytest.mark.parametrize("text, total", [
+        ("100:00", 0), ("100:00:00", 0), ("1:00:000", 3600), ("0:000", 0),
+    ])
+    def test_existing_unanchored_partial_matches_remain_accepted(self, parser, text, total):
+        reading = parser.parse(text)
+        assert reading.has_value
+        assert reading.total_seconds == total
+        assert reading.raw_text == text
+        assert parser.get_last_valid() is reading
 
     # MM:SS format tests
     def test_parse_mmss_basic(self, parser):
@@ -266,14 +352,13 @@ class TestTimerParser:
         assert reading.raw_text == text
         assert parser.get_last_valid() is reading
 
-    def test_rejected_hhmmss_match_keeps_existing_raw_text_fallback(self, parser):
-        # Preserve this legacy admission while fixing only the no-match branch.
-        # Dropping raw text on every HH failure would instead admit MM prefix 60:00.
+    def test_rejected_hhmmss_match_cannot_fall_back_to_raw_text_or_minutes(self, parser):
+        previous = parser.parse("20:00")
         reading = parser.parse("60:00:60")
 
         assert reading == TimerReading(raw_text="60:00:60")
-        assert reading.has_value
-        assert parser.get_last_valid() is reading
+        assert not reading.has_value
+        assert parser.get_last_valid() is previous
 
     @pytest.mark.parametrize("text, minutes, seconds, total", [
         ("10:01", 10, 1, 601),
@@ -290,7 +375,7 @@ class TestTimerParser:
         assert reading.raw_text == text
         assert parser.get_last_valid() is reading
 
-    @pytest.mark.parametrize("text", ["", "   ", "5:60", " 5;6O ", "not a timer", "0 : 00"])
+    @pytest.mark.parametrize("text", ["", "   ", "5:60", " 5;6O ", "not a timer"])
     def test_unsuccessful_parse_preserves_raw_text_and_previous_cache(self, parser, text):
         previous = parser.parse("3:00")
         reading = parser.parse(text)

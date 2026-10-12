@@ -217,3 +217,23 @@ def test_parsed_twenty_minute_timer_reaches_display(view):
         assert widget._activity_card.timer == "20:00"
     else:
         assert widget._timer_label.text == "Timer: 20:00"
+
+
+def test_parsed_positive_invalid_zero_sequence_refreshes_timer(view):
+    kind, app, widget = view
+    parser = TimerParser()
+    for text, expected in (("20:00", "20:00"), ("60:00:60", ""), ("0", "0:00")):
+        app.last_capture = CaptureResult(
+            game_state=app.game_state, activity_name="Headhunter",
+            activity_type=ActivityType.VIP_WORK, activity_identity_status="known_name",
+            timer=parser.parse(text),
+        )
+        widget.refresh()
+        assert name(view) == "Headhunter"
+        assert app.game_state is GameState.MISSION_ACTIVE
+        assert app.current_money == 125_000 and app.session_earnings == 1000
+        assert app.recent_activities == []
+        if kind == "dashboard":
+            assert widget._activity_card.timer == expected
+        else:
+            assert widget._timer_label.text == (f"Timer: {expected}" if expected else "")

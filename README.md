@@ -1023,6 +1023,32 @@ and qualified result evidence retain priority, and an unqualified result header
 cannot borrow this activity type. A changing or disappearing countdown does not
 complete or rearm an activity.
 
+The separate timer reader admits successful zero values in its existing
+hours, minutes and seconds formats, including `0`, `0s`, `0 sec`, `0 : 00`
+and OCR-corrected zeros. A matched but range-invalid candidate such as
+`60:00:60`, `00:00:99` or `1:30:60` is rejected without falling back to a
+minute prefix; `5:60 0:00` does not salvage the later zero. Failed parsing
+keeps the original raw input and the identical last valid cached reading.
+Successful readings keep cleaned input. Invalid current readings clear the
+displayed timer; a valid zero displays `0:00`, without completing the activity
+or changing ownership, balances or earnings.
+
+This is parse-status validation within the existing grammar. Regex boundaries
+and OCR substitutions are unchanged: the unanchored parser still accepts
+`100:00`, `100:00:00` and `0:000` as zero, `1:00:000` as 3600 seconds, and
+surrounding text such as `Time: 20:00 remaining`. It does not validate the
+entire OCR string as a timestamp.
+
+`TimerReading` retains its six positional constructor fields, representation
+and payload equality. Directly constructed readings retain the legacy value
+inference, including raw `0:00`; parser-created results use private
+`NO_MATCH`, `INVALID` or `VALID` status instead. The private `_parse_status`
+dataclass field intentionally adds a reflection/`asdict` key and, when set,
+private instance state despite being excluded from init, repr and comparison.
+Production detection-sample diagnostics omit timer objects. Synthetic capture
+and actual display-method regressions cover this behavior; they do not establish
+pixel OCR accuracy or native Windows/Qt behavior.
+
 The original five-guide evaluation used the actual local Tesseract, capture,
 detector and application path. It recovered a type-only **VIP Work** activity
 from the Headhunter screenshot where the earlier detector selected
