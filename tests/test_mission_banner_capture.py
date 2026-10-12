@@ -112,21 +112,42 @@ def test_three_crops_are_parsed_once_and_shared_with_app(app):
         def __init__(self):
             super().__init__()
             self.readings = []
+            self.headers = []
 
-        def parse_regions(self, texts):
-            reading = super().parse_regions(texts)
-            self.readings.append(reading)
+        def parse_regions(self, texts, *, result_header=""):
+            texts = tuple(texts)
+            reading = super().parse_regions(texts, result_header=result_header)
+            if texts:
+                self.readings.append(reading)
+            else:
+                self.headers.append((result_header, reading))
             return reading
 
     parser = CountingParser()
     app._state_detector = StateDetector(ocr_engine=SimpleNamespace(is_available=False))
     app._state_detector._mission_parser = parser
-    # The fallback parser must stay unused when the detector provided evidence.
+    # The app must reuse the detector's crop reading. Its independent header
+    # scope check is still allowed and must use the real parser contract.
     app._mission_parser = parser
     result, _ = banner_frame(app, "VIP work", "Collect the briefcase", "Hostile Takeover")
     assert result.mission.mission_name == "Hostile Takeover"
-    assert parser.readings == [result.mission]
+    (shared_reading,) = parser.readings
+    assert shared_reading is result.mission
     assert result.mission.raw_text == "VIP work\nCollect the briefcase\nHostile Takeover"
+    assert parser.headers
+    for header_evidence, header_reading in parser.headers:
+        assert header_evidence == result.result_header_evidence == result.result_header_text == ""
+        assert header_reading.raw_text == "" and header_reading.outcome is None
+
+    # A nonempty scoped header proves the override forwards its keyword as
+    # header evidence, rather than merely accepting and discarding it.
+    header = "HIT COMPLETE\nThe Popstar"
+    reading = parser.parse_result_header(header)
+    assert reading.raw_text == header
+    assert reading.mission_name == "The Popstar"
+    assert reading.outcome == "complete" and reading.outcome_scope == "payphone_hit"
+    assert parser.readings == [shared_reading]
+    assert parser.headers[-1] == (header, reading)
 
 
 @pytest.mark.parametrize("top,center,banner", [
