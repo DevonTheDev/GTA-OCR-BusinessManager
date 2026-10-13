@@ -900,16 +900,19 @@ class GTABusinessManager:
             )
             if sample is not None:
                 sample.call("stage", "candidate", state_result)
-            # The new header scope owns only the activity present at capture
-            # admission. Callbacks may replace or refine it before money/state
-            # processing; never recapture their new owner as this result's.
+            # Terminal observations own only the activity present before state
+            # callbacks. A callback-created, replaced or refined owner cannot
+            # lend this frame authority to label money or apply its result.
             payphone_scope = (
                 getattr(getattr(state_result, "mission", None), "outcome_scope", None) == "payphone_hit"
                 or self._mission_parser.parse_result_header(
                     getattr(state_result, "result_header_evidence", "")).outcome_scope == "payphone_hit"
             )
-            payphone_owner = self._activity_tracker.current_activity
-            payphone_snapshot = self._payphone_owner_snapshot() if payphone_scope else None
+            terminal_scope = payphone_scope or state_result.state in (
+                GameState.MISSION_COMPLETE, GameState.MISSION_FAILED,
+            )
+            terminal_owner = self._activity_tracker.current_activity
+            terminal_snapshot = self._terminal_owner_snapshot() if terminal_scope else None
             # Reject another mission's result before it can transition state,
             # classify a balance change or notify completion listeners.
             state_result = self._guard_mission_observation(state_result)
@@ -955,11 +958,17 @@ class GTABusinessManager:
                 money_reading = self._money_parser.parse(ocr_result.text)
                 if money_reading.has_value and self._money_parser.validate_reading(money_reading):
                     result.money = money_reading
-                    if payphone_scope:
-                        owned = (payphone_owner is not None
+                    owner_changed = terminal_scope and (
+                        self._activity_tracker.current_activity is not terminal_owner
+                        or self._terminal_owner_snapshot() != terminal_snapshot
+                    )
+                    if owner_changed:
+                        # The balance remains valid independently of which
+                        # activity a callback selected during this frame.
+                        result.money_change = self._process_money_change(money_reading, earning_source="")
+                    elif payphone_scope:
+                        owned = (terminal_owner is not None
                                  and self._data.mission_start_time is not None
-                                 and self._activity_tracker.current_activity is payphone_owner
-                                 and self._payphone_owner_snapshot() == payphone_snapshot
                                  and state_result.state == GameState.MISSION_COMPLETE)
                         # Keep independently valid balance amounts. An unowned
                         # or rejected hit supplies no earning-source authority.
@@ -980,11 +989,12 @@ class GTABusinessManager:
                     result.timer = timer_reading
 
             # Handle state-specific processing
-            if payphone_scope and (
-                    self._activity_tracker.current_activity is not payphone_owner
-                    or self._payphone_owner_snapshot() != payphone_snapshot):
+            if terminal_scope and (
+                    self._activity_tracker.current_activity is not terminal_owner
+                    or self._terminal_owner_snapshot() != terminal_snapshot):
                 state_result = replace(state_result, state=GameState.UNKNOWN, confidence=0.0,
-                                       reason="Payphone result owner changed during capture")
+                                       reason=("Payphone result owner changed during capture" if payphone_scope
+                                               else "Terminal result owner changed during capture"))
                 result.game_state = state_result.state
                 result.state_confidence = state_result.confidence
                 result.state_reason = state_result.reason
@@ -1471,8 +1481,8 @@ class GTABusinessManager:
                 )
         return state_result
 
-    def _payphone_owner_snapshot(self):
-        """Capture-local semantic/timing fence for the newly admitted scope."""
+    def _terminal_owner_snapshot(self):
+        """Capture-local semantic/timing fence, checked before result refinement."""
         current = self._activity_tracker.current_activity
         return (current.name if current else None, current.activity_type if current else None,
                 current.started_at if current else None, self._data.mission_start_time,

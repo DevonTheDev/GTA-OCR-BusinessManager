@@ -658,6 +658,18 @@ bonus/reward text, **Objective complete**, **SUCCESS**, **COMPLETED** and **Well
 done** do not end the whole tracked mission. These are heuristic recognition
 rules, not calibrated confidence scores or proof of actual gameplay state.
 
+Terminal capture observations also retain the activity identity and baseline
+from before state callbacks. If a registered state or money callback creates,
+replaces or refines that owner, the older frame cannot complete the changed
+activity or use it to label an earning. Independently valid balance readings
+and already delivered transitions/callbacks remain intact; a money callback
+does not retroactively change an earning recorded before it ran. Compatible
+identity refinement from the terminal text itself still happens after this
+ownership check. Ordinary ownerless success keeps the existing `Mission`
+earning label. Synthetic capture/SQLite tests establish this callback behavior;
+they do not establish native OCR accuracy or that a mission caused a balance
+increase.
+
 An explicit result and one supported canonical mission title can also share a
 single OCR segment in either order, such as **MISSION PASSED Headhunter** or
 **Headhunter MISSION FAILED**. The same bounded rule supports **JOB COMPLETE**
