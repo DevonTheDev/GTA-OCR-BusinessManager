@@ -207,7 +207,7 @@ class ScreenCapture:
         return self.capture_region(self._regions.center_prompt)
 
     def capture_multiple_regions(
-        self, regions: list[Region]
+        self, regions: list[Region], wait_for_rate: bool = True
     ) -> dict[int, Optional[np.ndarray]]:
         """Extract independent region images from one screen observation.
 
@@ -217,6 +217,7 @@ class ScreenCapture:
 
         Args:
             regions: List of regions to capture
+            wait_for_rate: Whether to wait for rate limiting
 
         Returns:
             Dict mapping region index to captured image
@@ -225,7 +226,8 @@ class ScreenCapture:
         if not regions:
             return results
 
-        self._wait_for_rate_limit()
+        if wait_for_rate:
+            self._wait_for_rate_limit()
         try:
             width, height = self._scaler.width, self._scaler.height
             offset_x, offset_y = self._scaler.offset

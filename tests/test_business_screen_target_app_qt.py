@@ -45,12 +45,15 @@ def synthetic_business_io(manager, monkeypatch, *, text=None, recognize=None):
     contents = dict(zip(regions.get_business_regions().values(), parts))
     calls = []
 
-    def capture(region, *, wait_for_rate):
-        calls.append((region, wait_for_rate))
-        return contents[region]
+    def capture(requested, *, wait_for_rate):
+        assert requested == list(regions.get_business_regions().values())
+        assert wait_for_rate is False
+        # Existing preview consumers inspect the three requested crops.
+        calls.extend((region, wait_for_rate) for region in requested)
+        return {index: contents[region] for index, region in enumerate(requested)}
 
     monkeypatch.setattr(manager, '_capture', SimpleNamespace(
-        regions=regions, capture_region=capture, close=lambda: None,
+        regions=regions, capture_multiple_regions=capture, close=lambda: None,
     ))
     monkeypatch.setattr(manager, '_ocr', SimpleNamespace(
         is_available=True,

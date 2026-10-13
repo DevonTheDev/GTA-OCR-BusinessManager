@@ -1712,10 +1712,14 @@ class GTABusinessManager:
             # Get business regions
             regions = self._capture.regions.get_business_regions()
 
-            # Capture and OCR each region
+            # Freeze all business fields before OCR can outlast this screen.
+            # Business reads keep their existing no-wait scheduling.
+            images = self._capture.capture_multiple_regions(
+                list(regions.values()), wait_for_rate=False,
+            )
             text_parts = []
-            for region_name, region in regions.items():
-                img = self._capture.capture_region(region, wait_for_rate=False)
+            for index in range(len(regions)):
+                img = images.get(index)
                 if img is not None:
                     ocr_result = self._ocr.recognize_preprocessed(img, invert=True, scale=2.0)
                     if ocr_result.text:

@@ -257,9 +257,13 @@ def test_real_window_clear_preserves_saved_data_then_ocr_refills_selected_card(
     regions = ScreenRegions()
     contents = dict(zip(regions.get_business_regions().values(),
                         ['Stock: 5/10', 'Supplies: 3/4', 'Value: $123,456']))
+    def capture(requested, *, wait_for_rate):
+        assert requested == list(regions.get_business_regions().values())
+        assert wait_for_rate is False
+        return {index: contents[region] for index, region in enumerate(requested)}
+
     monkeypatch.setattr(manager, '_capture', SimpleNamespace(
-        regions=regions, capture_region=lambda region, **kwargs: contents[region],
-        close=lambda: None,
+        regions=regions, capture_multiple_regions=capture, close=lambda: None,
     ))
     monkeypatch.setattr(manager, '_ocr', SimpleNamespace(
         is_available=True,

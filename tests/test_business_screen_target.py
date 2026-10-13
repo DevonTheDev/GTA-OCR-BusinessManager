@@ -46,6 +46,7 @@ class SyntheticBusinessCapture:
         self.state = state
         self.regions = ScreenRegions()
         self.batches = 0
+        self.business_batches = []
         self.calls = []
         self.ocr_calls = []
         self.rates = []
@@ -69,7 +70,16 @@ class SyntheticBusinessCapture:
         manager._state_machine.add_listener(manager._on_game_state_transition)
         manager._perf_monitor = PerformanceMonitor()
 
-    def capture_multiple_regions(self, requested):
+    def capture_multiple_regions(self, requested, wait_for_rate=True):
+        if requested == list(self.regions.get_business_regions().values()):
+            assert wait_for_rate is False
+            self.business_batches.append((requested, wait_for_rate))
+            # Keep per-crop observations for existing consumers; this hook is
+            # the one business acquisition boundary, before any OCR begins.
+            self.calls.extend((region, wait_for_rate) for region in requested)
+            self.hook("capture", len(self.business_batches))
+            return {index: self.frame[region] for index, region in enumerate(requested)}
+        assert wait_for_rate is True
         # Bounded fallback even if a swallowed production exception skips a callback.
         if self.batches >= len(self.frames):
             self.manager._stop_event.set()
@@ -85,9 +95,7 @@ class SyntheticBusinessCapture:
         return images
 
     def capture_region(self, region, wait_for_rate=True):
-        self.calls.append((region, wait_for_rate))
-        self.hook("capture", len(self.calls))
-        return self.frame[region]
+        pytest.fail("Business batches must not fall back to per-field capture")
 
     def recognize_preprocessed(self, image, **kwargs):
         self.ocr_calls.append((image, kwargs))
@@ -148,6 +156,7 @@ def test_all_catalog_targets_assign_unnamed_labeled_readings(manager, business_i
         capture.regions.get_business_regions().values(),
     )
     assert all(wait is False for _, wait in capture.calls)
+    assert capture.business_batches == [(list(capture.regions.get_business_regions().values()), False)]
     assert all(options == {"invert": True, "scale": 2.0} for _, options in capture.ocr_calls)
 
 

@@ -157,11 +157,18 @@ def run_business_captures(manager, frames):
             self.regions = ScreenRegions()
             self.closed = False
             self.batches = 0
+            self.business_batches = []
             self.calls = []
             self.rates = []
             self.current_text = {}
 
-        def capture_multiple_regions(self, requested):
+        def capture_multiple_regions(self, requested, wait_for_rate=True):
+            if requested == list(self.regions.get_business_regions().values()):
+                assert wait_for_rate is False
+                self.business_batches.append((requested, wait_for_rate))
+                self.calls.extend((region, wait_for_rate) for region in requested)
+                return {index: self.current_text[region] for index, region in enumerate(requested)}
+            assert wait_for_rate is True
             # End a broken loop even if a production exception prevents callbacks.
             if self.batches >= len(frames):
                 manager._stop_event.set()
@@ -177,8 +184,7 @@ def run_business_captures(manager, frames):
             return images
 
         def capture_region(self, region, wait_for_rate=True):
-            self.calls.append((region, wait_for_rate))
-            return self.current_text[region]
+            pytest.fail("Business batches must not fall back to per-field capture")
 
         def set_capture_rate(self, rate):
             self.rates.append(rate)
@@ -260,6 +266,7 @@ def test_capture_loop_updates_caches_logs_and_listeners_without_changing_schedul
     assert manager.last_capture is observations[-1][0]
     assert manager.data.total_captures == 2
     assert capture.batches == 2 and len(capture.calls) == 6
+    assert capture.business_batches == [(list(capture.regions.get_business_regions().values()), False)] * 2
     assert all(not wait_for_rate for _, wait_for_rate in capture.calls)
     assert capture.rates == [4.0]
     assert capture.closed and manager.state is AppState.STOPPED

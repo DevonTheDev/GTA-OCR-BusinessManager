@@ -87,3 +87,36 @@ def test_batch_failure_is_paced_once_between_batches(capture_clock, monkeypatch)
     assert capture.capture_multiple_regions(regions) == {0: None, 1: None}
     assert capture.capture_multiple_regions(regions) == {0: None, 1: None}
     assert clock.waits == [1.0]
+
+
+@pytest.mark.parametrize('wait_for_rate', [True, False])
+@pytest.mark.parametrize('outcome', ['success', 'failure', 'invalid'])
+def test_batch_wait_option_preserves_completion_pacing(capture_clock, monkeypatch, wait_for_rate, outcome):
+    capture, clock = capture_clock
+    capture.capture_full_screen()
+    clock.elapsed += 0.25
+    regions = [capture.regions.full_screen]
+    if outcome == 'failure':
+        def fail():
+            raise RuntimeError('synthetic capture unavailable')
+        monkeypatch.setattr(capture, '_ensure_mss', fail)
+    elif outcome == 'invalid':
+        regions = [None]
+        monkeypatch.setattr(capture, '_ensure_mss', lambda: pytest.fail('No valid pixels'))
+    images = capture.capture_multiple_regions(regions, wait_for_rate=wait_for_rate)
+    assert (images[0] is not None) == (outcome == 'success')
+    assert clock.waits == ([0.75] if wait_for_rate else [])
+    assert capture._last_capture_time == (11.0 if wait_for_rate else 10.25)
+    # Even a no-wait failure/invalid batch records completion for later callers.
+    capture._wait_for_rate_limit()
+    assert clock.waits == ([0.75, 1.0] if wait_for_rate else [1.0])
+
+
+@pytest.mark.parametrize('wait_for_rate', [True, False])
+def test_empty_batch_ignores_wait_option_and_keeps_completion_time(capture_clock, wait_for_rate):
+    capture, clock = capture_clock
+    capture.capture_full_screen()
+    completed = capture._last_capture_time
+    assert capture.capture_multiple_regions([], wait_for_rate=wait_for_rate) == {}
+    assert capture._last_capture_time == completed
+    assert clock.waits == []

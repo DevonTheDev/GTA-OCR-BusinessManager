@@ -35,16 +35,17 @@ def test_normalized_live_reading_reaches_business_bars_without_writing_history(
     captures = []
     recognitions = []
 
-    def capture_region(region, *, wait_for_rate):
-        captures.append((region, wait_for_rate))
-        return region_text[region]
+    def capture_multiple_regions(requested, *, wait_for_rate):
+        assert requested == list(regions.get_business_regions().values())
+        captures.append((requested, wait_for_rate))
+        return {index: region_text[region] for index, region in enumerate(requested)}
 
     def recognize(image, **options):
         recognitions.append((image, options))
         return SimpleNamespace(text=image)
 
     monkeypatch.setattr(manager, '_capture', SimpleNamespace(
-        regions=regions, capture_region=capture_region, close=lambda: None,
+        regions=regions, capture_multiple_regions=capture_multiple_regions, close=lambda: None,
     ))
     monkeypatch.setattr(manager, '_ocr', SimpleNamespace(is_available=True, recognize_preprocessed=recognize))
     caplog.set_level(logging.INFO)
@@ -59,7 +60,7 @@ def test_normalized_live_reading_reaches_business_bars_without_writing_history(
     assert (cached['stock'], cached['supply'], cached['value']) == (stock, supply, 123456)
     optimized = manager._optimizer._business_states['bunker']
     assert (optimized.stock_percent, optimized.supply_percent, optimized.estimated_value) == (stock, supply, 123456)
-    assert captures == [(region, False) for region in regions.get_business_regions().values()]
+    assert captures == [(list(regions.get_business_regions().values()), False)]
     assert recognitions == [(text, {'invert': True, 'scale': 2.0}) for text in parts]
     assert f'Business detected: BUNKER - Stock: {stock}%, Supply: {supply}%, Value: $123,456' in caplog.text
     assert 'Error processing business computer' not in caplog.text

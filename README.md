@@ -703,6 +703,14 @@ business-computer reads keep their existing scheduling. One grab is not a
 guarantee against operating-system/compositor tearing, concurrent configuration
 changes, or a measured Windows latency, memory-use or FPS improvement.
 
+Business-computer stock, supplies and value also come from one native grab,
+acquired before OCR begins. The business batch skips the rate-limit wait as
+before, retains available fields when another crop is invalid or empty, and
+does not recapture individual fields if the shared grab fails. Its earlier
+HUD/state-classification frame remains separate. Synthetic pixel tests cover
+screen changes during OCR; they do not measure recognition accuracy or add
+foreground-window gating.
+
 The Windows adapter now follows [WinOCR's lowercase Python API](https://github.com/GitHub30/winocr#information-that-can-be-obtained)
 and preserves backend line text, punctuation and word bounds. Windows
 [OcrWord exposes no confidence score](https://learn.microsoft.com/en-us/uwp/api/windows.media.ocr.ocrword),
