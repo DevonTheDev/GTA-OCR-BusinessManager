@@ -114,6 +114,7 @@ class BusinessParser:
         re.compile(r"sell[:\s]*\$?\s*([\d,]+)", re.IGNORECASE),
         re.compile(r"worth[:\s]*\$?\s*([\d,]+)", re.IGNORECASE),
     ]
+    INVALID_VALUE_SUFFIX = re.compile(r"(?:\.\d|\.?[eE](?=\d|\W|\Z))")
 
     UNIT_PATTERNS = [
         re.compile(r"(\d+)\s*(?:units?|crates?|bars?)", re.IGNORECASE),
@@ -238,6 +239,13 @@ class BusinessParser:
         for pattern in self.VALUE_PATTERNS:
             match = pattern.search(text)
             if match:
+                # Validate the chosen capture without shortening it or rescanning.
+                if self.INVALID_VALUE_SUFFIX.match(text, match.end(1)):
+                    continue
+                start = match.start()
+                # Only the dollar-first pattern starts at the currency marker.
+                if text[start] == "$" and start > 0 and text[start - 1] in "+-":
+                    continue
                 try:
                     # Remove commas from number
                     value_str = match.group(1).replace(",", "")

@@ -2334,6 +2334,18 @@ above; absent-field defaults and value estimates retain their existing behavior.
 Windows OCR, real screenshots
 and in-game recognition accuracy remain separate validation work.
 
+Business stock-value text also rejects decimal or exponent continuations such as
+`Value:$0.50`, `Sell:$25e2`, and incomplete `Worth:25e+`, plus an ASCII sign
+immediately before the dollar in `-$25 worth` or `+$25 value`. Each existing
+pattern still considers its first match only; rejection can fall through to the
+next pattern. Explicit `Value:$0`, comma deletion (including `1,25` becoming `125`),
+compact labels, Unicode digits, `Value:$25.` and `Value:$25each` retain their
+behavior. A rejected value alone leaves earlier live caches intact; a valid
+stock or supply companion can publish an unknown value. An optimizer estimate
+of zero remains distinct from an observed zero. Fixed synthetic-text tests cover
+these parser and capture-loop boundaries, without images, Windows OCR, or live
+gameplay validation. This check does not change balance or earnings accounting.
+
 ### Activity export periods and row counts
 
 Activity-history and earnings-breakdown exports now use the activity's completion
