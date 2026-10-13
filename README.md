@@ -2304,6 +2304,14 @@ Business OCR treats `Stock: 5/10` as 50% and `Supplies: 3/4` as 75%.
 Integer ratios require a positive denominator and a numerator between zero and
 that denominator; fractional percentages round down (`1/3` becomes 33%). A slash
 alone is not a percent sign. Ordinary text such as `Stock: 50%` still works.
+For reversed forms such as `50% stock` and `50% supplies`, the parser does not
+start partway through attached ASCII signed, decimal or exponent forms: `-5% stock`,
+`1.5% stock` and `1e2% supplies` do not contribute a percentage. Ordinary adjacent
+words and slash starts retain their prior behavior, including `5/10% stock`
+reading as 10%, while `Stock: 5/10%` still reads as 50%. This is a narrow
+recognized-text boundary check, not a complete numeric grammar. A rejected field
+alone leaves earlier live readings intact; a separate valid field can still
+replace the observation, with missing fields remaining unknown.
 The resulting live values reach the optimizer and the Businesses tab without
 calling an unsupported stock-update method on the explicit-action scheduler.
 

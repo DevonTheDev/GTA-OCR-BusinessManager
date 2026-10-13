@@ -98,13 +98,14 @@ class BusinessParser:
         # Do not accept a partial denominator from decimals, exponents or extra ratios.
         re.compile(r"stock[:\s]*(\d+)\s*/\s*(\d+)(?![\deE]|[.,]\d|\s*/)", re.IGNORECASE),
         re.compile(r"product[:\s]*(\d+)", re.IGNORECASE),
-        re.compile(r"(\d+)\s*%\s*(?:full|stock)", re.IGNORECASE),
+        # Keep slash/word starts while guarding attached ASCII numeric prefixes.
+        re.compile(r"(?<![\d.,+-])(?<!\d[eE])(?<!\d[.,][eE])(\d+)\s*%\s*(?:full|stock)", re.IGNORECASE),
     ]
 
     SUPPLY_PATTERNS = [
         re.compile(r"suppl(?:y|ies)[:\s]*(\d+)\s*%", re.IGNORECASE),
         re.compile(r"suppl(?:y|ies)[:\s]*(\d+)\s*/\s*(\d+)(?![\deE]|[.,]\d|\s*/)", re.IGNORECASE),
-        re.compile(r"(\d+)\s*%\s*suppl", re.IGNORECASE),
+        re.compile(r"(?<![\d.,+-])(?<!\d[eE])(?<!\d[.,][eE])(\d+)\s*%\s*suppl", re.IGNORECASE),
     ]
 
     VALUE_PATTERNS = [
