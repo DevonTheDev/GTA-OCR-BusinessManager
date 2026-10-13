@@ -176,16 +176,16 @@ def test_invalid_targets_leave_selection_and_live_state_untouched(manager, inval
 
 @pytest.mark.parametrize("text,business_id", [
     ("Bunker Stock: 5/10", "bunker"),
-    ("Acid Lab Stock: 5/10", "meth"),
-    ("Vehicle Warehouse Stock: 5/10", "nightclub"),
-    ("Special Cargo Stock: 5/10", "hangar"),
+    ("Acid Lab Stock: 5/10", "acid_lab"),
+    ("Vehicle Warehouse Stock: 5/10", "vehicle_warehouse"),
+    ("Special Cargo Stock: 5/10", "special_cargo"),
     ("Stock: 5/10", "unknown"),
 ])
-def test_automatic_keeps_existing_keyword_precedence(manager, text, business_id, caplog):
+def test_automatic_uses_explicit_business_names(manager, text, business_id, caplog):
     caplog.set_level(logging.INFO)
     manager.set_business_screen_target(None)
     SyntheticBusinessCapture(manager, [(text, "Supplies: 3/4", "Value: $123,456")]).run()
-    # Identification is unchanged; only cataloged cards accept live observations.
+    # Only cataloged cards accept live observations, including explicit name matches.
     if business_id in BUSINESSES:
         assert set(manager.data.business_states) == {business_id}
         assert manager.get_business_state(business_id)["identity_source"] == "ocr_text"

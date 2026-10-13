@@ -57,6 +57,24 @@ class BusinessReading:
 class BusinessParser:
     """Parser for GTA business computer displays."""
 
+    # Explicit names outrank generic words. Keep all matches so joined crops
+    # naming different businesses cannot silently choose the first one.
+    BUSINESS_NAME_PATTERNS = {
+        BusinessType.COCAINE: re.compile(r"\bcocaine\s+lockup\b", re.IGNORECASE),
+        BusinessType.METH: re.compile(r"\bmeth\s+lab\b", re.IGNORECASE),
+        BusinessType.CASH: re.compile(r"\bcounterfeit\s+cash\b", re.IGNORECASE),
+        BusinessType.WEED: re.compile(r"\bweed\s+farm\b", re.IGNORECASE),
+        BusinessType.DOCUMENTS: re.compile(r"\bdocument\s+forgery\b", re.IGNORECASE),
+        BusinessType.BUNKER: re.compile(r"\bbunker\b", re.IGNORECASE),
+        BusinessType.NIGHTCLUB: re.compile(r"\bnightclub(?:\s+warehouse)?\b", re.IGNORECASE),
+        BusinessType.AGENCY: re.compile(r"\bagency\b", re.IGNORECASE),
+        BusinessType.ACID_LAB: re.compile(r"\bacid\s+lab\b", re.IGNORECASE),
+        BusinessType.HANGAR: re.compile(r"\bhangar\b", re.IGNORECASE),
+        BusinessType.VEHICLE_WAREHOUSE: re.compile(r"\bvehicle\s+warehouse\b", re.IGNORECASE),
+        BusinessType.SPECIAL_CARGO: re.compile(r"\bspecial\s+cargo(?:\s+warehouse)?\b", re.IGNORECASE),
+        BusinessType.AUTO_SHOP: re.compile(r"\bauto\s+shop\b", re.IGNORECASE),
+    }
+
     # Keywords to identify business type
     BUSINESS_KEYWORDS = {
         BusinessType.COCAINE: ["cocaine", "coke", "lockup"],
@@ -158,6 +176,15 @@ class BusinessParser:
         Returns:
             Identified BusinessType
         """
+        explicit_types = {
+            business_type for business_type, pattern in self.BUSINESS_NAME_PATTERNS.items()
+            if pattern.search(text)
+        }
+        if len(explicit_types) == 1:
+            return next(iter(explicit_types))
+        if explicit_types:
+            return BusinessType.UNKNOWN
+
         text_lower = text.lower()
 
         for business_type, keywords in self.BUSINESS_KEYWORDS.items():

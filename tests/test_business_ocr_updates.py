@@ -120,13 +120,13 @@ def test_mixed_ratio_percent_suffix_keeps_pattern_precedence(text, stock, supply
 @pytest.mark.parametrize(
     "text,business_type",
     [
-        ("Acid Lab Stock: 50%", BusinessType.METH),
-        ("Vehicle Warehouse Stock: 50%", BusinessType.NIGHTCLUB),
-        ("Special Cargo Stock: 50%", BusinessType.HANGAR),
+        ("Acid Lab Stock: 50%", BusinessType.ACID_LAB),
+        ("Vehicle Warehouse Stock: 50%", BusinessType.VEHICLE_WAREHOUSE),
+        ("Special Cargo Stock: 50%", BusinessType.SPECIAL_CARGO),
         ("Stock: 50%", BusinessType.UNKNOWN),
     ],
 )
-def test_existing_business_identity_rules_are_preserved(text, business_type):
+def test_explicit_business_names_and_unidentified_text(text, business_type):
     assert BusinessParser().parse(text).business_type is business_type
 
 

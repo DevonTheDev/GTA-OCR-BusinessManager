@@ -1212,6 +1212,21 @@ OCR is processing a business batch, that batch is discarded before parsing and
 publication, including a change away and back to the same target. Stop also
 retires pending batches. The next normal capture uses the new selection.
 
+In Automatic mode, explicit business names in the recognized text take priority
+over generic words such as `lab`, `warehouse` and `cargo`. Matching uses whole
+tokens, ignores case, and accepts whitespace between name words. The eleven
+catalog display names are supported, along with `Special Cargo`, `Nightclub`,
+and the parser-only names `Hangar` and `Auto Shop`. Exactly one distinct named
+business across the combined business-field text wins; repeated names or aliases
+for that same business are fine. Different named businesses make the identity
+unknown and leave existing live readings intact. If no explicit name matches,
+the existing generic keyword fallback applies. A selected target still wins over
+all text matches. `Hangar` and `Auto Shop` do not add supported live cards.
+
+This is a recognized-text parsing rule, not a change to screen detection, crop
+capture or OCR accuracy. Synthetic-text checks cover the parser and live app,
+optimizer and manual-preview observations; they do not validate game pixels.
+
 The target assigns identity; it does not verify the screen or improve OCR
 accuracy. Existing business-screen detection and numeric parsing still apply.
 For example, `Stock: 5/10 Supplies: 3/4 Value: $123,456` can be assigned without
@@ -2294,8 +2309,9 @@ calling an unsupported stock-update method on the explicit-action scheduler.
 
 Tests exercise the real capture loop with synthetic OCR and the actual business
 cards in Linux offscreen Qt. The live observations leave recorded manual check-ins
-and database history untouched. Business-name recognition, absent-field defaults
-and value estimates retain their existing behavior. Windows OCR, real screenshots
+and database history untouched. Business names follow the explicit-name rules
+above; absent-field defaults and value estimates retain their existing behavior.
+Windows OCR, real screenshots
 and in-game recognition accuracy remain separate validation work.
 
 ### Activity export periods and row counts
