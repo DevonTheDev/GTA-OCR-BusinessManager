@@ -549,7 +549,12 @@ class SettingsPanel(QWidget):
         )
 
         if reply == QMessageBox.StandardButton.Yes:
-            self._settings.reset_to_defaults()
+            try:
+                self._settings.reset_to_defaults()
+            except Exception as e:
+                logger.error(f"Failed to reset settings: {e}")
+                QMessageBox.critical(self, "Error", f"Failed to reset settings: {e}")
+                return
             self._load_settings()
             self._status_label.setText("Settings reset to defaults")
             self._status_label.setStyleSheet("color: #4CAF50; font-size: 12px;")

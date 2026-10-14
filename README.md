@@ -2010,15 +2010,23 @@ serialization or replacement fails, the previous settings and file stay intact;
 the draft remains editable and Save stays available. A retry uses the latest
 complete draft, preserving unrelated and custom settings.
 
+**Settings → Reset to Defaults** writes the complete defaults before replacing
+the live settings or reloading the panel. If serialization or file replacement
+fails, it reports the error and retains the previous settings, saved file, draft,
+Save availability and status. Confirm Reset again to retry, or use Save to keep
+the current draft. Cancelling Reset leaves everything unchanged. A successful
+whole reset removes custom settings as well as restoring default values.
+
 The `Settings.set_many({...})` API applies dot-notation keys in mapping order to
 a deep copy, using the existing validation rules. An empty patch does nothing.
-After a successful batch, callers must re-fetch mutable results from `get` or
+After a successful batch or whole reset, callers must re-fetch mutable results from `get` or
 `get_section`; previously returned dictionaries or lists refer to the old
-configuration. Standalone `set`, `update_section` and reset behavior is unchanged.
+configuration. Standalone `set`, `update_section` and `reset_section` behavior is
+unchanged. `reset_to_defaults(save=False)` still replaces only in-memory settings.
 This provides per-file recovery, without concurrent-writer, thread-safety or
 power-loss durability guarantees.
 
-Focused checks use real temporary YAML files and the actual Settings Save method
+Focused checks use real temporary YAML files and the actual Settings Save, Reset and load methods
 with widget adapters: `python -m unittest -v tests.test_settings_batch tests.test_settings_capture_admission`.
 They do not launch the app or verify native Qt signals, rendering or Windows.
 

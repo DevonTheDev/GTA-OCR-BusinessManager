@@ -151,7 +151,8 @@ class Settings:
             Setting value or default
 
         Mutable values refer to the current configuration. Re-fetch them after
-        a successful set_many call, which replaces the configuration root.
+        a successful set_many or reset_to_defaults call, which replaces the
+        configuration root.
         """
         keys = key.split(".")
         value = self._config
@@ -281,7 +282,8 @@ class Settings:
         Returns:
             Section dictionary or empty dict if not found
 
-        Re-fetch this mutable section after a successful set_many call.
+        Re-fetch this mutable section after a successful set_many or
+        reset_to_defaults call.
         """
         return self._config.get(section, {})
 
@@ -301,10 +303,15 @@ class Settings:
             self._save()
 
     def reset_to_defaults(self, save: bool = True) -> None:
-        """Reset all settings to defaults."""
-        self._config = deepcopy(DEFAULT_CONFIG)
+        """Reset all settings, publishing defaults only after a successful save.
+
+        With save=False, replace only the in-memory configuration. Successful
+        resets discard custom settings and detach previously returned aliases.
+        """
+        candidate = deepcopy(DEFAULT_CONFIG)
         if save:
-            self._save()
+            self._write_config(candidate)
+        self._config = candidate
 
     def reset_section(self, section: str, save: bool = True) -> None:
         """Reset a specific section to defaults."""
