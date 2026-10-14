@@ -123,6 +123,11 @@ class Settings:
                         isinstance(opacity, float) and not math.isfinite(opacity)
                     ):
                         display["overlay_opacity"] = DEFAULT_CONFIG["display"]["overlay_opacity"]
+                    # Both position consumers use a dictionary lookup with a fallback.
+                    try:
+                        hash(display["overlay_position"])
+                    except TypeError:
+                        display["overlay_position"] = DEFAULT_CONFIG["display"]["overlay_position"]
             except Exception as e:
                 print(f"Warning: Failed to load config, using defaults: {e}")
                 self._config = deepcopy(DEFAULT_CONFIG)
