@@ -114,6 +114,15 @@ class Settings:
                         except SettingsValidationError as e:
                             capture[field] = DEFAULT_CONFIG["capture"][field]
                             print(f"Warning: {e}; using {capture[field]}")
+                # Admit the saved opacity leaf before the Settings UI reads it.
+                # Preserve finite numbers and bools without imposing slider limits.
+                display = self._config.get("display")
+                if isinstance(display, dict):
+                    opacity = display["overlay_opacity"]
+                    if not isinstance(opacity, (int, float)) or (
+                        isinstance(opacity, float) and not math.isfinite(opacity)
+                    ):
+                        display["overlay_opacity"] = DEFAULT_CONFIG["display"]["overlay_opacity"]
             except Exception as e:
                 print(f"Warning: Failed to load config, using defaults: {e}")
                 self._config = deepcopy(DEFAULT_CONFIG)
