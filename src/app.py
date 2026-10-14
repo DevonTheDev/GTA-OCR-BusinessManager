@@ -983,10 +983,14 @@ class GTABusinessManager:
                 GameState.MISSION_ACTIVE, GameState.SELLING,
                 GameState.HEIST_PREP, GameState.HEIST_FINALE,
             ):
-                timer_ocr = self._ocr.recognize_preprocessed(timer_img, invert=True, scale=2.0)
-                timer_reading = self._timer_parser.parse(timer_ocr.text)
-                if timer_reading.has_value:
-                    result.timer = timer_reading
+                try:
+                    timer_ocr = self._ocr.recognize_preprocessed(timer_img, invert=True, scale=2.0)
+                    timer_reading = self._timer_parser.parse(timer_ocr.text)
+                    if timer_reading.has_value:
+                        result.timer = timer_reading
+                except Exception as e:
+                    # The optional timer cannot discard independent mission evidence.
+                    logger.error(f"Timer read error: {e}")
 
             # Handle state-specific processing
             if terminal_scope and (

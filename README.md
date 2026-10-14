@@ -1053,6 +1053,14 @@ Successful readings keep cleaned input. Invalid current readings clear the
 displayed timer; a valid zero displays `0:00`, without completing the activity
 or changing ownership, balances or earnings.
 
+An exception while recognizing or parsing the optional HUD timer is logged and
+leaves that frame's timer unavailable. Independent mission processing and capture
+publication continue, without an immediate retry or reuse of a cached timer.
+The next ordinary frame can supply a valid timer. Detection samples still exclude
+timer readings; their own source or recorder failures retain their existing
+handling. Local injected-failure tests cover these boundaries, not native OCR
+failure frequency or accuracy.
+
 The selected hours or minutes match must now cover its entire numeric token:
 Unicode decimal digits joined by one `:`, `;` or `.` separator, with the
 existing optional whitespace around each separator. A match that truncates
