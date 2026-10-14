@@ -2004,6 +2004,24 @@ along with the current settings. This admission prevents malformed FPS values
 from reaching the Settings controls during startup. It does not repair unrelated
 settings or change capture-worker coercion.
 
+**Settings → Save** validates the full draft and saves it with one file
+replacement before publishing the changes in memory. If validation,
+serialization or replacement fails, the previous settings and file stay intact;
+the draft remains editable and Save stays available. A retry uses the latest
+complete draft, preserving unrelated and custom settings.
+
+The `Settings.set_many({...})` API applies dot-notation keys in mapping order to
+a deep copy, using the existing validation rules. An empty patch does nothing.
+After a successful batch, callers must re-fetch mutable results from `get` or
+`get_section`; previously returned dictionaries or lists refer to the old
+configuration. Standalone `set`, `update_section` and reset behavior is unchanged.
+This provides per-file recovery, without concurrent-writer, thread-safety or
+power-loss durability guarantees.
+
+Focused checks use real temporary YAML files and the actual Settings Save method
+with widget adapters: `python -m unittest -v tests.test_settings_batch tests.test_settings_capture_admission`.
+They do not launch the app or verify native Qt signals, rendering or Windows.
+
 Example configuration:
 ```yaml
 general:

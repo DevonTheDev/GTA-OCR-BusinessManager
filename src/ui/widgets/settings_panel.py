@@ -503,30 +503,26 @@ class SettingsPanel(QWidget):
             return
 
         try:
-            self._settings.set("general.character_name", self._name_edit.text().strip() or "Default")
-            self._settings.set("general.launch_on_startup", self._startup_check.isChecked())
-            self._settings.set("general.minimize_to_tray", self._tray_check.isChecked())
-
-            self._settings.set("capture.monitor_index", self._monitor_combo.currentIndex())
-            self._settings.set("capture.idle_fps", self._idle_fps.value())
-            self._settings.set("capture.active_fps", self._active_fps.value())
-
             modes = ["overlay", "window", "both"]
-            self._settings.set("display.mode", modes[self._mode_combo.currentIndex()])
-
             positions = ["top-left", "top-right", "bottom-left", "bottom-right"]
-            self._settings.set("display.overlay_position", positions[self._pos_combo.currentIndex()])
-
-            self._settings.set("display.overlay_opacity", self._opacity_slider.value() / 100)
-
-            self._settings.set("notifications.audio_enabled", self._audio_check.isChecked())
-            self._settings.set("notifications.desktop_notifications", self._desktop_check.isChecked())
-            self._settings.set("notifications.money_notification", self._money_notif_check.isChecked())
-
-            # Hotkeys
-            self._settings.set("hotkeys.toggle_overlay", self._overlay_key.text().strip() or "ctrl+shift+g")
-            self._settings.set("hotkeys.toggle_tracking", self._tracking_key.text().strip() or "ctrl+shift+t")
-            self._settings.set("hotkeys.show_window", self._window_key.text().strip() or "ctrl+shift+m")
+            values = {
+                "general.character_name": self._name_edit.text().strip() or "Default",
+                "general.launch_on_startup": self._startup_check.isChecked(),
+                "general.minimize_to_tray": self._tray_check.isChecked(),
+                "capture.monitor_index": self._monitor_combo.currentIndex(),
+                "capture.idle_fps": self._idle_fps.value(),
+                "capture.active_fps": self._active_fps.value(),
+                "display.mode": modes[self._mode_combo.currentIndex()],
+                "display.overlay_position": positions[self._pos_combo.currentIndex()],
+                "display.overlay_opacity": self._opacity_slider.value() / 100,
+                "notifications.audio_enabled": self._audio_check.isChecked(),
+                "notifications.desktop_notifications": self._desktop_check.isChecked(),
+                "notifications.money_notification": self._money_notif_check.isChecked(),
+                "hotkeys.toggle_overlay": self._overlay_key.text().strip() or "ctrl+shift+g",
+                "hotkeys.toggle_tracking": self._tracking_key.text().strip() or "ctrl+shift+t",
+                "hotkeys.show_window": self._window_key.text().strip() or "ctrl+shift+m",
+            }
+            self._settings.set_many(values)
 
             self._unsaved_changes = False
             self._save_btn.setEnabled(False)

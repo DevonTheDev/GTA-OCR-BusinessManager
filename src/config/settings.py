@@ -123,8 +123,12 @@ class Settings:
 
     def _save(self) -> None:
         """Save current configuration to file."""
+        self._write_config(self._config)
+
+    def _write_config(self, config: dict[str, Any]) -> None:
+        """Persist a complete configuration without publishing it in memory."""
         with atomic_text_writer(self._config_path) as f:
-            yaml.dump(self._config, f, default_flow_style=False, sort_keys=False)
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
     def _deep_merge(self, base: dict, override: dict) -> dict:
         """Deep merge two dictionaries, with override taking precedence."""
@@ -145,6 +149,9 @@ class Settings:
 
         Returns:
             Setting value or default
+
+        Mutable values refer to the current configuration. Re-fetch them after
+        a successful set_many call, which replaces the configuration root.
         """
         keys = key.split(".")
         value = self._config
@@ -235,6 +242,36 @@ class Settings:
         if save:
             self._save()
 
+    def set_many(self, values: dict[str, Any]) -> None:
+        """Validate and persist one ordered patch of dot-notation settings.
+
+        Apply entries in mapping order to a deep copy, then write that candidate
+        once before publishing it. Validation, serialization and pre-replacement
+        failures leave the current configuration and saved file unchanged. An
+        empty patch does nothing. Values without validation rules remain allowed,
+        as with set; mutable input values are copied into the candidate.
+
+        Callers retaining mutable get/get_section results must re-fetch after a
+        successful commit. This is not a concurrent-writer or thread-safety
+        guarantee, or a power-loss durability guarantee.
+        """
+        if not values:
+            return
+
+        candidate = deepcopy(self._config)
+        for key, value in values.items():
+            value = self._validate(key, value)
+            keys = key.split(".")
+            config = candidate
+            for part in keys[:-1]:
+                if part not in config:
+                    config[part] = {}
+                config = config[part]
+            config[keys[-1]] = deepcopy(value)
+
+        self._write_config(candidate)
+        self._config = candidate
+
     def get_section(self, section: str) -> dict[str, Any]:
         """Get an entire configuration section.
 
@@ -243,6 +280,8 @@ class Settings:
 
         Returns:
             Section dictionary or empty dict if not found
+
+        Re-fetch this mutable section after a successful set_many call.
         """
         return self._config.get(section, {})
 
