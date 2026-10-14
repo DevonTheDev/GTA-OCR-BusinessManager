@@ -1995,6 +1995,15 @@ Output will be in `dist/GTABusinessManager.exe`
 Settings are stored in:
 - Windows: `%LOCALAPPDATA%\GTABusinessManager\config.yaml`
 
+On loading a saved configuration, `capture.idle_fps`, `capture.active_fps` and
+`capture.business_fps` must be numeric, finite and within 0.1–60 FPS. Invalid
+values, including quoted numeric strings, fall back to the corresponding defaults
+of 0.5, 2.0 and 4.0 FPS. Loading leaves the existing file unchanged and preserves
+other settings. The next normal save writes the corrected in-memory FPS values
+along with the current settings. This admission prevents malformed FPS values
+from reaching the Settings controls during startup. It does not repair unrelated
+settings or change capture-worker coercion.
+
 Example configuration:
 ```yaml
 general:

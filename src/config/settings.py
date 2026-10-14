@@ -1,5 +1,6 @@
 """Settings manager for GTA Business Manager."""
 
+import math
 import os
 from copy import deepcopy
 from pathlib import Path
@@ -14,6 +15,9 @@ from ..utils.persistence import atomic_text_writer
 class SettingsValidationError(ValueError):
     """Raised when a settings value fails validation."""
     pass
+
+
+_CAPTURE_FPS_KEYS = ("capture.idle_fps", "capture.active_fps", "capture.business_fps")
 
 
 # Validation rules for settings
@@ -99,6 +103,17 @@ class Settings:
                     loaded = yaml.safe_load(f) or {}
                 # Merge with defaults (loaded values override defaults)
                 self._config = self._deep_merge(deepcopy(DEFAULT_CONFIG), loaded)
+                # Admit FPS before either the Settings UI or capture worker reads it.
+                # Keep an existing file unchanged until the next ordinary save.
+                capture = self._config.get("capture")
+                if isinstance(capture, dict):
+                    for key in _CAPTURE_FPS_KEYS:
+                        field = key.split(".", 1)[1]
+                        try:
+                            self._validate(key, capture[field])
+                        except SettingsValidationError as e:
+                            capture[field] = DEFAULT_CONFIG["capture"][field]
+                            print(f"Warning: {e}; using {capture[field]}")
             except Exception as e:
                 print(f"Warning: Failed to load config, using defaults: {e}")
                 self._config = deepcopy(DEFAULT_CONFIG)
@@ -175,6 +190,11 @@ class Settings:
             if max_val is not None and value > max_val:
                 raise SettingsValidationError(
                     f"Setting '{key}' must be <= {max_val}, got {value}"
+                )
+            # Bounds reject huge integers before isfinite converts to float.
+            if key in _CAPTURE_FPS_KEYS and not math.isfinite(value):
+                raise SettingsValidationError(
+                    f"Setting '{key}' must be finite, got {value}"
                 )
 
         # Allowed values check
