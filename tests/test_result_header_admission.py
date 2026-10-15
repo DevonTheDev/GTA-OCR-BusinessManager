@@ -2,12 +2,15 @@
 
 from dataclasses import asdict
 from inspect import signature
+import json
+from pathlib import Path
 from types import SimpleNamespace
 
 import numpy as np
 import pytest
 
 from src.capture.regions import Region, RegionType, ScreenRegions
+from src.detection.mission_episode import objective_evidence
 from src.detection.parsers.mission_parser import MissionType
 from src.detection.state_detector import StateDetectionResult, StateDetector
 from src.game.state_machine import GameState
@@ -86,6 +89,66 @@ def test_self_qualified_header_has_result_authority_and_separate_provenance(monk
     assert updates == [result] and updates[0] is result
     assert detector._context.last_state == GameState.MISSION_COMPLETE
     assert detector._context.in_mission_since is None
+
+
+def test_saved_cayo_six_source_transcript_preserves_result_header_authority(monkeypatch):
+    """Replay one saved observation's text, without pixels or native OCR."""
+    report_path = (Path(__file__).resolve().parents[1]
+                   / "validation/sightseer-start-banner-evaluation.json")
+    report = json.loads(report_path.read_text(encoding="utf-8"))
+    observed, = (item for item in report["observations"] if item["input"]["sha256"] ==
+                 "40ba00cefec3a32c6dd4530985268f54f6941167ed6b16a4e4b3e01b792b2877")
+    assert (observed["input"]["width"], observed["input"]["height"]) == (1600, 900)
+    texts = {name: source["text"] for name, source in observed["sources"].items()}
+    assert set(texts) == {"mission_text", "center_prompt", "mission_banner",
+                          "bottom_objective", "vip_status", "result_header"}
+    crops = {name: object() for name in texts}
+    calls = []
+
+    def recognize(image, **kwargs):
+        name = next(name for name, crop in crops.items() if crop is image)
+        calls.append(name)
+        return SimpleNamespace(text=texts[name])
+
+    detector = StateDetector(
+        ocr_engine=SimpleNamespace(is_available=True, recognize_preprocessed=recognize),
+        template_matcher=SimpleNamespace(match_any=lambda _image, _names: None),
+    )
+    monkeypatch.setattr(detector, "_quick_state_check", lambda _image:
+                        StateDetectionResult(GameState.UNKNOWN, 0.0, "No visual evidence"))
+    monkeypatch.setattr(detector, "_check_templates", lambda _image: None)
+    # Shape only: this test has no image, visual classification, or crop processing.
+    frame = SimpleNamespace(shape=(observed["input"]["height"], observed["input"]["width"], 3))
+    result = detector.detect(
+        frame, mission_text_image=crops["mission_text"],
+        center_text_image=crops["center_prompt"], mission_banner_image=crops["mission_banner"],
+        bottom_objective_image=crops["bottom_objective"],
+        result_header_image=crops["result_header"], vip_status_image=crops["vip_status"],
+    )
+
+    assert result.state is GameState.MISSION_COMPLETE
+    assert result.mission.identity_status == "type_only"
+    assert result.mission.candidates == ("CAYO_PERICO",)
+    assert result.mission.mission_type is MissionType.CAYO_PERICO
+    assert result.mission.mission_name == result.mission.objective == ""
+    assert (result.mission.outcome, result.mission.outcome_scope) == ("complete", "heist")
+    assert result.mission.heist_phase is MissionType.UNKNOWN
+    assert not result.mission.is_active
+    assert result.mission_text == texts["mission_text"]
+    assert result.objective_text == texts["center_prompt"]
+    assert result.banner_text == texts["mission_banner"]
+    assert result.bottom_objective_text == texts["bottom_objective"]
+    assert result.vip_status_text == texts["vip_status"]
+    assert result.result_header_text == result.result_header_evidence == texts["result_header"]
+    assert result.result_header_evidence == HEADER
+    assert result.bottom_objective_command == result.vip_status_evidence == ""
+    assert result.active_title_evidence == ""
+    assert result.mission.raw_text == "\n".join(
+        texts[name] for name in ("center_prompt", "mission_banner", "result_header"))
+    assert not objective_evidence((result.mission_text, result.objective_text,
+                                   result.banner_text, result.bottom_objective_command)).entries
+    assert calls == ["mission_text", "center_prompt", "mission_banner",
+                     "bottom_objective", "vip_status", "result_header"]
 
 
 @pytest.mark.parametrize("raw", ["", " \n ", "The Cayo Perico Heist", "Agency", "Bunker Stock 40%",
