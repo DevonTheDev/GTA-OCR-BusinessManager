@@ -2293,6 +2293,23 @@ storage failure or abrupt process exit can leave the session unfinished. Local
 tests exercise real SQLite, injected commit failures and concurrent finalizers;
 native Windows OCR and crash recovery remain separate validation work.
 
+### Completed sessions without an observed balance
+
+Stopping a newly tracked session before any balance reading is accepted keeps
+the completed session and its timestamps, with opening balance, ending balance
+and net change unavailable. History shows these as unavailable and JSON exports
+keep them as `null`. Both session CSV exports use blank cells for unavailable
+session money; the session-summary CSV also leaves $/Hour blank when net change
+is unavailable. Blank cells mean unavailable, not zero.
+
+An accepted balance of $0 remains a known zero. One accepted reading establishes
+both endpoints and a known zero net change; later missed readings keep the last
+accepted balance. Daily overview counts unobserved sessions and their valid
+elapsed time, but excludes their unknown net from known-net totals and the paired
+net/hour calculation. Existing stored zeros are not reclassified. Active-session
+placeholders and unfinished sessions after an abrupt exit keep their existing
+behavior.
+
 ### Completed session statistics
 
 Stopping a session records its end time. Its displayed duration and session

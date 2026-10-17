@@ -28,6 +28,11 @@ MAX_BUSINESS_CHECKINS_EXPORT_BYTES = 8 * 1024 * 1024
 MAX_BUSINESS_CHECKIN_COMPARISON_EXPORT_BYTES = 256 * 1024
 
 
+def _session_money_csv(value: Optional[int]) -> str:
+    """A blank session-money cell means unavailable; observed zero stays $0."""
+    return "" if value is None else f"${value:,}"
+
+
 @dataclass
 class ExportResult:
     """Result of an export operation."""
@@ -90,9 +95,9 @@ class DataExporter:
                 writer.writerow(["Session ID", session_info["id"]])
                 writer.writerow(["Started At", session_info["started_at"]])
                 writer.writerow(["Ended At", session_info["ended_at"] or "In Progress"])
-                writer.writerow(["Start Money", f"${session_info['start_money']:,}"])
-                writer.writerow(["End Money", f"${session_info['end_money'] or 0:,}"])
-                writer.writerow(["Total Earnings", f"${session_info['total_earnings'] or 0:,}"])
+                writer.writerow(["Start Money", _session_money_csv(session_info["start_money"])])
+                writer.writerow(["End Money", _session_money_csv(session_info["end_money"])])
+                writer.writerow(["Total Earnings", _session_money_csv(session_info["total_earnings"])])
 
                 duration = session_info.get("duration_seconds", 0) or 0
                 hours = duration // 3600
@@ -187,17 +192,20 @@ class DataExporter:
                 for session in sessions:
                     duration_min = (session.duration_seconds or 0) / 60
                     duration_hours = duration_min / 60
-                    earnings = session.total_earnings or 0
-                    per_hour = earnings / duration_hours if duration_hours > 0 else 0
+                    earnings = session.total_earnings
+                    per_hour = (
+                        None if earnings is None
+                        else earnings / duration_hours if duration_hours > 0 else 0
+                    )
 
                     writer.writerow([
                         session.id,
                         session.started_at.strftime("%Y-%m-%d %H:%M") if session.started_at else "",
                         f"{duration_min:.0f}",
-                        f"${session.start_money or 0:,}",
-                        f"${session.end_money or 0:,}",
-                        f"${earnings:,}",
-                        f"${per_hour:,.0f}",
+                        _session_money_csv(session.start_money),
+                        _session_money_csv(session.end_money),
+                        _session_money_csv(earnings),
+                        "" if per_hour is None else f"${per_hour:,.0f}",
                     ])
 
             logger.info(f"Exported {len(sessions)} sessions to {output_file}")

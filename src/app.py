@@ -480,7 +480,7 @@ class GTABusinessManager:
             logger.info("GTA Business Manager stopped")
 
     def _end_database_session(self) -> None:
-        """Atomically finalize observed balances, then close the repository."""
+        """Finalize accepted balances or explicit unknowns, then close storage."""
         repository = self._repository
         with self._data_lock:
             session_id = self._data.db_session_id
@@ -488,7 +488,10 @@ class GTABusinessManager:
             start_money = self._data.db_start_money
         if repository and session_id:
             try:
-                if repository.end_session(session_id, end_money, start_money=start_money):
+                if repository.end_session(
+                    session_id, end_money, start_money=start_money,
+                    unobserved=start_money is None,
+                ):
                     logger.info(f"Database session {session_id} ended")
                 else:
                     logger.warning(f"Failed to finalize database session {session_id}")

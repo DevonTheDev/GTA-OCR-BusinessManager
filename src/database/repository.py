@@ -870,23 +870,31 @@ class Repository:
             return False
 
     def end_session(
-        self, session_id: int, end_money: int = 0, *, start_money: Optional[int] = None
+        self, session_id: int, end_money: int = 0, *, start_money: Optional[int] = None,
+        unobserved: bool = False,
     ) -> bool:
         """Close an open session, optionally recovering its observed baseline.
 
         The opening balance, ending balance and net change commit together.
         ``None`` preserves the stored opening balance; zero is a valid override.
+        Opting into ``unobserved`` writes all three money values as NULL,
+        ignoring supplied balances, when no balance was accepted during the run.
         Closed or missing sessions return False without rewriting history.
         """
-        updates = {
-            Session.ended_at: utc_now(),
-            Session.end_money: end_money,
-            Session.total_earnings: end_money - (
+        updates = {Session.ended_at: utc_now()}
+        if unobserved:
+            updates.update({
+                Session.start_money: None,
+                Session.end_money: None,
+                Session.total_earnings: None,
+            })
+        else:
+            updates[Session.end_money] = end_money
+            updates[Session.total_earnings] = end_money - (
                 start_money if start_money is not None else Session.start_money
-            ),
-        }
-        if start_money is not None:
-            updates[Session.start_money] = start_money
+            )
+            if start_money is not None:
+                updates[Session.start_money] = start_money
         try:
             with self._session_scope() as db_session:
                 # The open-session condition belongs to the UPDATE itself so

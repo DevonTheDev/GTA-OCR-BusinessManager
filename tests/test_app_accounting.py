@@ -1,5 +1,8 @@
 """Offline accounting integration using the real app and temporary SQLite."""
 
+import sqlite3
+import threading
+
 import pytest
 
 from src.app import GTABusinessManager
@@ -252,9 +255,122 @@ def test_zero_observed_opening_balance_is_not_replaced_by_a_later_reading(app, m
     assert session["total_earnings"] == 20_000
 
 
-def test_stop_before_any_valid_reading_keeps_the_default_zero_session(app):
+@pytest.mark.parametrize("empty_readings", [0, 2])
+def test_stop_without_accepted_balance_preserves_unavailable_money(app, empty_readings):
+    before = app._repository.export_session_data(app._data.db_session_id)["session"]
+    for _ in range(empty_readings):
+        app._process_money_change(MoneyReading())
+    app._end_database_session()
+    session = app._repository.export_session_data(app._data.db_session_id)["session"]
+    assert session["start_money"] is session["end_money"] is session["total_earnings"] is None
+    assert session["ended_at"] is not None
+    assert session["id"] == before["id"]
+    assert session["started_at"] == before["started_at"]
+    with sqlite3.connect(app._repository._db_path) as db:
+        stored = db.execute(
+            "SELECT start_money,end_money,total_earnings,typeof(start_money),"
+            "typeof(end_money),typeof(total_earnings) FROM sessions WHERE id=?",
+            (app._data.db_session_id,),
+        ).fetchone()
+    assert stored == (None, None, None, "null", "null", "null")
+
+
+@pytest.mark.parametrize("balance", [0, 45_000])
+def test_one_accepted_balance_then_misses_keeps_known_zero_net(app, balance):
+    app._process_money_change(MoneyReading(total=balance))
     app._process_money_change(MoneyReading())
     app._end_database_session()
     session = app._repository.export_session_data(app._data.db_session_id)["session"]
-    assert session["start_money"] == session["end_money"] == session["total_earnings"] == 0
+    assert (session["start_money"], session["end_money"], session["total_earnings"]) == (
+        balance, balance, 0,
+    )
+
+
+@pytest.mark.parametrize("ending", [0, 80_000, 120_000])
+def test_later_misses_keep_last_accepted_balance_and_original_net(app, ending):
+    app._process_money_change(MoneyReading(total=100_000))
+    app._process_money_change(MoneyReading(total=ending))
+    app._process_money_change(MoneyReading())
+    app._process_money_change(MoneyReading())
+    app._end_database_session()
+    session = app._repository.export_session_data(app._data.db_session_id)["session"]
+    assert (session["start_money"], session["end_money"], session["total_earnings"]) == (
+        100_000, ending, ending - 100_000,
+    )
+
+
+def test_statistics_reset_without_a_reading_does_not_invent_a_balance(app):
+    app.reset_session()
+    app._end_database_session()
+    session = app._repository.export_session_data(app._data.db_session_id)["session"]
+    assert session["start_money"] is session["end_money"] is session["total_earnings"] is None
+
+
+@pytest.mark.parametrize("unobserved", [False, True])
+def test_closed_unobserved_session_cannot_be_rewritten(app, unobserved):
+    app._end_database_session()
+    repo, session_id = app._repository, app._data.db_session_id
+    original = repo.export_session_data(session_id)
+    assert not repo.end_session(session_id, 500, start_money=100, unobserved=unobserved)
+    app._end_database_session()
+    assert repo.export_session_data(session_id) == original
+
+
+def test_failed_unobserved_finalization_rolls_back_then_recovers(app, caplog):
+    from sqlalchemy import event
+    from sqlalchemy.exc import SQLAlchemyError
+    from src.database.models import Session
+
+    repo, session_id = app._repository, app._data.db_session_id
+    before = repo.export_session_data(session_id)["session"]
+    attempted = []
+
+    def fail_commit(database_session):
+        row = database_session.query(Session).filter_by(id=session_id).one()
+        attempted.append((row.start_money, row.end_money, row.total_earnings, row.ended_at))
+        raise SQLAlchemyError("synthetic unobserved commit failure")
+
+    target = repo._session_factory.class_
+    event.listen(target, "before_commit", fail_commit)
+    try:
+        app._end_database_session()
+    finally:
+        event.remove(target, "before_commit", fail_commit)
+    assert attempted[0][:3] == (None, None, None)
+    assert attempted[0][3] is not None
+    after = repo.export_session_data(session_id)["session"]
+    for field in ("start_money", "end_money", "total_earnings", "started_at", "ended_at"):
+        assert after[field] == before[field]
+    assert "Failed to finalize database session" in caplog.text
+    app._end_database_session()
+    recovered = repo.export_session_data(session_id)["session"]
+    assert recovered["start_money"] is recovered["end_money"] is recovered["total_earnings"] is None
+    assert recovered["ended_at"] is not None
+
+
+def test_competing_known_and_unobserved_finalizers_commit_one_complete_result(app):
+    repo, session_id = app._repository, app._data.db_session_id
+    barrier = threading.Barrier(2)
+    results, errors = [], []
+
+    def finalize(unobserved):
+        try:
+            barrier.wait(timeout=2)
+            results.append(repo.end_session(session_id, 200, start_money=100, unobserved=unobserved))
+        except Exception as error:
+            errors.append(error)
+
+    workers = [threading.Thread(target=finalize, args=(unknown,)) for unknown in (False, True)]
+    for worker in workers:
+        worker.start()
+    for worker in workers:
+        worker.join(3)
+    assert not any(worker.is_alive() for worker in workers)
+    assert errors == []
+    assert sorted(results) == [False, True]
+    session = repo.export_session_data(session_id)["session"]
+    assert (session["start_money"], session["end_money"], session["total_earnings"]) in (
+        (None, None, None), (100, 200, 100),
+    )
     assert session["ended_at"] is not None
+
